@@ -1,0 +1,618 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  type      String   @default("FAMILY")
+  taxId     String?
+  logoUrl   String?
+  currency  String   @default("GTQ")
+  timezone  String   @default("America/Guatemala")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  properties     Property[]
+  tenants        Tenant[]
+  contracts      Contract[]
+  invoices       Invoice[]
+  payments       Payment[]
+  expenses       Expense[]
+  maintenances   MaintenanceRequest[]
+  assets         Asset[]
+  projects       Project[]
+  vendors        Vendor[]
+  quotes         Quote[]
+  employees      Employee[]
+  documents      Document[]
+  notifications  Notification[]
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String
+  passwordHash   String?
+  emailVerified  DateTime?
+  image          String?
+  role           String    @default("VIEWER")
+  phone          String?
+  organizationId String
+  isActive       Boolean   @default(true)
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  notifications   Notification[]
+  assignedTickets MaintenanceRequest[] @relation("AssignedTo")
+
+  @@index([organizationId])
+}
+
+model Property {
+  id              String    @id @default(cuid())
+  organizationId  String
+  name            String
+  alias           String?
+  type            String
+  status          String    @default("ACTIVE")
+  addressLine     String
+  zone            String?
+  city            String
+  department      String
+  country         String    @default("Guatemala")
+  postalCode      String?
+  latitude        Float?
+  longitude       Float?
+  totalArea       Float?
+  builtArea       Float?
+  bedrooms        Int?
+  bathrooms       Float?
+  parkingSpaces   Int?
+  yearBuilt       Int?
+  acquisitionDate DateTime?
+  acquisitionCost Float?
+  currentValue    Float?
+  propertyTaxYear Float?
+  notes           String?
+  coverImageUrl   String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  units        PropertyUnit[]
+  contracts    Contract[]
+  maintenances MaintenanceRequest[]
+  assets       Asset[]
+  projects     Project[]
+  expenses     Expense[]
+  documents    Document[]
+  plans        Plan[]
+  utilities    UtilityAccount[]
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model PropertyUnit {
+  id         String  @id @default(cuid())
+  propertyId String
+  unitNumber String
+  bedrooms   Int?
+  bathrooms  Float?
+  area       Float?
+  notes      String?
+
+  property  Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  contracts Contract[]
+
+  @@unique([propertyId, unitNumber])
+}
+
+model Tenant {
+  id               String   @id @default(cuid())
+  organizationId   String
+  type             String   @default("INDIVIDUAL")
+  fullName         String
+  documentType     String
+  documentNumber   String
+  email            String?
+  phone            String
+  alternatePhone   String?
+  occupation       String?
+  emergencyContact String?
+  emergencyPhone   String?
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contracts    Contract[]
+
+  @@index([organizationId])
+  @@index([documentNumber])
+}
+
+model Contract {
+  id                String    @id @default(cuid())
+  organizationId    String
+  contractNumber    String
+  propertyId        String
+  unitId            String?
+  tenantId          String
+  startDate         DateTime
+  endDate           DateTime
+  monthlyRent       Float
+  currency          String    @default("GTQ")
+  deposit           Float?
+  paymentDueDay     Int
+  paymentFrequency  String    @default("MONTHLY")
+  includesUtilities Boolean   @default(false)
+  utilitiesNotes    String?
+  lateFeePercent    Float?
+  annualIncrease    Float?
+  status            String    @default("DRAFT")
+  signedAt          DateTime?
+  terminatedAt      DateTime?
+  terminationReason String?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property      @relation(fields: [propertyId], references: [id])
+  unit         PropertyUnit? @relation(fields: [unitId], references: [id])
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  invoices     Invoice[]
+  payments     Payment[]
+  documents    Document[]
+
+  @@unique([organizationId, contractNumber])
+  @@index([status])
+  @@index([endDate])
+}
+
+model Invoice {
+  id             String    @id @default(cuid())
+  organizationId String
+  contractId     String?
+  number         String
+  satSerie       String?
+  satNumber      String?
+  satUuid        String?
+  issueDate      DateTime
+  dueDate        DateTime
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  subtotal       Float
+  taxAmount      Float     @default(0)
+  total          Float
+  paidAmount     Float     @default(0)
+  balance        Float
+  currency       String    @default("GTQ")
+  status         String    @default("DRAFT")
+  notes          String?
+  pdfUrl         String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contract     Contract?     @relation(fields: [contractId], references: [id])
+  items        InvoiceItem[]
+  payments     Payment[]
+
+  @@index([organizationId, number])
+  @@index([status, dueDate])
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Float   @default(1)
+  unitPrice   Float
+  total       Float
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id             String   @id @default(cuid())
+  organizationId String
+  contractId     String?
+  invoiceId      String?
+  amount         Float
+  currency       String   @default("GTQ")
+  paymentDate    DateTime
+  method         String
+  reference      String?
+  bankName       String?
+  notes          String?
+  receiptUrl     String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contract     Contract?    @relation(fields: [contractId], references: [id])
+  invoice      Invoice?     @relation(fields: [invoiceId], references: [id])
+
+  @@index([organizationId, paymentDate])
+}
+
+model Expense {
+  id             String   @id @default(cuid())
+  organizationId String
+  propertyId     String?
+  projectId      String?
+  category       String
+  amount         Float
+  currency       String   @default("GTQ")
+  date           DateTime
+  description    String
+  vendor         String?
+  vendorId       String?
+  invoiceRef     String?
+  receiptUrl     String?
+  isRecurring    Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property?    @relation(fields: [propertyId], references: [id])
+  project      Project?     @relation(fields: [projectId], references: [id])
+  vendorEntity Vendor?      @relation(fields: [vendorId], references: [id])
+
+  @@index([organizationId, date])
+  @@index([category])
+}
+
+model UtilityAccount {
+  id            String  @id @default(cuid())
+  propertyId    String
+  type          String
+  provider      String
+  accountNumber String
+  meterNumber   String?
+  notes         String?
+
+  property Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  bills    UtilityBill[]
+}
+
+model UtilityBill {
+  id               String    @id @default(cuid())
+  utilityAccountId String
+  periodStart      DateTime
+  periodEnd        DateTime
+  consumption      Float?
+  amount           Float
+  dueDate          DateTime
+  isPaid           Boolean   @default(false)
+  paidAt           DateTime?
+  receiptUrl       String?
+
+  account UtilityAccount @relation(fields: [utilityAccountId], references: [id], onDelete: Cascade)
+}
+
+model MaintenanceRequest {
+  id              String    @id @default(cuid())
+  organizationId  String
+  ticketNumber    String
+  propertyId      String
+  assetId         String?
+  category        String
+  priority        String    @default("MEDIUM")
+  status          String    @default("REPORTED")
+  title           String
+  description     String
+  reportedBy      String?
+  reportedPhone   String?
+  reportedAt      DateTime  @default(now())
+  assignedToId    String?
+  assignedAt      DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  estimatedCost   Float?
+  actualCost      Float?
+  resolutionNotes String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property           @relation(fields: [propertyId], references: [id])
+  asset        Asset?             @relation(fields: [assetId], references: [id])
+  assignedTo   User?              @relation("AssignedTo", fields: [assignedToId], references: [id])
+  photos       MaintenancePhoto[]
+
+  @@unique([organizationId, ticketNumber])
+  @@index([status])
+  @@index([propertyId])
+}
+
+model MaintenancePhoto {
+  id        String   @id @default(cuid())
+  requestId String
+  url       String
+  caption   String?
+  isAfter   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  request MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}
+
+model Asset {
+  id             String    @id @default(cuid())
+  organizationId String
+  propertyId     String?
+  category       String
+  name           String
+  brand          String?
+  model          String?
+  serialNumber   String?
+  purchaseDate   DateTime?
+  purchaseCost   Float?
+  currentValue   Float?
+  warranty       DateTime?
+  status         String    @default("ACTIVE")
+  location       String?
+  notes          String?
+  imageUrl       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property?            @relation(fields: [propertyId], references: [id])
+  maintenances MaintenanceRequest[]
+  serviceLogs  AssetServiceLog[]
+
+  @@index([organizationId])
+  @@index([category])
+}
+
+model AssetServiceLog {
+  id            String    @id @default(cuid())
+  assetId       String
+  serviceType   String
+  date          DateTime
+  cost          Float
+  performedBy   String?
+  nextServiceAt DateTime?
+  notes         String?
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+}
+
+model Project {
+  id              String    @id @default(cuid())
+  organizationId  String
+  propertyId      String?
+  type            String
+  name            String
+  description     String?
+  status          String    @default("PLANNING")
+  startDate       DateTime?
+  endDate         DateTime?
+  actualEndDate   DateTime?
+  budgetTotal     Float
+  budgetSpent     Float     @default(0)
+  currency        String    @default("GTQ")
+  progressPercent Int       @default(0)
+  notes           String?
+  coverImageUrl   String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property?            @relation(fields: [propertyId], references: [id])
+  tasks        ProjectTask[]
+  costs        ProjectCost[]
+  expenses     Expense[]
+  quotes       Quote[]
+  documents    Document[]
+  assignments  EmployeeAssignment[]
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model ProjectTask {
+  id          String    @id @default(cuid())
+  projectId   String
+  name        String
+  description String?
+  status      String    @default("TODO")
+  startDate   DateTime?
+  endDate     DateTime?
+  completedAt DateTime?
+  orderIndex  Int       @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model ProjectCost {
+  id          String   @id @default(cuid())
+  projectId   String
+  type        String
+  description String
+  amount      Float
+  date        DateTime
+  vendorId    String?
+  notes       String?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendor  Vendor? @relation(fields: [vendorId], references: [id])
+}
+
+model Vendor {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  type           String   @default("COMPANY")
+  category       String
+  taxId          String?
+  contactName    String?
+  email          String?
+  phone          String
+  address        String?
+  rating         Float?
+  notes          String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  quotes       Quote[]
+  expenses     Expense[]
+  projectCosts ProjectCost[]
+
+  @@index([organizationId])
+}
+
+model Quote {
+  id              String    @id @default(cuid())
+  organizationId  String
+  vendorId        String
+  projectId       String?
+  propertyId      String?
+  quoteNumber     String
+  vendorReference String?
+  date            DateTime
+  validUntil      DateTime?
+  subtotal        Float
+  taxAmount       Float     @default(0)
+  total           Float
+  currency        String    @default("GTQ")
+  status          String    @default("PENDING")
+  approvedAt      DateTime?
+  approvedBy      String?
+  notes           String?
+  pdfUrl          String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendor       Vendor       @relation(fields: [vendorId], references: [id])
+  project      Project?     @relation(fields: [projectId], references: [id])
+  items        QuoteItem[]
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model QuoteItem {
+  id          String  @id @default(cuid())
+  quoteId     String
+  description String
+  quantity    Float
+  unit        String?
+  unitPrice   Float
+  total       Float
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+}
+
+model Employee {
+  id              String    @id @default(cuid())
+  organizationId  String
+  fullName        String
+  documentNumber  String
+  position        String
+  email           String?
+  phone           String
+  hireDate        DateTime
+  terminationDate DateTime?
+  status          String    @default("ACTIVE")
+  payPeriod       String    @default("MONTHLY")
+  payRate         Float
+  notes           String?
+  imageUrl        String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignments  EmployeeAssignment[]
+
+  @@index([organizationId])
+}
+
+model EmployeeAssignment {
+  id          String    @id @default(cuid())
+  employeeId  String
+  projectId   String?
+  propertyId  String?
+  startDate   DateTime
+  endDate     DateTime?
+  hoursWorked Float?
+  amountPaid  Float?
+  notes       String?
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  project  Project? @relation(fields: [projectId], references: [id])
+}
+
+model Document {
+  id             String   @id @default(cuid())
+  organizationId String
+  type           String
+  name           String
+  filePath       String
+  fileSize       Int
+  mimeType       String
+  propertyId     String?
+  contractId     String?
+  projectId      String?
+  uploadedBy     String?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property?    @relation(fields: [propertyId], references: [id])
+  contract     Contract?    @relation(fields: [contractId], references: [id])
+  project      Project?     @relation(fields: [projectId], references: [id])
+
+  @@index([organizationId])
+}
+
+model Plan {
+  id          String   @id @default(cuid())
+  propertyId  String
+  name        String
+  type        String
+  filePath    String
+  fileSize    Int
+  mimeType    String
+  modelUrl    String?
+  modelStatus String?
+  aiAnalysis  String?
+  scale       String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  type           String
+  title          String
+  message        String
+  link           String?
+  isRead         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
