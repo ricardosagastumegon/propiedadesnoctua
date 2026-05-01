@@ -19,6 +19,7 @@ export async function createQuote(formData: FormData) {
   const orgId = await getOrgId()
   const vendorId = formData.get("vendorId") as string
   const projectId = formData.get("projectId") as string || null
+  const partidaId = formData.get("partidaId") as string || null
   const date = formData.get("date") as string
   const validUntil = formData.get("validUntil") as string || null
   const subtotal = parseFloat(formData.get("subtotal") as string) || 0
@@ -35,6 +36,7 @@ export async function createQuote(formData: FormData) {
       organizationId: orgId,
       vendorId,
       projectId,
+      partidaId,
       quoteNumber,
       date: new Date(date),
       validUntil: validUntil ? new Date(validUntil) : null,

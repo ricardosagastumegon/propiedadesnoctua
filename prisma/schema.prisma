@@ -94,6 +94,9 @@ model ApprovalRequest {
   cosignedAt      DateTime?
   rejectionReason String?
   notes           String?
+  title           String?
+  amount          Float?
+  relatedId       String?   // aux FK (e.g. quoteId when entityType=PROJECT_PARTIDA)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -561,6 +564,7 @@ model ProjectPartida {
   vendorId        String?
   amountApproved  Float?
   amountPaid      Float     @default(0)
+  deliveredAt     DateTime?
   orderIndex      Int       @default(0)
   notes           String?
   createdAt       DateTime  @default(now())
@@ -580,6 +584,7 @@ model PartidaPayment {
   id         String   @id @default(cuid())
   partidaId  String
   amount     Float
+  type       String   @default("PARTIAL")
   date       DateTime
   method     String
   reference  String?

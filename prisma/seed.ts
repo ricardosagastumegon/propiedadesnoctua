@@ -517,14 +517,81 @@ async function main() {
     budgetEstimate: 20000, status: "PENDING", orderIndex: 1,
   }})
 
+  // Partidas for Bodega Mixco (proj3) — rich example with quotes
   const partida6 = await prisma.projectPartida.create({ data: {
     projectId: proj3.id, name: "Pintura exterior bodega",
     budgetEstimate: 24000, status: "QUOTING", orderIndex: 0,
   }})
 
-  // Link quote to partida
+  const partida7 = await prisma.projectPartida.create({ data: {
+    projectId: proj3.id, name: "Camas metalicas y estanterias",
+    budgetEstimate: 12000, orderIndex: 1,
+    // Will be approved with Mobitec quote below
+  }})
+
+  // Link existing quote to partida6
   await prisma.quote.update({ where: { id: q1.id }, data: { partidaId: partida3.id } })
   await prisma.quote.update({ where: { id: q3.id }, data: { partidaId: partida6.id } })
+
+  // 2 more quotes for partida6 (pintura)
+  const v7 = await prisma.vendor.create({ data: {
+    organizationId: org.id, name: "Pinturas del Sur", category: "PAINTING",
+    contactName: "Ernesto Ramos", phone: "5511-2233", rating: 3.8,
+  }})
+  const q4 = await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v7.id, projectId: proj3.id, partidaId: partida6.id,
+    quoteNumber: "COT-2025-004", date: subDays(now, 3),
+    validUntil: addDays(now, 27), subtotal: 19000, taxAmount: 2280, total: 21280,
+    status: "PENDING",
+  }})
+  await prisma.quoteItem.createMany({ data: [
+    { quoteId: q4.id, description: "Pintura exterior 600m2 (latex premium)", quantity: 600, unit: "m2", unitPrice: 28, total: 16800 },
+    { quoteId: q4.id, description: "Preparacion de superficie", quantity: 600, unit: "m2", unitPrice: 3.67, total: 2200 },
+  ]})
+
+  // 2 quotes for partida7 (camas Mobitec — approved)
+  const v8 = await prisma.vendor.create({ data: {
+    organizationId: org.id, name: "Mobitec Guatemala", category: "OTHER",
+    contactName: "Claudia Fuentes", phone: "6644-7788", email: "ventas@mobitec.gt", rating: 4.7,
+  }})
+  const v9 = await prisma.vendor.create({ data: {
+    organizationId: org.id, name: "Metalica Industrial SA", category: "CONSTRUCTION",
+    phone: "7733-4455", rating: 4.0,
+  }})
+
+  const qMobitec = await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v8.id, projectId: proj3.id, partidaId: partida7.id,
+    quoteNumber: "COT-2025-005", date: subDays(now, 10),
+    validUntil: addDays(now, 20), subtotal: 8000, taxAmount: 960, total: 8960,
+    status: "APPROVED", approvedAt: subDays(now, 3), approvedBy: admin.name,
+    notes: "Incluye instalacion y garantia 1 año",
+  }})
+  await prisma.quoteItem.createMany({ data: [
+    { quoteId: qMobitec.id, description: "Camas metalicas industriales 2x1.5m", quantity: 10, unitPrice: 650, total: 6500 },
+    { quoteId: qMobitec.id, description: "Instalacion y anclaje", quantity: 1, unitPrice: 1500, total: 1500 },
+  ]})
+
+  const qMetalica = await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v9.id, projectId: proj3.id, partidaId: partida7.id,
+    quoteNumber: "COT-2025-006", date: subDays(now, 8),
+    validUntil: addDays(now, 22), subtotal: 11000, taxAmount: 1320, total: 12320,
+    status: "PENDING",
+  }})
+  await prisma.quoteItem.createMany({ data: [
+    { quoteId: qMetalica.id, description: "Estanterias metalicas 2.5m alto", quantity: 8, unitPrice: 1200, total: 9600 },
+    { quoteId: qMetalica.id, description: "Instalacion", quantity: 1, unitPrice: 1400, total: 1400 },
+  ]})
+
+  // Approve partida7 with Mobitec quote + Q8000 anticipo payment
+  await prisma.projectPartida.update({
+    where: { id: partida7.id },
+    data: { approvedQuoteId: qMobitec.id, vendorId: v8.id, amountApproved: 8960, status: "IN_PROGRESS" },
+  })
+  const anticipo = await prisma.partidaPayment.create({ data: {
+    partidaId: partida7.id, amount: 8000, type: "ADVANCE", date: subDays(now, 2),
+    method: "TRANSFER", reference: "TRF-MOBITEC-001", notes: "Anticipo 89%",
+  }})
+  await prisma.projectPartida.update({ where: { id: partida7.id }, data: { amountPaid: 8000 } })
 
   // ─── EMPLOYEES ────────────────────────────────────────────────────────────────
   await prisma.employee.createMany({ data: [
@@ -573,11 +640,25 @@ async function main() {
     notes: "Cotizacion A/C aprovada",
   }})
 
-  // 6. Partida approval
+  // 6. Partida approval (cotizacion de acabados pendiente)
   await prisma.approvalRequest.create({ data: {
-    organizationId: org.id, entityType: "PARTIDA", entityId: partida3.id,
-    requestedById: supervisor.id, status: "PENDING",
-    notes: "Partida de acabados lista para aprobar proveedor",
+    organizationId: org.id, entityType: "PROJECT_PARTIDA", entityId: partida3.id,
+    relatedId: q1.id,
+    requestedById: supervisor.id, status: "PENDING_COSIGN",
+    title: `Aprobar cotizacion: Constructora Vega SA — Remodelacion Terraza`,
+    amount: q1.total,
+    notes: "Partida de acabados: Constructora Vega SA Q50,400",
+  }})
+
+  // 7. Mobitec approval (approved, historical)
+  await prisma.approvalRequest.create({ data: {
+    organizationId: org.id, entityType: "PROJECT_PARTIDA", entityId: partida7.id,
+    relatedId: qMobitec.id,
+    requestedById: manager.id, approvedById: admin.id,
+    status: "APPROVED", approvedAt: subDays(now, 3),
+    title: "Aprobar cotizacion: Mobitec Guatemala — Bodega Mixco",
+    amount: qMobitec.total,
+    notes: "Camas metalicas e instalacion",
   }})
 
   // ─── NOTIFICATIONS ───────────────────────────────────────────────────────────

@@ -5,15 +5,22 @@ import { PageHeader } from "@/components/ui/page-header"
 import { QuoteForm } from "../_components/quote-form"
 import { createQuote } from "../actions"
 
-export default async function NuevaCotizacionPage({ searchParams }: { searchParams: Promise<{ vendorId?: string; projectId?: string }> }) {
+export default async function NuevaCotizacionPage({ searchParams }: { searchParams: Promise<{ vendorId?: string; projectId?: string; partidaId?: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = (session.user as any).organizationId as string
   const sp = await searchParams
 
-  const [vendors, projects] = await Promise.all([
+  const [vendors, projects, partidas] = await Promise.all([
     prisma.vendor.findMany({ where: { organizationId: orgId, isActive: true }, orderBy: { name: "asc" } }),
     prisma.project.findMany({ where: { organizationId: orgId }, orderBy: { name: "asc" } }),
+    sp.projectId
+      ? prisma.projectPartida.findMany({
+          where: { projectId: sp.projectId },
+          orderBy: { orderIndex: "asc" },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
   ])
 
   return (
@@ -22,8 +29,10 @@ export default async function NuevaCotizacionPage({ searchParams }: { searchPara
       <QuoteForm
         vendors={vendors}
         projects={projects}
+        partidas={partidas}
         defaultVendorId={sp.vendorId}
         defaultProjectId={sp.projectId}
+        defaultPartidaId={sp.partidaId}
         action={createQuote}
       />
     </div>

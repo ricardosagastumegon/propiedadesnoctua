@@ -3,6 +3,7 @@ import Link from "next/link"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -11,13 +12,16 @@ import { PROJECT_TYPES, PROJECT_STATUSES, PROJECT_STATUS_COLORS } from "@/lib/sc
 import { TaskList } from "./_task-list"
 import { CostList } from "./_cost-list"
 import { PartidaList } from "./_partida-list"
+import { ProjectApprovals } from "./_project-approvals"
 import { DeleteProjectButton } from "./_delete-button"
-import { Building2, Calendar } from "lucide-react"
+import { Building2, Calendar, CheckSquare2 } from "lucide-react"
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = (session.user as any).organizationId as string
+  const userId = session.user!.id!
+  const authorityPolicy = (session.user as any).authorityPolicy as string | undefined
   const { id } = await params
 
   const project = await prisma.project.findFirst({
@@ -30,18 +34,44 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         orderBy: { orderIndex: "asc" },
         include: {
           vendor: { select: { name: true } },
-          approvedQuote: { include: { vendor: { select: { name: true } } } },
+          approvedQuote: { include: { vendor: { select: { name: true, id: true } } } },
           payments: { orderBy: { date: "desc" } },
+          quotes: {
+            orderBy: { createdAt: "desc" },
+            include: {
+              vendor: { select: { name: true, id: true, rating: true, phone: true, email: true } },
+              items: true,
+            },
+          },
         },
       },
     },
   })
   if (!project) notFound()
 
-  const budgetEstimate = project.budgetEstimate ?? project.partidas.reduce((s, p) => s + (p.budgetEstimate ?? 0), 0)
-  const amountPaid = project.partidas.reduce((s, p) => s + p.amountPaid, 0)
-  const budgetUsedPct = budgetEstimate > 0 ? Math.min(100, (amountPaid / budgetEstimate) * 100) : 0
-  const doneTasks = project.tasks.filter(t => t.status === "DONE").length
+  // Fetch approval requests for this project's partidas
+  const partidaIds = project.partidas.map(p => p.id)
+  const approvalRequests = await prisma.approvalRequest.findMany({
+    where: { organizationId: orgId, entityType: "PROJECT_PARTIDA", entityId: { in: partidaIds } },
+    include: {
+      requestedBy: { select: { name: true } },
+      approvedBy: { select: { name: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  })
+
+  // KPI computations
+  const totalApproved = project.partidas.reduce((s, p) => s + (p.amountApproved ?? 0), 0)
+  const totalPaid = project.partidas.reduce((s, p) => s + p.amountPaid, 0)
+  const saldo = totalApproved - totalPaid
+  const deliveredOrPaid = project.partidas.filter(p => {
+    const approved = p.amountApproved ?? 0
+    return p.deliveredAt != null || (approved > 0 && p.amountPaid >= approved)
+  }).length
+  const avance = project.partidas.length > 0
+    ? Math.round((deliveredOrPaid / project.partidas.length) * 100)
+    : 0
+  const pendingApprovals = approvalRequests.filter(a => a.status === "PENDING" || a.status === "PENDING_COSIGN").length
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -58,52 +88,63 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       </PageHeader>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
         <Card className="p-4">
           <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Avance</p>
-          <p className="font-display text-2xl tabular-nums">{project.progressPercent}%</p>
+          <p className="font-display text-2xl tabular-nums">{avance}%</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Tareas</p>
-          <p className="font-display text-2xl tabular-nums">{doneTasks}/{project.tasks.length}</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Partidas</p>
+          <p className="font-display text-2xl tabular-nums">{project.partidas.length}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Pagado</p>
-          <p className="font-display text-2xl tabular-nums">{formatGTQ(amountPaid)}</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total aprobado</p>
+          <p className="font-display text-xl tabular-nums">{totalApproved > 0 ? formatGTQ(totalApproved) : "—"}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Presupuesto</p>
-          <p className={`font-display text-2xl tabular-nums ${budgetUsedPct > 90 ? "text-destructive" : ""}`}>
-            {budgetEstimate > 0 ? formatGTQ(budgetEstimate) : "—"}
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total pagado</p>
+          <p className="font-display text-xl tabular-nums text-emerald-600">{totalPaid > 0 ? formatGTQ(totalPaid) : "—"}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Saldo</p>
+          <p className={`font-display text-xl tabular-nums ${saldo > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+            {totalApproved > 0 ? formatGTQ(saldo) : "—"}
           </p>
         </Card>
       </div>
 
-      {budgetEstimate > 0 && (
-        <Card className="p-4 mb-6">
-          <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-            <span>Uso del presupuesto</span>
-            <span>{budgetUsedPct.toFixed(0)}%</span>
-          </div>
-          <div className="w-full bg-muted rounded-full h-2">
-            <div
-              className={`rounded-full h-2 transition-all ${budgetUsedPct > 90 ? "bg-destructive" : "bg-foreground"}`}
-              style={{ width: `${budgetUsedPct}%` }}
-            />
-          </div>
-        </Card>
-      )}
-
       <Tabs defaultValue="partidas">
         <TabsList className="mb-4">
-          <TabsTrigger value="partidas">Partidas ({project.partidas.length})</TabsTrigger>
+          <TabsTrigger value="partidas">
+            Partidas ({project.partidas.length})
+          </TabsTrigger>
+          <TabsTrigger value="autorizaciones" className="relative">
+            Autorizaciones
+            {pendingApprovals > 0 && (
+              <Badge className="ml-1.5 h-4 min-w-4 text-[10px] px-1">{pendingApprovals}</Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="tareas">Tareas ({project.tasks.length})</TabsTrigger>
           <TabsTrigger value="costos">Costos ({project.costs.length})</TabsTrigger>
           <TabsTrigger value="info">Informacion</TabsTrigger>
         </TabsList>
 
         <TabsContent value="partidas">
-          <PartidaList projectId={id} partidas={project.partidas} />
+          <PartidaList
+            projectId={id}
+            partidas={project.partidas as any}
+            authorityPolicy={authorityPolicy ?? "NONE"}
+          />
+        </TabsContent>
+
+        <TabsContent value="autorizaciones">
+          <ProjectApprovals
+            projectId={id}
+            approvalRequests={approvalRequests as any}
+            partidas={project.partidas as any}
+            orgId={orgId}
+            currentUserId={userId}
+          />
         </TabsContent>
 
         <TabsContent value="tareas">
@@ -143,6 +184,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   <span>{formatDate(project.endDate)}</span>
                 </div>
               )}
+              {project.budgetEstimate && (
+                <div>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Presupuesto estimado</p>
+                  <span className="tabular-nums">{formatGTQ(project.budgetEstimate)}</span>
+                </div>
+              )}
+              <div>
+                <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Progreso general</p>
+                <span className="flex items-center gap-1"><CheckSquare2 className="size-3" />{project.progressPercent}%</span>
+              </div>
             </div>
             {project.description && (
               <div>

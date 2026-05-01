@@ -25,6 +25,7 @@ export const ENTITY_TYPES: Record<string, string> = {
   INVOICE_MODIFIED: "Factura modificada",
   VENDOR: "Proveedor",
   PARTIDA: "Partida de proyecto",
+  PROJECT_PARTIDA: "Cotización de partida",
 }
 
 export const USER_ROLES: Record<string, string> = {

@@ -9,23 +9,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 interface Vendor { id: string; name: string }
 interface Project { id: string; name: string }
+interface Partida { id: string; name: string }
 
 export function QuoteForm({
   vendors,
   projects,
+  partidas = [],
   action,
   defaultVendorId,
   defaultProjectId,
+  defaultPartidaId,
 }: {
   vendors: Vendor[]
   projects: Project[]
+  partidas?: Partida[]
   action: (fd: FormData) => Promise<any>
   defaultVendorId?: string
   defaultProjectId?: string
+  defaultPartidaId?: string
 }) {
   const ref = useRef<HTMLFormElement>(null)
   const [vendorId, setVendorId] = useState(defaultVendorId ?? "")
   const [projectId, setProjectId] = useState(defaultProjectId ?? "")
+  const [partidaId, setPartidaId] = useState(defaultPartidaId ?? "")
   const [subtotal, setSubtotal] = useState(0)
   const [tax, setTax] = useState(0)
   const [error, setError] = useState<Record<string, string[]>>({})
@@ -38,6 +44,7 @@ export function QuoteForm({
     const fd = new FormData(ref.current!)
     fd.set("vendorId", vendorId)
     if (projectId) fd.set("projectId", projectId)
+    if (partidaId) fd.set("partidaId", partidaId)
     fd.set("subtotal", subtotal.toString())
     fd.set("taxAmount", tax.toString())
     fd.set("total", (subtotal + tax).toString())
@@ -61,13 +68,25 @@ export function QuoteForm({
 
         <div className="space-y-1.5">
           <Label>Proyecto (opcional)</Label>
-          <Select value={projectId} onValueChange={setProjectId}>
+          <Select value={projectId} onValueChange={v => { setProjectId(v); setPartidaId("") }}>
             <SelectTrigger><SelectValue placeholder="Sin proyecto" /></SelectTrigger>
             <SelectContent>
               {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
+
+        {(projectId && partidas.length > 0) && (
+          <div className="space-y-1.5">
+            <Label>Partida (opcional)</Label>
+            <Select value={partidaId} onValueChange={setPartidaId}>
+              <SelectTrigger><SelectValue placeholder="Sin partida especifica" /></SelectTrigger>
+              <SelectContent>
+                {partidas.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
