@@ -92,3 +92,34 @@ export async function toggleUserActive(userId: string, isActive: boolean) {
   await prisma.user.updateMany({ where: { id: userId, organizationId: orgId }, data: { isActive } })
   revalidatePath("/configuracion")
 }
+
+export async function updateUserRole(userId: string, role: string) {
+  const orgId = await getOrgId()
+  await prisma.user.updateMany({ where: { id: userId, organizationId: orgId }, data: { role } })
+  revalidatePath("/configuracion")
+}
+
+export async function updateUserAuthorityPolicy(userId: string, authorityPolicy: string) {
+  const orgId = await getOrgId()
+  await prisma.user.updateMany({ where: { id: userId, organizationId: orgId }, data: { authorityPolicy } })
+  revalidatePath("/configuracion")
+}
+
+export async function setCosignPolicy(userId: string, cosignerIds: string[]) {
+  const orgId = await getOrgId()
+  const user = await prisma.user.findFirst({ where: { id: userId, organizationId: orgId } })
+  if (!user) return { error: "Usuario no encontrado" }
+
+  const existing = await prisma.cosignPolicy.findUnique({ where: { userId } })
+  if (existing) {
+    await prisma.cosignPolicy.update({
+      where: { userId },
+      data: { allowedCosigners: { set: cosignerIds.map(id => ({ id })) } },
+    })
+  } else {
+    await prisma.cosignPolicy.create({
+      data: { userId, allowedCosigners: { connect: cosignerIds.map(id => ({ id })) } },
+    })
+  }
+  revalidatePath("/configuracion")
+}

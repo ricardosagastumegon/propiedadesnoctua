@@ -81,3 +81,55 @@ export async function deleteServiceLog(id: string, assetId: string) {
   await prisma.assetServiceLog.delete({ where: { id } })
   revalidatePath(`/activos/${assetId}`)
 }
+
+export async function createAssetRecord(assetId: string, formData: FormData) {
+  const orgId = await getOrgId()
+  const asset = await prisma.asset.findFirst({ where: { id: assetId, organizationId: orgId } })
+  if (!asset) return { error: "Activo no encontrado" }
+
+  const title = formData.get("title") as string
+  const recordTypeId = formData.get("recordTypeId") as string
+  const issueDateRaw = formData.get("issueDate") as string
+  const expiryDateRaw = formData.get("expiryDate") as string
+  const notifyDaysBefore = parseInt(formData.get("notifyDaysBefore") as string) || 30
+  const notes = formData.get("notes") as string
+
+  if (!title?.trim()) return { error: "Titulo requerido" }
+  if (!recordTypeId?.trim()) return { error: "Tipo requerido" }
+
+  await prisma.assetRecord.create({
+    data: {
+      assetId,
+      recordTypeId,
+      title,
+      issueDate: issueDateRaw ? new Date(issueDateRaw) : null,
+      expiryDate: expiryDateRaw ? new Date(expiryDateRaw) : null,
+      notifyDaysBefore,
+      notes: notes || null,
+    },
+  })
+  revalidatePath(`/activos/${assetId}`)
+}
+
+export async function deleteAssetRecord(recordId: string, assetId: string) {
+  await prisma.assetRecord.delete({ where: { id: recordId } })
+  revalidatePath(`/activos/${assetId}`)
+}
+
+export async function ensureDefaultRecordTypes(orgId: string) {
+  const defaults = [
+    { code: "INSURANCE", name: "Seguro", isSystem: true },
+    { code: "REGISTRATION", name: "Matricula / Registro", isSystem: true },
+    { code: "LICENSE", name: "Licencia", isSystem: true },
+    { code: "INSPECTION", name: "Inspeccion tecnica", isSystem: true },
+    { code: "WARRANTY", name: "Garantia", isSystem: true },
+    { code: "PERMIT", name: "Permiso de operacion", isSystem: true },
+  ]
+  for (const d of defaults) {
+    await prisma.assetRecordType.upsert({
+      where: { organizationId_code: { organizationId: orgId, code: d.code } },
+      update: {},
+      create: { organizationId: orgId, ...d },
+    })
+  }
+}

@@ -20,7 +20,7 @@ export function DashboardChart({ data }: { data: Point[] }) {
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
         <YAxis tick={{ fontSize: 11 }} width={40} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
-        <Tooltip contentStyle={{ fontSize: 12 }} formatter={(v: number) => [`Q${v.toLocaleString("es-GT", { minimumFractionDigits: 2 })}`, undefined]} />
+        <Tooltip contentStyle={{ fontSize: 12 }} formatter={(v) => [`Q${Number(v).toLocaleString("es-GT", { minimumFractionDigits: 2 })}`, undefined]} />
         <Area type="monotone" dataKey="income" name="Ingresos" stroke="#10b981" fill="url(#dashIncome)" strokeWidth={2} />
         <Area type="monotone" dataKey="expense" name="Egresos" stroke="#ef4444" fill="url(#dashExpense)" strokeWidth={2} />
       </AreaChart>

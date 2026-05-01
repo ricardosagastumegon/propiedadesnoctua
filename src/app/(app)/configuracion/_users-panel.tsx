@@ -7,22 +7,30 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
-import { createUser, toggleUserActive } from "./actions"
-import { Plus } from "lucide-react"
+import { createUser, toggleUserActive, updateUserRole, updateUserAuthorityPolicy } from "./actions"
+import { Plus, ChevronDown, ChevronRight } from "lucide-react"
 
 interface User {
   id: string
   name: string
   email: string
   role: string
+  authorityPolicy: string
   isActive: boolean
 }
 
 const ROLES: Record<string, string> = {
-  OWNER: "Propietario",
   ADMIN: "Administrador",
   MANAGER: "Gerente",
-  VIEWER: "Lectura",
+  SUPERVISOR: "Supervisor",
+  ASSISTANT: "Asistente",
+  VIEWER: "Visualizador",
+}
+
+const AUTHORITY_POLICIES: Record<string, string> = {
+  NONE: "Sin autoridad de firma",
+  ALONE: "Puede actuar solo",
+  COSIGN_REQUIRED: "Requiere co-firma",
 }
 
 export function UsersPanel({ users, currentUserId }: { users: User[]; currentUserId: string }) {
@@ -30,6 +38,7 @@ export function UsersPanel({ users, currentUserId }: { users: User[]; currentUse
   const [loading, setLoading] = useState(false)
   const [role, setRole] = useState("VIEWER")
   const [error, setError] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(null)
   const ref = useRef<HTMLFormElement>(null)
 
   async function handleSubmit(e: React.FormEvent) {
@@ -43,10 +52,6 @@ export function UsersPanel({ users, currentUserId }: { users: User[]; currentUse
     else { setOpen(false); setError(null) }
   }
 
-  async function handleToggle(userId: string, active: boolean) {
-    await toggleUserActive(userId, active)
-  }
-
   return (
     <Card className="p-6">
       <div className="flex items-center justify-between mb-4">
@@ -58,19 +63,47 @@ export function UsersPanel({ users, currentUserId }: { users: User[]; currentUse
 
       <div className="space-y-2">
         {users.map(u => (
-          <div key={u.id} className="flex items-center justify-between border rounded-lg p-3">
-            <div>
-              <p className="text-sm font-medium">{u.name}</p>
-              <p className="text-xs text-muted-foreground">{u.email} — {ROLES[u.role] ?? u.role}</p>
+          <div key={u.id} className="border rounded-lg">
+            <div className="flex items-center justify-between p-3">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <button onClick={() => setExpanded(e => e === u.id ? null : u.id)} className="text-muted-foreground hover:text-foreground shrink-0">
+                  {expanded === u.id ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                </button>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{u.name}</p>
+                  <p className="text-xs text-muted-foreground">{u.email} — {ROLES[u.role] ?? u.role} — {AUTHORITY_POLICIES[u.authorityPolicy] ?? u.authorityPolicy}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {u.id === currentUserId ? (
+                  <span className="text-xs text-muted-foreground">(yo)</span>
+                ) : (
+                  <Switch checked={u.isActive} onCheckedChange={v => toggleUserActive(u.id, v)} />
+                )}
+              </div>
             </div>
-            {u.id !== currentUserId && (
-              <Switch
-                checked={u.isActive}
-                onCheckedChange={v => handleToggle(u.id, v)}
-              />
-            )}
-            {u.id === currentUserId && (
-              <span className="text-xs text-muted-foreground">(yo)</span>
+
+            {expanded === u.id && (
+              <div className="px-3 pb-3 border-t pt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Rol</label>
+                  <Select defaultValue={u.role} onValueChange={v => updateUserRole(u.id, v)}>
+                    <SelectTrigger className="mt-0.5 h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(ROLES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Politica de autoridad</label>
+                  <Select defaultValue={u.authorityPolicy} onValueChange={v => updateUserAuthorityPolicy(u.id, v)}>
+                    <SelectTrigger className="mt-0.5 h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(AUTHORITY_POLICIES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             )}
           </div>
         ))}

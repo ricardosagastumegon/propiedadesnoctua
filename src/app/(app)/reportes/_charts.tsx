@@ -26,7 +26,7 @@ export function IncomeExpenseChart({ data }: { data: ChartPoint[] }) {
         <XAxis dataKey="label" tick={{ fontSize: 12 }} />
         <YAxis tickFormatter={formatK} tick={{ fontSize: 12 }} width={50} />
         <Tooltip
-          formatter={(value: number) => [`Q${value.toLocaleString("es-GT", { minimumFractionDigits: 2 })}`, undefined]}
+          formatter={(value) => [`Q${Number(value).toLocaleString("es-GT", { minimumFractionDigits: 2 })}`, undefined]}
           contentStyle={{ fontSize: 12 }}
         />
         <Legend />

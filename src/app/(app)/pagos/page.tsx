@@ -124,7 +124,10 @@ export default async function PagosPage() {
                         <TableCell className="tabular-nums">{formatGTQ(inv.total)}</TableCell>
                         <TableCell className="tabular-nums">{formatGTQ(inv.balance)}</TableCell>
                         <TableCell>
-                          <Badge variant={inv.status === "PAID" ? "default" : isOverdue ? "destructive" : "secondary"}>
+                          <Badge
+                            variant={inv.status === "PAID" ? "default" : "outline"}
+                            className={isOverdue && inv.status !== "PAID" ? "border-red-400 text-red-700 bg-red-50" : ""}
+                          >
                             {inv.status === "PAID" ? "Pagada" : isOverdue ? "Vencida" : "Pendiente"}
                           </Badge>
                         </TableCell>

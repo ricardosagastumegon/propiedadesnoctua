@@ -100,9 +100,9 @@ export function ProjectForm({
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <Label>Presupuesto total (Q) *</Label>
-            <Input name="budgetTotal" type="number" min="0" step="0.01" defaultValue={defaultValues?.budgetTotal ?? "0"} />
-            {error.budgetTotal && <p className="text-xs text-destructive">{error.budgetTotal[0]}</p>}
+            <Label>Presupuesto estimado (Q)</Label>
+            <Input name="budgetEstimate" type="number" min="0" step="0.01" defaultValue={defaultValues?.budgetEstimate ?? ""} placeholder="Se calcula desde partidas" />
+            {error.budgetEstimate && <p className="text-xs text-destructive">{error.budgetEstimate[0]}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>Avance (%)</Label>

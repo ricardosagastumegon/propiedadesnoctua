@@ -7,9 +7,10 @@ import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDate, formatGTQ } from "@/lib/format"
-import { PROJECT_TYPES, PROJECT_STATUSES, PROJECT_STATUS_COLORS, COST_TYPES } from "@/lib/schemas/project"
+import { PROJECT_TYPES, PROJECT_STATUSES, PROJECT_STATUS_COLORS } from "@/lib/schemas/project"
 import { TaskList } from "./_task-list"
 import { CostList } from "./_cost-list"
+import { PartidaList } from "./_partida-list"
 import { DeleteProjectButton } from "./_delete-button"
 import { Building2, Calendar } from "lucide-react"
 
@@ -25,11 +26,21 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       property: true,
       tasks: { orderBy: { orderIndex: "asc" } },
       costs: { orderBy: { date: "desc" } },
+      partidas: {
+        orderBy: { orderIndex: "asc" },
+        include: {
+          vendor: { select: { name: true } },
+          approvedQuote: { include: { vendor: { select: { name: true } } } },
+          payments: { orderBy: { date: "desc" } },
+        },
+      },
     },
   })
   if (!project) notFound()
 
-  const budgetUsedPct = project.budgetTotal > 0 ? Math.min(100, (project.budgetSpent / project.budgetTotal) * 100) : 0
+  const budgetEstimate = project.budgetEstimate ?? project.partidas.reduce((s, p) => s + (p.budgetEstimate ?? 0), 0)
+  const amountPaid = project.partidas.reduce((s, p) => s + p.amountPaid, 0)
+  const budgetUsedPct = budgetEstimate > 0 ? Math.min(100, (amountPaid / budgetEstimate) * 100) : 0
   const doneTasks = project.tasks.filter(t => t.status === "DONE").length
 
   return (
@@ -57,37 +68,43 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           <p className="font-display text-2xl tabular-nums">{doneTasks}/{project.tasks.length}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Gastado</p>
-          <p className="font-display text-2xl tabular-nums">{formatGTQ(project.budgetSpent)}</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Pagado</p>
+          <p className="font-display text-2xl tabular-nums">{formatGTQ(amountPaid)}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Presupuesto</p>
           <p className={`font-display text-2xl tabular-nums ${budgetUsedPct > 90 ? "text-destructive" : ""}`}>
-            {formatGTQ(project.budgetTotal)}
+            {budgetEstimate > 0 ? formatGTQ(budgetEstimate) : "—"}
           </p>
         </Card>
       </div>
 
-      {/* Budget progress */}
-      <Card className="p-4 mb-6">
-        <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-          <span>Uso del presupuesto</span>
-          <span>{budgetUsedPct.toFixed(0)}%</span>
-        </div>
-        <div className="w-full bg-muted rounded-full h-2">
-          <div
-            className={`rounded-full h-2 transition-all ${budgetUsedPct > 90 ? "bg-destructive" : "bg-foreground"}`}
-            style={{ width: `${budgetUsedPct}%` }}
-          />
-        </div>
-      </Card>
+      {budgetEstimate > 0 && (
+        <Card className="p-4 mb-6">
+          <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+            <span>Uso del presupuesto</span>
+            <span>{budgetUsedPct.toFixed(0)}%</span>
+          </div>
+          <div className="w-full bg-muted rounded-full h-2">
+            <div
+              className={`rounded-full h-2 transition-all ${budgetUsedPct > 90 ? "bg-destructive" : "bg-foreground"}`}
+              style={{ width: `${budgetUsedPct}%` }}
+            />
+          </div>
+        </Card>
+      )}
 
-      <Tabs defaultValue="tareas">
+      <Tabs defaultValue="partidas">
         <TabsList className="mb-4">
+          <TabsTrigger value="partidas">Partidas ({project.partidas.length})</TabsTrigger>
           <TabsTrigger value="tareas">Tareas ({project.tasks.length})</TabsTrigger>
           <TabsTrigger value="costos">Costos ({project.costs.length})</TabsTrigger>
           <TabsTrigger value="info">Informacion</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="partidas">
+          <PartidaList projectId={id} partidas={project.partidas} />
+        </TabsContent>
 
         <TabsContent value="tareas">
           <TaskList projectId={id} tasks={project.tasks} />

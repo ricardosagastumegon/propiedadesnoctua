@@ -5,11 +5,14 @@ import { prisma } from "@/lib/prisma"
 import { Card } from "@/components/ui/card"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDate, formatGTQ } from "@/lib/format"
 import { ASSET_CATEGORIES, ASSET_STATUSES, ASSET_STATUS_COLORS } from "@/lib/schemas/asset"
 import { DeleteAssetButton } from "./_delete-button"
 import { ServiceLogSection } from "./_service-log"
-import { AlertTriangle, Building2, Calendar, Hash, MapPin, Tag } from "lucide-react"
+import { AssetRecords } from "./_asset-records"
+import { ensureDefaultRecordTypes } from "../actions"
+import { AlertTriangle, Building2, Hash, MapPin, Tag } from "lucide-react"
 
 export default async function AssetDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -17,10 +20,26 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
   const orgId = (session.user as any).organizationId as string
   const { id } = await params
 
-  const asset = await prisma.asset.findFirst({
-    where: { id, organizationId: orgId },
-    include: { property: true, serviceLogs: { orderBy: { date: "desc" } } },
-  })
+  await ensureDefaultRecordTypes(orgId)
+
+  const [asset, recordTypes] = await Promise.all([
+    prisma.asset.findFirst({
+      where: { id, organizationId: orgId },
+      include: {
+        property: true,
+        serviceLogs: { orderBy: { date: "desc" } },
+        records: {
+          where: { isActive: true },
+          include: { recordType: true },
+          orderBy: { expiryDate: "asc" },
+        },
+      },
+    }),
+    prisma.assetRecordType.findMany({
+      where: { organizationId: orgId, isActive: true },
+      orderBy: { name: "asc" },
+    }),
+  ])
   if (!asset) notFound()
 
   const lastLog = asset.serviceLogs[0]
@@ -29,6 +48,12 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
     ? Math.ceil((new Date(lastLog.nextServiceAt).getTime() - today.getTime()) / 86400000)
     : null
   const warrantyExpired = asset.warranty && new Date(asset.warranty) < today
+
+  const expiringRecords = asset.records.filter(r => {
+    if (!r.expiryDate) return false
+    const days = Math.ceil((new Date(r.expiryDate).getTime() - today.getTime()) / 86400000)
+    return days <= r.notifyDaysBefore
+  })
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
@@ -42,7 +67,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
       </PageHeader>
 
       {daysToService !== null && daysToService <= 30 && (
-        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+        <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
           <AlertTriangle className="size-5 text-amber-600 shrink-0 mt-0.5" />
           <p className="text-sm text-amber-800">
             Proximo servicio en <strong>{daysToService} dias</strong> ({formatDate(lastLog!.nextServiceAt!)})
@@ -50,9 +75,44 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
         </div>
       )}
 
+      {expiringRecords.length > 0 && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="size-5 text-red-600 shrink-0" />
+            <p className="text-sm font-medium text-red-800">Documentos por vencer o vencidos</p>
+          </div>
+          {expiringRecords.map(r => {
+            const days = r.expiryDate ? Math.ceil((new Date(r.expiryDate).getTime() - today.getTime()) / 86400000) : 0
+            return (
+              <p key={r.id} className="text-xs text-red-700 mt-1">
+                {r.recordType.name}: {r.title} — {days < 0 ? `Vencido hace ${Math.abs(days)} dias` : `Vence en ${days} dias`}
+              </p>
+            )
+          })}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <ServiceLogSection assetId={id} logs={asset.serviceLogs} />
+        <div className="lg:col-span-2">
+          <Tabs defaultValue="servicios">
+            <TabsList className="mb-4">
+              <TabsTrigger value="servicios">Servicios ({asset.serviceLogs.length})</TabsTrigger>
+              <TabsTrigger value="documentos">
+                Documentos ({asset.records.length})
+                {expiringRecords.length > 0 && (
+                  <span className="ml-1.5 bg-destructive text-white text-xs rounded-full size-4 inline-flex items-center justify-center">
+                    {expiringRecords.length}
+                  </span>
+                )}
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="servicios">
+              <ServiceLogSection assetId={id} logs={asset.serviceLogs} />
+            </TabsContent>
+            <TabsContent value="documentos">
+              <AssetRecords assetId={id} records={asset.records} recordTypes={recordTypes} />
+            </TabsContent>
+          </Tabs>
         </div>
 
         <div className="space-y-4">

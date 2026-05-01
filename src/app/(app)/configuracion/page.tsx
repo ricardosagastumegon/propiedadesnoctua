@@ -16,7 +16,11 @@ export default async function ConfiguracionPage() {
 
   const [org, users, me] = await Promise.all([
     prisma.organization.findUnique({ where: { id: orgId } }),
-    prisma.user.findMany({ where: { organizationId: orgId }, orderBy: { name: "asc" } }),
+    prisma.user.findMany({
+      where: { organizationId: orgId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, email: true, role: true, authorityPolicy: true, isActive: true },
+    }),
     prisma.user.findUnique({ where: { id: userId } }),
   ])
 

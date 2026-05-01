@@ -220,7 +220,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
                       </div>
                       <div className="text-right">
                         <Badge variant="secondary">{p.status}</Badge>
-                        <p className="text-xs text-muted-foreground mt-1">{formatGTQ(p.budgetTotal)}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{p.budgetEstimate != null ? formatGTQ(p.budgetEstimate) : ""}</p>
                       </div>
                     </div>
                   </Card>

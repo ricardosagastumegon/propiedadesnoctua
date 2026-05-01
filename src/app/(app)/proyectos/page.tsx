@@ -17,7 +17,7 @@ export default async function ProyectosPage() {
 
   const projects = await prisma.project.findMany({
     where: { organizationId: orgId },
-    include: { property: true, tasks: true, costs: true },
+    include: { property: true, tasks: true, partidas: { include: { payments: true } } },
     orderBy: { createdAt: "desc" },
   })
 
@@ -36,7 +36,9 @@ export default async function ProyectosPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {projects.map(p => {
-            const budgetUsedPct = p.budgetTotal > 0 ? Math.min(100, (p.budgetSpent / p.budgetTotal) * 100) : 0
+            const budgetEstimate = p.budgetEstimate ?? p.partidas.reduce((s, pt) => s + (pt.budgetEstimate ?? 0), 0)
+            const amountPaid = p.partidas.reduce((s, pt) => s + pt.amountPaid, 0)
+            const budgetUsedPct = budgetEstimate > 0 ? Math.min(100, (amountPaid / budgetEstimate) * 100) : 0
             return (
               <Link key={p.id} href={`/proyectos/${p.id}`}>
                 <Card className="p-4 hover:border-foreground/20 transition-colors cursor-pointer h-full flex flex-col">
@@ -49,7 +51,6 @@ export default async function ProyectosPage() {
                   <p className="font-medium mb-1">{p.name}</p>
                   {p.property && <p className="text-xs text-muted-foreground mb-2">{p.property.name}</p>}
 
-                  {/* Progress bar */}
                   <div className="mt-auto">
                     <div className="flex justify-between text-xs text-muted-foreground mb-1">
                       <span>Avance {p.progressPercent}%</span>
@@ -59,13 +60,15 @@ export default async function ProyectosPage() {
                       <div className="bg-foreground rounded-full h-1.5 transition-all" style={{ width: `${p.progressPercent}%` }} />
                     </div>
                     <div className="mt-2 flex justify-between text-xs">
-                      <span className="text-muted-foreground">Presupuesto</span>
-                      <span className={budgetUsedPct > 90 ? "text-destructive font-medium" : ""}>
-                        {formatGTQ(p.budgetSpent)} / {formatGTQ(p.budgetTotal)}
-                      </span>
+                      <span className="text-muted-foreground">{p.partidas.length} partidas</span>
+                      {budgetEstimate > 0 && (
+                        <span className={budgetUsedPct > 90 ? "text-destructive font-medium" : ""}>
+                          {formatGTQ(amountPaid)} / {formatGTQ(budgetEstimate)}
+                        </span>
+                      )}
                     </div>
                     {p.endDate && (
-                      <p className="text-xs text-muted-foreground mt-1">Fecha objetivo: {formatDate(p.endDate)}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Objetivo: {formatDate(p.endDate)}</p>
                     )}
                   </div>
                 </Card>

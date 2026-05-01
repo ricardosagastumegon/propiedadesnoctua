@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client"
 import bcrypt from "bcryptjs"
-import { subMonths, addMonths, addDays } from "date-fns"
+import { subMonths, addMonths, addDays, subDays } from "date-fns"
 
 const prisma = new PrismaClient()
 
@@ -11,17 +11,69 @@ async function main() {
     create: { name: "Propiedades Demo GT", slug: "demo", type: "FAMILY", taxId: "CF" },
   })
 
-  const passwordHash = await bcrypt.hash("demo1234", 10)
+  const hash = await bcrypt.hash("demo1234", 10)
+
+  // ─── USERS ──────────────────────────────────────────────────────────────────
   const admin = await prisma.user.upsert({
-    where: { email: "demo@inmobiliaria.gt" },
+    where: { email: "admin@demo.gt" },
     update: {},
-    create: { email: "demo@inmobiliaria.gt", name: "Carlos Mendez", passwordHash, role: "OWNER", organizationId: org.id },
+    create: { email: "admin@demo.gt", name: "Carlos Mendez", passwordHash: hash, role: "ADMIN", authorityPolicy: "ALONE", organizationId: org.id },
   })
 
-  // Clear all data for clean seed
+  const manager = await prisma.user.upsert({
+    where: { email: "gerente@demo.gt" },
+    update: {},
+    create: { email: "gerente@demo.gt", name: "Sofia Giron", passwordHash: hash, role: "MANAGER", authorityPolicy: "COSIGN_REQUIRED", organizationId: org.id },
+  })
+
+  const supervisor = await prisma.user.upsert({
+    where: { email: "super@demo.gt" },
+    update: {},
+    create: { email: "super@demo.gt", name: "Luis Herrera", passwordHash: hash, role: "SUPERVISOR", authorityPolicy: "COSIGN_REQUIRED", organizationId: org.id },
+  })
+
+  const assistant1 = await prisma.user.upsert({
+    where: { email: "asist1@demo.gt" },
+    update: {},
+    create: { email: "asist1@demo.gt", name: "Maria Torres", passwordHash: hash, role: "ASSISTANT", authorityPolicy: "NONE", organizationId: org.id },
+  })
+
+  const assistant2 = await prisma.user.upsert({
+    where: { email: "asist2@demo.gt" },
+    update: {},
+    create: { email: "asist2@demo.gt", name: "Pedro Vasquez", passwordHash: hash, role: "ASSISTANT", authorityPolicy: "NONE", organizationId: org.id },
+  })
+
+  const viewer = await prisma.user.upsert({
+    where: { email: "demo@inmobiliaria.gt" },
+    update: {},
+    create: { email: "demo@inmobiliaria.gt", name: "Ana Morales", passwordHash: hash, role: "VIEWER", authorityPolicy: "NONE", organizationId: org.id },
+  })
+
+  // ─── COSIGN POLICIES ────────────────────────────────────────────────────────
+  // Manager needs admin to co-sign
+  await prisma.cosignPolicy.upsert({
+    where: { userId: manager.id },
+    update: { allowedCosigners: { set: [{ id: admin.id }] } },
+    create: { userId: manager.id, allowedCosigners: { connect: [{ id: admin.id }] } },
+  })
+  // Supervisor needs manager or admin to co-sign
+  await prisma.cosignPolicy.upsert({
+    where: { userId: supervisor.id },
+    update: { allowedCosigners: { set: [{ id: admin.id }, { id: manager.id }] } },
+    create: { userId: supervisor.id, allowedCosigners: { connect: [{ id: admin.id }, { id: manager.id }] } },
+  })
+
+  // ─── CLEAN ──────────────────────────────────────────────────────────────────
   await prisma.notification.deleteMany({ where: { organizationId: org.id } })
+  await prisma.approvalRequest.deleteMany({ where: { organizationId: org.id } })
+  await prisma.assetRecord.deleteMany({ where: { asset: { organizationId: org.id } } })
   await prisma.assetServiceLog.deleteMany({ where: { asset: { organizationId: org.id } } })
   await prisma.asset.deleteMany({ where: { organizationId: org.id } })
+  await prisma.assetRecordType.deleteMany({ where: { organizationId: org.id } })
+  await prisma.vendorInvoice.deleteMany({ where: { organizationId: org.id } })
+  await prisma.partidaPayment.deleteMany({ where: { partida: { project: { organizationId: org.id } } } })
+  await prisma.projectPartida.deleteMany({ where: { project: { organizationId: org.id } } })
   await prisma.quoteItem.deleteMany({ where: { quote: { organizationId: org.id } } })
   await prisma.quote.deleteMany({ where: { organizationId: org.id } })
   await prisma.vendor.deleteMany({ where: { organizationId: org.id } })
@@ -29,456 +81,522 @@ async function main() {
   await prisma.projectCost.deleteMany({ where: { project: { organizationId: org.id } } })
   await prisma.project.deleteMany({ where: { organizationId: org.id } })
   await prisma.maintenanceRequest.deleteMany({ where: { organizationId: org.id } })
-  await prisma.invoice.deleteMany({ where: { organizationId: org.id } })
+  await prisma.expense.deleteMany({ where: { organizationId: org.id } })
+  await prisma.invoiceItem.deleteMany({ where: { invoice: { organizationId: org.id } } })
   await prisma.payment.deleteMany({ where: { organizationId: org.id } })
+  await prisma.invoice.deleteMany({ where: { organizationId: org.id } })
   await prisma.contract.deleteMany({ where: { organizationId: org.id } })
   await prisma.property.deleteMany({ where: { organizationId: org.id } })
   await prisma.tenant.deleteMany({ where: { organizationId: org.id } })
   await prisma.employee.deleteMany({ where: { organizationId: org.id } })
 
-  // ─── PROPERTIES ─────────────────────────────────────────────────────────────
   const now = new Date()
 
+  // ─── PROPERTIES ─────────────────────────────────────────────────────────────
   const propCayala = await prisma.property.create({ data: {
     organizationId: org.id,
-    name: "Casa Cayala",
-    type: "HOUSE", status: "RENTED",
+    name: "Casa Cayala", type: "HOUSE", status: "RENTED",
     addressLine: "Boulevard Cayala 12-34", zone: "Zona 16", city: "Guatemala", department: "Guatemala",
     bedrooms: 4, bathrooms: 3.5, builtArea: 320, currentValue: 2800000,
   }})
 
   const propMonterrico = await prisma.property.create({ data: {
     organizationId: org.id,
-    name: "Chalet Monterrico",
-    type: "CHALET", status: "AVAILABLE",
-    addressLine: "Aldea Monterrico km 110", city: "Taxisco", department: "Santa Rosa",
-    bedrooms: 5, bathrooms: 4, builtArea: 280, currentValue: 1500000,
+    name: "Cabana Monterrico", type: "VACATION", status: "AVAILABLE",
+    addressLine: "Calle del Mar km 105", city: "Monterrico", department: "Santa Rosa",
+    bedrooms: 3, bathrooms: 2, builtArea: 180, currentValue: 1500000,
   }})
 
-  const propApartamento = await prisma.property.create({ data: {
+  const propZ14 = await prisma.property.create({ data: {
     organizationId: org.id,
-    name: "Apto Zona 14",
-    type: "APARTMENT", status: "RENTED",
-    addressLine: "Av. Las Americas 8-50, Ed. Tiffany", zone: "Zona 14", city: "Guatemala", department: "Guatemala",
-    bedrooms: 2, bathrooms: 2, builtArea: 110, currentValue: 950000,
+    name: "Apartamento Zona 14", type: "APARTMENT", status: "RENTED",
+    addressLine: "Av. La Reforma 14-55 apto 8B", zone: "Zona 14", city: "Guatemala", department: "Guatemala",
+    bedrooms: 2, bathrooms: 2, builtArea: 120, currentValue: 1200000,
   }})
 
   const propOficina = await prisma.property.create({ data: {
     organizationId: org.id,
-    name: "Oficina Zona 10",
-    type: "OFFICE", status: "RENTED",
-    addressLine: "Blvd. Los Proceres 15-60, Torre Sixtino", zone: "Zona 10", city: "Guatemala", department: "Guatemala",
-    builtArea: 85, currentValue: 750000,
+    name: "Oficina Zona 10", type: "COMMERCIAL", status: "RENTED",
+    addressLine: "10 Calle 1-65 Of. 302", zone: "Zona 10", city: "Guatemala", department: "Guatemala",
+    builtArea: 85, currentValue: 900000,
   }})
 
   const propBodega = await prisma.property.create({ data: {
     organizationId: org.id,
-    name: "Bodega Mixco",
-    type: "WAREHOUSE", status: "MAINTENANCE",
-    addressLine: "Km 13 Calzada Roosevelt", city: "Mixco", department: "Guatemala",
-    builtArea: 500, currentValue: 600000,
+    name: "Bodega Mixco", type: "WAREHOUSE", status: "AVAILABLE",
+    addressLine: "Calzada Roosevelt 25-80", city: "Mixco", department: "Guatemala",
+    builtArea: 600, currentValue: 1800000,
   }})
 
   // ─── TENANTS ────────────────────────────────────────────────────────────────
-  const tenantAna = await prisma.tenant.create({ data: {
-    organizationId: org.id,
-    fullName: "Ana Patricia Lopez", documentType: "DPI", documentNumber: "2345678901234",
-    email: "ana.lopez@gmail.com", phone: "5534-9871", type: "INDIVIDUAL",
-    emergencyContact: "Mario Lopez", emergencyPhone: "5512-3456",
+  const t1 = await prisma.tenant.create({ data: {
+    organizationId: org.id, type: "INDIVIDUAL", fullName: "Ana Lopez Martinez",
+    documentType: "DPI", documentNumber: "2485637890101",
+    email: "ana.lopez@gmail.com", phone: "5588-7766",
   }})
 
-  const tenantRoberto = await prisma.tenant.create({ data: {
-    organizationId: org.id,
-    fullName: "Roberto Castillo Ruiz", documentType: "DPI", documentNumber: "1234567890123",
-    email: "rcastillo@email.com", phone: "4455-6677", type: "INDIVIDUAL",
-    emergencyContact: "Lucia Ruiz", emergencyPhone: "5500-1122",
+  const t2 = await prisma.tenant.create({ data: {
+    organizationId: org.id, type: "INDIVIDUAL", fullName: "Roberto Castillo Juarez",
+    documentType: "DPI", documentNumber: "1924538790201",
+    email: "rcastillo@outlook.com", phone: "4477-3355",
   }})
 
-  const tenantEmpresa = await prisma.tenant.create({ data: {
-    organizationId: org.id,
-    fullName: "Soluciones Digitales GT S.A.", documentType: "NIT", documentNumber: "1234567-8",
-    email: "admin@solucionesgt.com", phone: "2267-8900", type: "COMPANY",
+  const t3 = await prisma.tenant.create({ data: {
+    organizationId: org.id, type: "COMPANY", fullName: "Soluciones TI Guatemala S.A.",
+    documentType: "NIT", documentNumber: "78654321-7",
+    email: "admin@solucionesti.gt", phone: "2366-5544",
   }})
 
-  const tenantMaria = await prisma.tenant.create({ data: {
-    organizationId: org.id,
-    fullName: "Maria Fernanda Gomez", documentType: "DPI", documentNumber: "9876543210123",
-    email: "mfgomez@hotmail.com", phone: "5599-4433", type: "INDIVIDUAL",
-    emergencyContact: "Jose Gomez", emergencyPhone: "5588-7766",
+  const t4 = await prisma.tenant.create({ data: {
+    organizationId: org.id, type: "INDIVIDUAL", fullName: "Maria Fernanda Solis",
+    documentType: "DPI", documentNumber: "3075849260303",
+    phone: "3344-2211",
   }})
 
   // ─── CONTRACTS ──────────────────────────────────────────────────────────────
-  const contractStart6mo = subMonths(now, 6)
-  const contractActive1 = await prisma.contract.create({ data: {
+  const c1 = await prisma.contract.create({ data: {
     organizationId: org.id,
-    contractNumber: "C-2024-0001",
-    propertyId: propCayala.id,
-    tenantId: tenantAna.id,
+    contractNumber: "C-2024-001",
+    propertyId: propCayala.id, tenantId: t1.id,
+    startDate: subMonths(now, 18), endDate: addDays(now, 45), // Expires in 45 days
+    monthlyRent: 8500, paymentDueDay: 5, deposit: 17000,
     status: "ACTIVE",
-    startDate: contractStart6mo,
-    endDate: addMonths(contractStart6mo, 12),
-    monthlyRent: 12000,
-    deposit: 24000,
-    paymentFrequency: "MONTHLY",
-    paymentDueDay: 5,
-    signedAt: contractStart6mo,
   }})
 
-  const contractActive2 = await prisma.contract.create({ data: {
+  const c2 = await prisma.contract.create({ data: {
     organizationId: org.id,
-    contractNumber: "C-2024-0002",
-    propertyId: propApartamento.id,
-    tenantId: tenantRoberto.id,
+    contractNumber: "C-2024-002",
+    propertyId: propZ14.id, tenantId: t2.id,
+    startDate: subMonths(now, 12), endDate: addMonths(now, 14),
+    monthlyRent: 5500, paymentDueDay: 1, deposit: 11000,
     status: "ACTIVE",
-    startDate: subMonths(now, 3),
-    endDate: addMonths(now, 9),
-    monthlyRent: 5500,
-    deposit: 11000,
-    paymentFrequency: "MONTHLY",
-    paymentDueDay: 1,
-    signedAt: subMonths(now, 3),
   }})
 
-  const contractActive3 = await prisma.contract.create({ data: {
+  const c3 = await prisma.contract.create({ data: {
     organizationId: org.id,
-    contractNumber: "C-2024-0003",
-    propertyId: propOficina.id,
-    tenantId: tenantEmpresa.id,
+    contractNumber: "C-2024-003",
+    propertyId: propOficina.id, tenantId: t3.id,
+    startDate: subMonths(now, 8), endDate: addMonths(now, 16),
+    monthlyRent: 12000, paymentDueDay: 10, deposit: 24000,
     status: "ACTIVE",
-    startDate: subMonths(now, 10),
-    endDate: addDays(now, 45),
-    monthlyRent: 6000,
-    deposit: 12000,
-    paymentFrequency: "MONTHLY",
-    paymentDueDay: 1,
-    signedAt: subMonths(now, 10),
   }})
 
-  const contractExpiring = await prisma.contract.create({ data: {
+  const c4 = await prisma.contract.create({ data: {
     organizationId: org.id,
-    contractNumber: "C-2025-0001",
-    propertyId: propBodega.id,
-    tenantId: tenantMaria.id,
+    contractNumber: "C-2025-001",
+    propertyId: propBodega.id, tenantId: t4.id,
+    startDate: subMonths(now, 2), endDate: addDays(now, 20), // Expires in 20 days
+    monthlyRent: 9000, paymentDueDay: 15, deposit: 18000,
     status: "ACTIVE",
-    startDate: subMonths(now, 11),
-    endDate: addDays(now, 20),
-    monthlyRent: 4500,
-    deposit: 9000,
-    paymentFrequency: "MONTHLY",
-    paymentDueDay: 10,
-    signedAt: subMonths(now, 11),
   }})
 
-  // ─── PAYMENTS (6 months history) ─────────────────────────────────────────
-  async function addPayments(contractId: string, amount: number, months: number) {
+  // ─── PAYMENTS ───────────────────────────────────────────────────────────────
+  async function addPayments(contractId: string, monthlyRent: number, months: number) {
     for (let i = months - 1; i >= 0; i--) {
+      const d = subMonths(now, i)
+      d.setDate(5)
       await prisma.payment.create({ data: {
-        organizationId: org.id,
-        contractId,
-        amount,
-        paymentDate: subMonths(now, i),
-        method: i % 3 === 0 ? "TRANSFER" : "CHECK",
-        reference: `REF-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        organizationId: org.id, contractId,
+        amount: monthlyRent, paymentDate: d,
+        method: "TRANSFER", reference: `TRF-${Date.now()}-${i}`,
       }})
     }
   }
 
-  await addPayments(contractActive1.id, 12000, 6)
-  await addPayments(contractActive2.id, 5500, 3)
-  await addPayments(contractActive3.id, 6000, 6)
-  await addPayments(contractExpiring.id, 4500, 5)
+  await addPayments(c1.id, 8500, 6)
+  await addPayments(c2.id, 5500, 5)
+  await addPayments(c3.id, 12000, 4)
+  await addPayments(c4.id, 9000, 2)
 
-  // ─── INVOICES ─────────────────────────────────────────────────────────────
-  await prisma.invoice.createMany({ data: [
+  // ─── INVOICES ───────────────────────────────────────────────────────────────
+  const inv1 = await prisma.invoice.create({ data: {
+    organizationId: org.id, contractId: c1.id,
+    number: "F-2025-001",
+    issueDate: subMonths(now, 1), dueDate: addDays(subMonths(now, 1), 30),
+    subtotal: 8500, taxAmount: 0, total: 8500, balance: 0, paidAmount: 8500,
+    status: "PAID",
+  }})
+
+  await prisma.invoice.create({ data: {
+    organizationId: org.id, contractId: c2.id,
+    number: "F-2025-002",
+    issueDate: now, dueDate: addDays(now, 15),
+    subtotal: 5500, taxAmount: 0, total: 5500, balance: 5500,
+    status: "ISSUED",
+    isModified: true, modificationType: "DISCOUNT",
+    modificationAmount: 275, modificationReason: "Descuento por pago anticipado",
+  }})
+
+  await prisma.invoice.create({ data: {
+    organizationId: org.id, contractId: c3.id,
+    number: "F-2025-003",
+    issueDate: subMonths(now, 2), dueDate: subDays(now, 15),
+    subtotal: 12000, taxAmount: 0, total: 12000, balance: 12000,
+    status: "OVERDUE",
+  }})
+
+  // ─── EXPENSES ───────────────────────────────────────────────────────────────
+  await prisma.expense.createMany({ data: [
+    { organizationId: org.id, propertyId: propCayala.id, category: "MAINTENANCE", amount: 3500, date: subMonths(now, 2), description: "Reparacion plomeria cocina" },
+    { organizationId: org.id, propertyId: propMonterrico.id, category: "CLEANING", amount: 1800, date: subMonths(now, 1), description: "Limpieza profunda playa" },
+    { organizationId: org.id, propertyId: propZ14.id, category: "INSURANCE", amount: 4500, date: subMonths(now, 3), description: "Poliza anual propiedad" },
+    { organizationId: org.id, propertyId: propOficina.id, category: "UTILITIES", amount: 2200, date: subMonths(now, 1), description: "Electricidad octubre" },
+    { organizationId: org.id, category: "ADMINISTRATIVE", amount: 1500, date: subMonths(now, 1), description: "Honorarios legales" },
+    { organizationId: org.id, propertyId: propBodega.id, category: "MAINTENANCE", amount: 5000, date: subMonths(now, 4), description: "Pintura exterior bodega" },
+  ]})
+
+  // ─── MAINTENANCE TICKETS ─────────────────────────────────────────────────────
+  await prisma.maintenanceRequest.createMany({ data: [
+    { organizationId: org.id, ticketNumber: "T-001", propertyId: propCayala.id, category: "PLUMBING", priority: "HIGH", status: "IN_PROGRESS", title: "Fuga en tuberia de jardin", description: "Se reporto fuga de agua en area de jardin trasero", reportedBy: "Ana Lopez", reportedAt: subDays(now, 5), assignedToId: supervisor.id },
+    { organizationId: org.id, ticketNumber: "T-002", propertyId: propMonterrico.id, category: "ELECTRICAL", priority: "URGENT", status: "REPORTED", title: "Cortocircuito en sala", description: "Breaker principal salta repetidamente", reportedBy: "Encargado", reportedAt: subDays(now, 2) },
+    { organizationId: org.id, ticketNumber: "T-003", propertyId: propZ14.id, category: "HVAC", priority: "MEDIUM", status: "ASSIGNED", title: "A/C no enfria", description: "Unidad de A/C pierde eficiencia", assignedToId: assistant1.id, assignedAt: subDays(now, 3), reportedAt: subDays(now, 7) },
+    { organizationId: org.id, ticketNumber: "T-004", propertyId: propOficina.id, category: "SECURITY", priority: "LOW", status: "REPORTED", title: "Camara de seguridad sin imagen", description: "Camara exterior del parqueo no transmite", reportedAt: subDays(now, 10) },
+    { organizationId: org.id, ticketNumber: "T-005", propertyId: propCayala.id, category: "GENERAL", priority: "MEDIUM", status: "COMPLETED", title: "Puerta de garage atascada", description: "Motor de puerta automatica falla", reportedAt: subDays(now, 20), completedAt: subDays(now, 15) },
+  ]})
+
+  // ─── VENDORS ────────────────────────────────────────────────────────────────
+  const v1 = await prisma.vendor.create({ data: {
+    organizationId: org.id, name: "Plomeros Unidos GT", category: "PLUMBING",
+    contactName: "Jose Pilar", phone: "5544-3322", rating: 4.5,
+  }})
+
+  const v2 = await prisma.vendor.create({ data: {
+    organizationId: org.id, name: "Electro Servicios GT", category: "ELECTRICAL",
+    contactName: "Miguel Angel Ruiz", phone: "4433-2211", email: "info@electroserv.gt", rating: 4.8,
+  }})
+
+  const v3 = await prisma.vendor.create({ data: {
+    organizationId: org.id, name: "Constructora Vega SA", category: "CONSTRUCTION",
+    taxId: "12345678-9", contactName: "Ing. Roberto Vega", phone: "2345-6789", rating: 4.2,
+  }})
+
+  const v4 = await prisma.vendor.create({ data: {
+    organizationId: org.id, name: "Clima Total GT", category: "HVAC",
+    phone: "6677-8899", email: "ventas@climatotal.gt", rating: 4.6,
+  }})
+
+  const v5 = await prisma.vendor.create({ data: {
+    organizationId: org.id, name: "Pintura Profesional", category: "PAINTING",
+    contactName: "Juan Mateo", phone: "3322-4455",
+  }})
+
+  const v6 = await prisma.vendor.create({ data: {
+    organizationId: org.id, name: "Seguridad Integral", category: "SECURITY",
+    phone: "7788-9900", isActive: true,
+  }})
+
+  // ─── QUOTES ─────────────────────────────────────────────────────────────────
+  const q1 = await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v3.id, propertyId: propMonterrico.id,
+    quoteNumber: "COT-2025-001", date: subDays(now, 15),
+    validUntil: addDays(now, 15), subtotal: 45000, taxAmount: 5400, total: 50400,
+    status: "PENDING",
+  }})
+  await prisma.quoteItem.createMany({ data: [
+    { quoteId: q1.id, description: "Remodelacion de terraza", quantity: 1, unitPrice: 30000, total: 30000 },
+    { quoteId: q1.id, description: "Impermeabilizacion de techo", quantity: 1, unitPrice: 15000, total: 15000 },
+  ]})
+
+  const q2 = await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v4.id,
+    quoteNumber: "COT-2025-002", date: subDays(now, 20),
+    subtotal: 18000, taxAmount: 2160, total: 20160,
+    status: "APPROVED", approvedAt: subDays(now, 5), approvedBy: admin.name,
+  }})
+  await prisma.quoteItem.createMany({ data: [
+    { quoteId: q2.id, description: "Instalacion A/C split 24000 BTU", quantity: 2, unitPrice: 8500, total: 17000 },
+    { quoteId: q2.id, description: "Instalacion", quantity: 1, unitPrice: 1000, total: 1000 },
+  ]})
+
+  const q3 = await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v5.id, propertyId: propBodega.id,
+    quoteNumber: "COT-2025-003", date: subDays(now, 5),
+    validUntil: addDays(now, 25), subtotal: 22000, taxAmount: 2640, total: 24640,
+    status: "PENDING",
+  }})
+  await prisma.quoteItem.createMany({ data: [
+    { quoteId: q3.id, description: "Pintura exterior m2 (600 m2)", quantity: 600, unit: "m2", unitPrice: 35, total: 21000 },
+    { quoteId: q3.id, description: "Pintura interior m2 (50 m2)", quantity: 50, unit: "m2", unitPrice: 20, total: 1000 },
+  ]})
+
+  // ─── VENDOR INVOICES ────────────────────────────────────────────────────────
+  await prisma.vendorInvoice.createMany({ data: [
     {
-      organizationId: org.id, contractId: contractActive1.id,
-      number: "F-2025-0001", status: "PAID",
-      issueDate: subMonths(now, 1), dueDate: subMonths(now, 1),
-      subtotal: 12000, total: 12000, paidAmount: 12000, balance: 0,
+      organizationId: org.id, vendorId: v4.id,
+      invoiceNumber: "FAC-V-001", date: subDays(now, 10),
+      dueDate: addDays(now, 20), subtotal: 18000, taxAmount: 2160, total: 20160,
+      balance: 20160, status: "APPROVED",
     },
     {
-      organizationId: org.id, contractId: contractActive2.id,
-      number: "F-2025-0002", status: "PENDING",
-      issueDate: now, dueDate: addDays(now, 10),
-      subtotal: 5500, total: 5500, paidAmount: 0, balance: 5500,
+      organizationId: org.id, vendorId: v3.id, propertyId: propMonterrico.id,
+      invoiceNumber: "FAC-V-002", date: subDays(now, 30),
+      dueDate: subDays(now, 5), subtotal: 8000, taxAmount: 960, total: 8960,
+      balance: 0, paidAmount: 8960, status: "PAID", paidAt: subDays(now, 6),
     },
     {
-      organizationId: org.id, contractId: contractActive3.id,
-      number: "F-2025-0003", status: "OVERDUE",
-      issueDate: subMonths(now, 2), dueDate: subMonths(now, 1),
-      subtotal: 6000, total: 6000, paidAmount: 0, balance: 6000,
+      organizationId: org.id, vendorId: v1.id, propertyId: propCayala.id,
+      invoiceNumber: "FAC-V-003", date: subDays(now, 5),
+      dueDate: addDays(now, 25), subtotal: 3500, taxAmount: 420, total: 3920,
+      balance: 3920, status: "PENDING",
     },
   ]})
 
-  // ─── EXPENSES ─────────────────────────────────────────────────────────────
-  const expenseData = [
-    { category: "MAINTENANCE", amount: 3500, description: "Reparacion bomba de agua", propertyId: propCayala.id, date: subMonths(now, 2) },
-    { category: "CLEANING", amount: 800, description: "Limpieza profunda post-inquilino", propertyId: propMonterrico.id, date: subMonths(now, 1) },
-    { category: "TAXES", amount: 2200, description: "IUSI primer semestre", propertyId: propOficina.id, date: subMonths(now, 3) },
-    { category: "INSURANCE", amount: 4500, description: "Seguro anual propiedades", propertyId: propCayala.id, date: subMonths(now, 4) },
-    { category: "UTILITIES", amount: 1200, description: "Agua y luz", propertyId: propBodega.id, date: subMonths(now, 1) },
-    { category: "MAINTENANCE", amount: 5000, description: "Pintura exterior", propertyId: propMonterrico.id, date: subMonths(now, 5) },
-    { category: "MAINTENANCE", amount: 1800, description: "Cambio de cerraduras", propertyId: propApartamento.id, date: subMonths(now, 2) },
-    { category: "ADMIN", amount: 600, description: "Honorarios gestion mensual", date: now },
-  ]
-  for (const e of expenseData) {
-    await prisma.expense.create({ data: { organizationId: org.id, currency: "GTQ", ...e } })
-  }
+  // ─── ASSETS ─────────────────────────────────────────────────────────────────
+  const assetLancha1 = await prisma.asset.create({ data: {
+    organizationId: org.id, propertyId: propMonterrico.id,
+    category: "VEHICLE", name: "Lancha Monterrico A",
+    brand: "Yamaha", model: "AR210", serialNumber: "YM-2019-0045",
+    purchaseDate: new Date("2019-06-15"), purchaseCost: 185000, currentValue: 130000,
+    status: "ACTIVE", location: "Muelle privado Monterrico",
+  }})
 
-  // ─── MAINTENANCE TICKETS ──────────────────────────────────────────────────
-  const tickets = [
-    { category: "PLUMBING", priority: "URGENT", title: "Fuga en tubo principal cocina", status: "IN_PROGRESS", propertyId: propCayala.id, reportedBy: "Ana Lopez", startedAt: subMonths(now, 0.1) },
-    { category: "ELECTRICAL", priority: "HIGH", title: "Corto circuito en panel", status: "ASSIGNED", propertyId: propApartamento.id },
-    { category: "HVAC", priority: "MEDIUM", title: "Aire acondicionado no enfria", status: "REPORTED", propertyId: propOficina.id, reportedBy: "Soluciones GT" },
-    { category: "PAINTING", priority: "LOW", title: "Pintura descascarada sala", status: "REPORTED", propertyId: propMonterrico.id },
-    { category: "STRUCTURAL", priority: "HIGH", title: "Grieta en pared este", status: "COMPLETED", propertyId: propBodega.id, completedAt: subMonths(now, 1), actualCost: 8500 },
-    { category: "CLEANING", priority: "LOW", title: "Limpieza de cisternas", status: "COMPLETED", propertyId: propCayala.id, completedAt: subMonths(now, 2), actualCost: 1200 },
-    { category: "SECURITY", priority: "MEDIUM", title: "Camara de seguridad danada", status: "REPORTED", propertyId: propOficina.id },
-    { category: "APPLIANCE", priority: "MEDIUM", title: "Lavadora averiada", status: "ASSIGNED", propertyId: propApartamento.id, reportedBy: "Roberto Castillo" },
-  ]
-  for (let i = 0; i < tickets.length; i++) {
-    const t = tickets[i]
-    await prisma.maintenanceRequest.create({ data: {
-      organizationId: org.id,
-      ticketNumber: `M-${now.getFullYear()}-${String(i + 1).padStart(4, "0")}`,
-      description: `Descripcion detallada: ${t.title}`,
-      estimatedCost: Math.floor(Math.random() * 5000) + 500,
-      reportedAt: subMonths(now, Math.random() * 2),
-      assignedAt: t.status !== "REPORTED" ? subMonths(now, 0.5) : null,
-      ...t,
+  const assetLancha2 = await prisma.asset.create({ data: {
+    organizationId: org.id, propertyId: propMonterrico.id,
+    category: "VEHICLE", name: "Lancha Monterrico B",
+    brand: "Sea-Doo", model: "Challenger 180", serialNumber: "SD-2021-1122",
+    purchaseDate: new Date("2021-03-10"), purchaseCost: 220000, currentValue: 185000,
+    status: "ACTIVE", location: "Muelle privado Monterrico",
+  }})
+
+  const assetJetski = await prisma.asset.create({ data: {
+    organizationId: org.id, propertyId: propMonterrico.id,
+    category: "VEHICLE", name: "Jet Ski Monterrico",
+    brand: "Kawasaki", model: "Ultra 310X", serialNumber: "KW-310-2020",
+    purchaseDate: new Date("2020-08-01"), purchaseCost: 95000, currentValue: 75000,
+    status: "ACTIVE", location: "Muelle privado Monterrico",
+  }})
+
+  const assetAC1 = await prisma.asset.create({ data: {
+    organizationId: org.id, propertyId: propCayala.id,
+    category: "HVAC", name: "A/C Sala Principal Cayala",
+    brand: "LG", model: "LS-Q242HSG2", serialNumber: "LG2022-AC-001",
+    purchaseDate: new Date("2022-01-15"), purchaseCost: 12500, currentValue: 9000,
+    status: "ACTIVE", location: "Sala principal",
+  }})
+
+  const assetAC2 = await prisma.asset.create({ data: {
+    organizationId: org.id, propertyId: propZ14.id,
+    category: "HVAC", name: "A/C Recamara Master Z14",
+    brand: "Samsung", model: "AR18TSHQBU", serialNumber: "SAM-AC-2023-88",
+    purchaseDate: new Date("2023-05-20"), purchaseCost: 8900, currentValue: 7500,
+    status: "ACTIVE",
+  }})
+
+  // ─── SERVICE LOGS ────────────────────────────────────────────────────────────
+  await prisma.assetServiceLog.createMany({ data: [
+    { assetId: assetLancha1.id, serviceType: "Mantenimiento anual", date: subMonths(now, 6), cost: 4500, performedBy: "Taller Naval GT", nextServiceAt: addMonths(now, 6) },
+    { assetId: assetLancha2.id, serviceType: "Revision de motor", date: subMonths(now, 2), cost: 2800, nextServiceAt: addDays(now, 12) },
+    { assetId: assetJetski.id, serviceType: "Cambio de aceite", date: subMonths(now, 4), cost: 1200, performedBy: "Kawasaki GT", nextServiceAt: addDays(now, 25) },
+    { assetId: assetAC1.id, serviceType: "Limpieza y recarga", date: subMonths(now, 3), cost: 850, nextServiceAt: addMonths(now, 3) },
+  ]})
+
+  // ─── ASSET RECORD TYPES ──────────────────────────────────────────────────────
+  const rtypes = await Promise.all([
+    prisma.assetRecordType.create({ data: { organizationId: org.id, code: "INSURANCE", name: "Seguro", isSystem: true } }),
+    prisma.assetRecordType.create({ data: { organizationId: org.id, code: "REGISTRATION", name: "Matricula / Registro", isSystem: true } }),
+    prisma.assetRecordType.create({ data: { organizationId: org.id, code: "LICENSE", name: "Licencia", isSystem: true } }),
+    prisma.assetRecordType.create({ data: { organizationId: org.id, code: "INSPECTION", name: "Inspeccion tecnica", isSystem: true } }),
+    prisma.assetRecordType.create({ data: { organizationId: org.id, code: "WARRANTY", name: "Garantia", isSystem: true } }),
+    prisma.assetRecordType.create({ data: { organizationId: org.id, code: "PERMIT", name: "Permiso de operacion", isSystem: true } }),
+  ])
+  const [rtInsurance, rtRegistration, rtLicense, rtInspection, rtWarranty] = rtypes
+
+  // ─── ASSET RECORDS ───────────────────────────────────────────────────────────
+  // Lancha 1 - Insurance expiring in 5 days (URGENT)
+  await prisma.assetRecord.create({ data: {
+    assetId: assetLancha1.id, recordTypeId: rtInsurance.id,
+    title: "Poliza Seguro 2024", issueDate: subMonths(now, 11),
+    expiryDate: addDays(now, 5), notifyDaysBefore: 30,
+    notes: "Seguro maritimo Aseguradoras GT",
+  }})
+  // Lancha 1 - Registration expiring in 15 days
+  await prisma.assetRecord.create({ data: {
+    assetId: assetLancha1.id, recordTypeId: rtRegistration.id,
+    title: "Matricula Lancha 2025", issueDate: subMonths(now, 10),
+    expiryDate: addDays(now, 15), notifyDaysBefore: 30,
+  }})
+  // Lancha 2 - Valid insurance
+  await prisma.assetRecord.create({ data: {
+    assetId: assetLancha2.id, recordTypeId: rtInsurance.id,
+    title: "Poliza Seguro Lancha B", issueDate: subMonths(now, 2),
+    expiryDate: addMonths(now, 10), notifyDaysBefore: 30,
+  }})
+  // Jet Ski - Expired registration
+  await prisma.assetRecord.create({ data: {
+    assetId: assetJetski.id, recordTypeId: rtRegistration.id,
+    title: "Matricula Jet Ski 2024", issueDate: subMonths(now, 13),
+    expiryDate: subDays(now, 10), notifyDaysBefore: 30,
+    notes: "VENCIDA - pendiente renovacion",
+  }})
+  // Jet Ski - License expiring in 8 days
+  await prisma.assetRecord.create({ data: {
+    assetId: assetJetski.id, recordTypeId: rtLicense.id,
+    title: "Licencia nautica 2025", issueDate: subMonths(now, 11),
+    expiryDate: addDays(now, 8), notifyDaysBefore: 30,
+  }})
+  // AC warranty (valid)
+  await prisma.assetRecord.create({ data: {
+    assetId: assetAC1.id, recordTypeId: rtWarranty.id,
+    title: "Garantia fabrica LG", issueDate: new Date("2022-01-15"),
+    expiryDate: new Date("2027-01-15"), notifyDaysBefore: 60,
+  }})
+
+  // ─── PROJECTS ────────────────────────────────────────────────────────────────
+  const proj1 = await prisma.project.create({ data: {
+    organizationId: org.id, propertyId: propMonterrico.id,
+    type: "RENOVATION", name: "Remodelacion Terraza Monterrico",
+    description: "Ampliacion y remodelacion de terraza exterior con vista al mar",
+    status: "IN_PROGRESS", budgetEstimate: 120000,
+    startDate: subMonths(now, 2), endDate: addMonths(now, 2),
+    progressPercent: 35,
+  }})
+
+  const proj2 = await prisma.project.create({ data: {
+    organizationId: org.id, propertyId: propCayala.id,
+    type: "ELECTRICAL", name: "Instalacion Paneles Solares Cayala",
+    description: "Sistema fotovoltaico 10kW para reduccion de consumo electrico",
+    status: "PLANNING", budgetEstimate: 85000,
+    startDate: addMonths(now, 1), endDate: addMonths(now, 4),
+    progressPercent: 0,
+  }})
+
+  const proj3 = await prisma.project.create({ data: {
+    organizationId: org.id, propertyId: propBodega.id,
+    type: "PAINTING", name: "Pintura y mantenimiento Bodega Mixco",
+    status: "PLANNING", budgetEstimate: 28000,
+    startDate: addDays(now, 15), endDate: addMonths(now, 1),
+    progressPercent: 0,
+  }})
+
+  // ─── PROJECT TASKS ───────────────────────────────────────────────────────────
+  await prisma.projectTask.createMany({ data: [
+    { projectId: proj1.id, name: "Diseño arquitectonico", status: "DONE", orderIndex: 0, completedAt: subMonths(now, 1) },
+    { projectId: proj1.id, name: "Demolicion terraza vieja", status: "DONE", orderIndex: 1, completedAt: subDays(now, 20) },
+    { projectId: proj1.id, name: "Cimentacion nueva", status: "IN_PROGRESS", orderIndex: 2 },
+    { projectId: proj1.id, name: "Acabados y pintura", status: "TODO", orderIndex: 3 },
+    { projectId: proj2.id, name: "Evaluacion tecnica y cotizaciones", status: "TODO", orderIndex: 0 },
+    { projectId: proj2.id, name: "Tramite de permiso municipal", status: "TODO", orderIndex: 1 },
+    { projectId: proj2.id, name: "Instalacion de paneles", status: "TODO", orderIndex: 2 },
+    { projectId: proj3.id, name: "Preparacion de superficies", status: "TODO", orderIndex: 0 },
+    { projectId: proj3.id, name: "Aplicacion de pintura", status: "TODO", orderIndex: 1 },
+  ]})
+
+  // ─── PROJECT PARTIDAS ────────────────────────────────────────────────────────
+  const partida1 = await prisma.projectPartida.create({ data: {
+    projectId: proj1.id, name: "Demolicion y preparacion",
+    budgetEstimate: 25000, status: "COMPLETED", amountApproved: 22000, amountPaid: 22000, orderIndex: 0,
+  }})
+  await prisma.partidaPayment.create({ data: {
+    partidaId: partida1.id, amount: 22000, date: subDays(now, 18),
+    method: "TRANSFER", reference: "TRF-PROJ-001",
+  }})
+
+  const partida2 = await prisma.projectPartida.create({ data: {
+    projectId: proj1.id, name: "Cimentacion y estructura",
+    budgetEstimate: 45000, status: "IN_PROGRESS", vendorId: v3.id,
+    amountApproved: 42000, amountPaid: 21000, orderIndex: 1,
+  }})
+  await prisma.partidaPayment.create({ data: {
+    partidaId: partida2.id, amount: 21000, date: subDays(now, 5),
+    method: "TRANSFER", reference: "TRF-PROJ-002",
+    notes: "Primer desembolso 50%",
+  }})
+
+  const partida3 = await prisma.projectPartida.create({ data: {
+    projectId: proj1.id, name: "Acabados y decoracion",
+    budgetEstimate: 50000, status: "QUOTING", orderIndex: 2,
+  }})
+
+  const partida4 = await prisma.projectPartida.create({ data: {
+    projectId: proj2.id, name: "Paneles solares y onduladores",
+    budgetEstimate: 65000, status: "PENDING", orderIndex: 0,
+  }})
+
+  const partida5 = await prisma.projectPartida.create({ data: {
+    projectId: proj2.id, name: "Instalacion electrica",
+    budgetEstimate: 20000, status: "PENDING", orderIndex: 1,
+  }})
+
+  const partida6 = await prisma.projectPartida.create({ data: {
+    projectId: proj3.id, name: "Pintura exterior bodega",
+    budgetEstimate: 24000, status: "QUOTING", orderIndex: 0,
+  }})
+
+  // Link quote to partida
+  await prisma.quote.update({ where: { id: q1.id }, data: { partidaId: partida3.id } })
+  await prisma.quote.update({ where: { id: q3.id }, data: { partidaId: partida6.id } })
+
+  // ─── EMPLOYEES ────────────────────────────────────────────────────────────────
+  await prisma.employee.createMany({ data: [
+    { organizationId: org.id, fullName: "Marcos Tzul", documentNumber: "1234567890101", position: "Conserje", phone: "5544-1122", hireDate: subMonths(now, 24), payPeriod: "MONTHLY", payRate: 3500 },
+    { organizationId: org.id, fullName: "Beatriz Coy", documentNumber: "9876543210102", position: "Administrativa", phone: "6655-3344", hireDate: subMonths(now, 18), payPeriod: "MONTHLY", payRate: 5500 },
+    { organizationId: org.id, fullName: "Diego Morales", documentNumber: "5566778890103", position: "Tecnico de mantenimiento", phone: "7766-5544", hireDate: subMonths(now, 12), payPeriod: "BIWEEKLY", payRate: 2800 },
+  ]})
+
+  // ─── APPROVAL REQUESTS ───────────────────────────────────────────────────────
+  // 1. Quote pending approval (manager submitted, needs admin approval)
+  await prisma.approvalRequest.create({ data: {
+    organizationId: org.id, entityType: "QUOTE", entityId: q1.id,
+    requestedById: manager.id, status: "PENDING",
+    notes: "Cotizacion para remodelacion terraza - favor revisar",
+  }})
+
+  // 2. Quote pending cosign (supervisor submitted, needs cosign)
+  await prisma.approvalRequest.create({ data: {
+    organizationId: org.id, entityType: "QUOTE", entityId: q3.id,
+    requestedById: supervisor.id, cosignerId: manager.id, status: "PENDING_COSIGN",
+    notes: "Cotizacion pintura bodega - requiere co-firma",
+  }})
+
+  // 3. Contract modification pending
+  await prisma.approvalRequest.create({ data: {
+    organizationId: org.id, entityType: "CONTRACT", entityId: c4.id,
+    requestedById: manager.id, status: "PENDING",
+    notes: "Renovacion anticipada de contrato bodega",
+  }})
+
+  // 4. Vendor invoice pending approval
+  const vi = await prisma.vendorInvoice.findFirst({ where: { organizationId: org.id, status: "PENDING" } })
+  if (vi) {
+    await prisma.approvalRequest.create({ data: {
+      organizationId: org.id, entityType: "VENDOR_INVOICE", entityId: vi.id,
+      requestedById: assistant1.id, status: "PENDING",
+      notes: "Factura plomeros por reparacion urgente",
     }})
   }
 
-  // ─── ASSETS ─────────────────────────────────────────────────────────────
-  const acMonterrico1 = await prisma.asset.create({ data: {
-    organizationId: org.id, propertyId: propMonterrico.id,
-    category: "HVAC", name: "Aire Acondicionado LG 24k BTU - Sala",
-    brand: "LG", model: "LW2416HR", serialNumber: "LG-2021-001",
-    purchaseDate: subMonths(now, 36), purchaseCost: 8500, currentValue: 6000,
-    warranty: addMonths(now, 12), status: "ACTIVE", location: "Sala principal",
+  // 5. Approved request (historical)
+  await prisma.approvalRequest.create({ data: {
+    organizationId: org.id, entityType: "QUOTE", entityId: q2.id,
+    requestedById: manager.id, approvedById: admin.id,
+    status: "APPROVED", approvedAt: subDays(now, 5),
+    notes: "Cotizacion A/C aprovada",
   }})
 
-  const acMonterrico2 = await prisma.asset.create({ data: {
-    organizationId: org.id, propertyId: propMonterrico.id,
-    category: "HVAC", name: "Aire Acondicionado Samsung - Master",
-    brand: "Samsung", model: "AR12TXEZBWK",
-    purchaseDate: subMonths(now, 24), purchaseCost: 9200, currentValue: 7500,
-    warranty: addMonths(now, 24), status: "ACTIVE", location: "Habitacion principal",
+  // 6. Partida approval
+  await prisma.approvalRequest.create({ data: {
+    organizationId: org.id, entityType: "PARTIDA", entityId: partida3.id,
+    requestedById: supervisor.id, status: "PENDING",
+    notes: "Partida de acabados lista para aprobar proveedor",
   }})
 
-  const lancha1 = await prisma.asset.create({ data: {
-    organizationId: org.id, propertyId: propMonterrico.id,
-    category: "VEHICLE", name: "Lancha Yamaha 150 HP",
-    brand: "Yamaha", model: "F150LCA", serialNumber: "YM-2022-456",
-    purchaseDate: subMonths(now, 18), purchaseCost: 185000, currentValue: 150000,
-    status: "ACTIVE", location: "Muelle Monterrico",
-  }})
-
-  const lancha2 = await prisma.asset.create({ data: {
-    organizationId: org.id, propertyId: propMonterrico.id,
-    category: "VEHICLE", name: "Lancha Panga 75 HP",
-    brand: "Mercury", model: "75ELH",
-    purchaseDate: subMonths(now, 48), purchaseCost: 85000, currentValue: 55000,
-    status: "ACTIVE", location: "Muelle Monterrico",
-  }})
-
-  const motoAcuatica = await prisma.asset.create({ data: {
-    organizationId: org.id, propertyId: propMonterrico.id,
-    category: "VEHICLE", name: "Jet Ski Sea-Doo RXT",
-    brand: "Sea-Doo", model: "RXT 300", serialNumber: "SD-2023-789",
-    purchaseDate: subMonths(now, 12), purchaseCost: 120000, currentValue: 105000,
-    warranty: addMonths(now, 24), status: "ACTIVE", location: "Muelle Monterrico",
-  }})
-
-  // Add service logs to assets
-  await prisma.assetServiceLog.create({ data: {
-    assetId: acMonterrico1.id, serviceType: "Mantenimiento preventivo",
-    date: subMonths(now, 3), cost: 850, performedBy: "TecnoClima GT",
-    nextServiceAt: addMonths(now, 3), notes: "Limpieza filtros, recarga gas",
-  }})
-
-  await prisma.assetServiceLog.create({ data: {
-    assetId: lancha1.id, serviceType: "Service anual motor",
-    date: subMonths(now, 6), cost: 5500, performedBy: "Marina Monterrico",
-    nextServiceAt: addMonths(now, 6), notes: "Cambio aceite, bujias, filtros",
-  }})
-
-  await prisma.assetServiceLog.create({ data: {
-    assetId: motoAcuatica.id, serviceType: "Revision tecnica",
-    date: subMonths(now, 4), cost: 2200, performedBy: "Sea-Doo Guatemala",
-    nextServiceAt: addDays(now, 20), notes: "Bajo garantia",
-  }})
-
-  // ─── EMPLOYEES ────────────────────────────────────────────────────────────
-  const emp1 = await prisma.employee.create({ data: {
-    organizationId: org.id,
-    fullName: "Juan Pedro Cifuentes", documentNumber: "1234567890123",
-    position: "Jardinero / Mantenimiento", phone: "5544-3322",
-    hireDate: subMonths(now, 24), status: "ACTIVE", payPeriod: "BIWEEKLY", payRate: 2500,
-  }})
-
-  const emp2 = await prisma.employee.create({ data: {
-    organizationId: org.id,
-    fullName: "Rosa Elvira Tahay", documentNumber: "9876543210987",
-    position: "Asistente administrativa", phone: "5566-7788", email: "r.tahay@demo.gt",
-    hireDate: subMonths(now, 12), status: "ACTIVE", payPeriod: "MONTHLY", payRate: 4500,
-  }})
-
-  const emp3 = await prisma.employee.create({ data: {
-    organizationId: org.id,
-    fullName: "Carlos Batz Choc", documentNumber: "4567890123456",
-    position: "Guarda de seguridad", phone: "5500-9900",
-    hireDate: subMonths(now, 36), status: "ACTIVE", payPeriod: "MONTHLY", payRate: 3200,
-  }})
-
-  // ─── VENDORS ─────────────────────────────────────────────────────────────
-  const vendorPlomero = await prisma.vendor.create({ data: {
-    organizationId: org.id,
-    name: "Plomeria Express GT", type: "COMPANY", category: "PLUMBING",
-    taxId: "1234567-8", contactName: "Ing. Manuel Roca",
-    phone: "2234-5678", email: "info@plomeriaexpress.gt",
-    rating: 4.5, isActive: true,
-  }})
-
-  const vendorElectrico = await prisma.vendor.create({ data: {
-    organizationId: org.id,
-    name: "Electrica Total S.A.", type: "COMPANY", category: "ELECTRICAL",
-    contactName: "Luis Barrios", phone: "2245-6789",
-    rating: 4.0, isActive: true,
-  }})
-
-  const vendorPintura = await prisma.vendor.create({ data: {
-    organizationId: org.id,
-    name: "Pinturas Guatemala", type: "COMPANY", category: "PAINTING",
-    contactName: "Pedro Pac", phone: "5567-8901",
-    rating: 3.5, isActive: true,
-  }})
-
-  const vendorJardinero = await prisma.vendor.create({ data: {
-    organizationId: org.id,
-    name: "Jardines del Sur", type: "COMPANY", category: "LANDSCAPING",
-    contactName: "Ana Pop", phone: "5512-3456",
-    rating: 5.0, isActive: true,
-  }})
-
-  const vendorClimatizacion = await prisma.vendor.create({ data: {
-    organizationId: org.id,
-    name: "TecnoClima GT", type: "COMPANY", category: "HVAC",
-    taxId: "9876543-2", contactName: "Ing. Roberto Sun",
-    phone: "2268-9900", email: "ventas@tecnoclima.gt",
-    rating: 4.8, isActive: true,
-  }})
-
-  const vendorConstruccion = await prisma.vendor.create({ data: {
-    organizationId: org.id,
-    name: "Constructora Altiplano", type: "COMPANY", category: "CONSTRUCTION",
-    taxId: "5678901-2", contactName: "Arq. Sofia Mendez",
-    phone: "2290-1234", email: "proyectos@altiplano.gt",
-    rating: 4.2, isActive: true,
-  }})
-
-  // ─── PROJECTS ─────────────────────────────────────────────────────────────
-  const project1 = await prisma.project.create({ data: {
-    organizationId: org.id, propertyId: propMonterrico.id,
-    type: "RENOVATION", name: "Remodelacion cocina Monterrico",
-    status: "IN_PROGRESS", budgetTotal: 85000, budgetSpent: 42000,
-    progressPercent: 50, startDate: subMonths(now, 2), endDate: addMonths(now, 1),
-    description: "Remodelacion completa de cocina incluyendo granito, gabinetes y electrodomesticos nuevos",
-  }})
-
-  await prisma.projectTask.createMany({ data: [
-    { projectId: project1.id, name: "Demolicion cocina vieja", status: "DONE", completedAt: subMonths(now, 1.5), orderIndex: 0 },
-    { projectId: project1.id, name: "Instalacion plomeria nueva", status: "DONE", completedAt: subMonths(now, 1), orderIndex: 1 },
-    { projectId: project1.id, name: "Instalacion gabinetes", status: "TODO", orderIndex: 2 },
-    { projectId: project1.id, name: "Instalacion granito", status: "TODO", orderIndex: 3 },
-    { projectId: project1.id, name: "Pintura y acabados", status: "TODO", orderIndex: 4 },
-  ]})
-
-  await prisma.projectCost.createMany({ data: [
-    { projectId: project1.id, type: "MATERIAL", description: "Granito importado", amount: 18000, date: subMonths(now, 1.5) },
-    { projectId: project1.id, type: "LABOR", description: "Demolicion y albañileria", amount: 12000, date: subMonths(now, 1.8) },
-    { projectId: project1.id, type: "MATERIAL", description: "Gabinetes de madera", amount: 12000, date: subMonths(now, 0.5) },
-  ]})
-
-  const project2 = await prisma.project.create({ data: {
-    organizationId: org.id, propertyId: propBodega.id,
-    type: "CONSTRUCTION", name: "Impermeabilizacion techo bodega",
-    status: "PLANNING", budgetTotal: 35000, budgetSpent: 0,
-    progressPercent: 0, startDate: addDays(now, 15),
-    description: "Impermeabilizacion total del techo de la bodega + instalacion de canales",
-  }})
-
-  await prisma.projectTask.createMany({ data: [
-    { projectId: project2.id, name: "Cotizacion y seleccion de proveedor", status: "DONE", completedAt: now, orderIndex: 0 },
-    { projectId: project2.id, name: "Limpieza y preparacion superficie", status: "TODO", orderIndex: 1 },
-    { projectId: project2.id, name: "Aplicacion impermeabilizante", status: "TODO", orderIndex: 2 },
-    { projectId: project2.id, name: "Instalacion canales", status: "TODO", orderIndex: 3 },
-  ]})
-
-  // ─── QUOTES ──────────────────────────────────────────────────────────────
-  const quote1 = await prisma.quote.create({ data: {
-    organizationId: org.id, vendorId: vendorClimatizacion.id, projectId: project1.id,
-    quoteNumber: "COT-2025-0001", date: subMonths(now, 2),
-    validUntil: addMonths(now, 1), subtotal: 15000, taxAmount: 1800, total: 16800,
-    status: "APPROVED", approvedAt: subMonths(now, 1.8),
-    notes: "Incluye instalacion de 2 minisplits",
-  }})
-
-  await prisma.quoteItem.createMany({ data: [
-    { quoteId: quote1.id, description: "Minisplit Samsung 24k BTU", quantity: 2, unit: "und", unitPrice: 6500, total: 13000 },
-    { quoteId: quote1.id, description: "Instalacion y mano de obra", quantity: 1, unit: "servicio", unitPrice: 2000, total: 2000 },
-  ]})
-
-  const quote2 = await prisma.quote.create({ data: {
-    organizationId: org.id, vendorId: vendorConstruccion.id, projectId: project2.id,
-    quoteNumber: "COT-2025-0002", date: subMonths(now, 0.5),
-    validUntil: addMonths(now, 2), subtotal: 30000, taxAmount: 3600, total: 33600,
-    status: "PENDING",
-    notes: "Propuesta para impermeabilizacion techo 500m2",
-  }})
-
-  await prisma.quoteItem.createMany({ data: [
-    { quoteId: quote2.id, description: "Impermeabilizante epoxido", quantity: 50, unit: "gal", unitPrice: 350, total: 17500 },
-    { quoteId: quote2.id, description: "Mano de obra", quantity: 500, unit: "m2", unitPrice: 25, total: 12500 },
-  ]})
-
-  const quote3 = await prisma.quote.create({ data: {
-    organizationId: org.id, vendorId: vendorPlomero.id,
-    quoteNumber: "COT-2025-0003", date: subMonths(now, 0.2),
-    validUntil: addDays(now, 30), subtotal: 8500, taxAmount: 1020, total: 9520,
-    status: "PENDING",
-    notes: "Reparacion fuga + cambio tuberias cocina casa Cayala",
-  }})
-
-  // ─── NOTIFICATIONS ────────────────────────────────────────────────────────
+  // ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
   await prisma.notification.createMany({ data: [
-    {
-      organizationId: org.id, userId: admin.id,
-      type: "CONTRACT_EXPIRING", isRead: false,
-      title: "Contrato por vencer",
-      message: "Contrato de Maria Fernanda Gomez en Bodega Mixco vence en 20 dias",
-      link: `/contratos/${contractExpiring.id}`,
-    },
-    {
-      organizationId: org.id, userId: admin.id,
-      type: "TICKET_URGENT", isRead: false,
-      title: "Ticket urgente",
-      message: "Fuga en tubo principal cocina en Casa Cayala",
-      link: "/mantenimiento",
-    },
-    {
-      organizationId: org.id, userId: admin.id,
-      type: "ASSET_SERVICE_DUE", isRead: true,
-      title: "Servicio de activo proximo",
-      message: "Jet Ski Sea-Doo RXT requiere servicio en 20 dias",
-      link: `/activos/${motoAcuatica.id}`,
-    },
+    { organizationId: org.id, userId: admin.id, type: "CONTRACT_EXPIRING", title: "Contrato por vencer", message: "Contrato de Ana Lopez en Casa Cayala vence en 45 dias", link: `/contratos/${c1.id}`, isRead: false },
+    { organizationId: org.id, userId: admin.id, type: "CONTRACT_EXPIRING", title: "Contrato critico", message: "Contrato de Maria Fernanda en Bodega Mixco vence en 20 dias", link: `/contratos/${c4.id}`, isRead: false },
+    { organizationId: org.id, userId: admin.id, type: "ASSET_RECORD_EXPIRING", title: "Seguro por vencer", message: "Lancha Monterrico A: Poliza Seguro 2024 vence en 5 dias", link: `/activos/${assetLancha1.id}`, isRead: false },
+    { organizationId: org.id, userId: admin.id, type: "ASSET_RECORD_EXPIRED", title: "Matricula vencida", message: "Jet Ski Monterrico: Matricula vencio hace 10 dias", link: `/activos/${assetJetski.id}`, isRead: false },
+    { organizationId: org.id, userId: admin.id, type: "INVOICE_OVERDUE", title: "Factura vencida", message: "Factura F-2025-003 de Soluciones TI esta vencida", link: `/contratos/${c3.id}`, isRead: true },
   ]})
 
-  console.log("\n✓ Seed completado exitosamente.")
-  console.log("  Login: demo@inmobiliaria.gt / demo1234")
-  console.log(`  Propiedades: 5, Inquilinos: 4, Contratos: 4, Activos: 5`)
-  console.log(`  Empleados: 3, Proveedores: 6, Tickets: 8, Proyectos: 2\n`)
+  console.log("Seed v2 completado exitosamente.")
+  console.log(`Org: ${org.id}`)
+  console.log(`Admin: admin@demo.gt / demo1234`)
+  console.log(`Manager: gerente@demo.gt / demo1234`)
+  console.log(`Supervisor: super@demo.gt / demo1234`)
+  console.log(`Viewer: demo@inmobiliaria.gt / demo1234`)
 }
 
-main().catch(console.error).finally(() => prisma.$disconnect())
+main()
+  .catch(e => { console.error(e); process.exit(1) })
+  .finally(() => prisma.$disconnect())

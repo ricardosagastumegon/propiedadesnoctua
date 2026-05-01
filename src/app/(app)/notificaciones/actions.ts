@@ -64,19 +64,43 @@ export async function generateNotifications() {
   // Asset service due
   const assets = await prisma.asset.findMany({
     where: { organizationId: orgId },
-    include: { serviceLogs: { orderBy: { date: "desc" }, take: 1 } },
+    include: {
+      serviceLogs: { orderBy: { date: "desc" }, take: 1 },
+      records: { where: { isActive: true, expiryDate: { not: null } } },
+    },
   })
   for (const a of assets) {
     const last = a.serviceLogs[0]
-    if (!last?.nextServiceAt) continue
-    const days = differenceInDays(last.nextServiceAt, now)
-    if (days >= 0 && days <= 30) {
-      toCreate.push({
-        type: "ASSET_SERVICE_DUE",
-        title: "Servicio de activo proximo",
-        message: `${a.name} requiere servicio en ${days} dias`,
-        link: `/activos/${a.id}`,
-      })
+    if (last?.nextServiceAt) {
+      const days = differenceInDays(last.nextServiceAt, now)
+      if (days >= 0 && days <= 30) {
+        toCreate.push({
+          type: "ASSET_SERVICE_DUE",
+          title: "Servicio de activo proximo",
+          message: `${a.name} requiere servicio en ${days} dias`,
+          link: `/activos/${a.id}`,
+        })
+      }
+    }
+    // Asset record expiry
+    for (const rec of a.records) {
+      if (!rec.expiryDate) continue
+      const days = differenceInDays(rec.expiryDate, now)
+      if (days >= 0 && days <= rec.notifyDaysBefore) {
+        toCreate.push({
+          type: "ASSET_RECORD_EXPIRING",
+          title: "Documento de activo por vencer",
+          message: `${a.name}: "${rec.title}" vence en ${days} dias`,
+          link: `/activos/${a.id}`,
+        })
+      } else if (days < 0) {
+        toCreate.push({
+          type: "ASSET_RECORD_EXPIRED",
+          title: "Documento de activo vencido",
+          message: `${a.name}: "${rec.title}" vencio hace ${Math.abs(days)} dias`,
+          link: `/activos/${a.id}`,
+        })
+      }
     }
   }
 
@@ -97,7 +121,6 @@ export async function generateNotifications() {
   if (toCreate.length > 0) {
     await prisma.notification.createMany({
       data: toCreate.map(n => ({ ...n, organizationId: orgId, userId })),
-      skipDuplicates: false,
     })
   }
 

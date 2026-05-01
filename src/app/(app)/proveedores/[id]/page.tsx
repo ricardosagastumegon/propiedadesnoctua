@@ -5,10 +5,12 @@ import { prisma } from "@/lib/prisma"
 import { Card } from "@/components/ui/card"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDate, formatGTQ } from "@/lib/format"
 import { VENDOR_CATEGORIES, QUOTE_STATUSES, QUOTE_STATUS_COLORS } from "@/lib/schemas/vendor"
 import { DeleteVendorButton } from "./_delete-button"
-import { Mail, Phone, MapPin, Star, FileText } from "lucide-react"
+import { VendorInvoices } from "./_vendor-invoices"
+import { Mail, Phone, MapPin, Star } from "lucide-react"
 
 export default async function VendorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -18,9 +20,14 @@ export default async function VendorDetailPage({ params }: { params: Promise<{ i
 
   const vendor = await prisma.vendor.findFirst({
     where: { id, organizationId: orgId },
-    include: { quotes: { orderBy: { date: "desc" }, take: 10 } },
+    include: {
+      quotes: { orderBy: { date: "desc" }, take: 10 },
+      vendorInvoices: { orderBy: { date: "desc" } },
+    },
   })
   if (!vendor) notFound()
+
+  const pendingInvoices = vendor.vendorInvoices.filter(i => i.status !== "PAID" && i.status !== "REJECTED")
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
@@ -35,36 +42,56 @@ export default async function VendorDetailPage({ params }: { params: Promise<{ i
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-medium text-sm">Cotizaciones recientes</h3>
-              <Button asChild size="sm" variant="outline">
-                <Link href={`/cotizaciones/nueva?vendorId=${id}`}>Nueva cotizacion</Link>
-              </Button>
-            </div>
-            {vendor.quotes.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">Sin cotizaciones.</p>
-            ) : (
-              <div className="space-y-2">
-                {vendor.quotes.map(q => (
-                  <Link key={q.id} href={`/cotizaciones/${q.id}`}>
-                    <div className="flex items-center justify-between border rounded-lg p-3 hover:border-foreground/20 transition-colors">
-                      <div>
-                        <p className="text-sm font-medium font-mono">{q.quoteNumber}</p>
-                        <p className="text-xs text-muted-foreground">{formatDate(q.date)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium">{formatGTQ(q.total)}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${QUOTE_STATUS_COLORS[q.status]}`}>
-                          {QUOTE_STATUSES[q.status]}
-                        </span>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </Card>
+          <Tabs defaultValue="cotizaciones">
+            <TabsList className="mb-4">
+              <TabsTrigger value="cotizaciones">Cotizaciones ({vendor.quotes.length})</TabsTrigger>
+              <TabsTrigger value="facturas">
+                Facturas ({vendor.vendorInvoices.length})
+                {pendingInvoices.length > 0 && (
+                  <span className="ml-1.5 bg-amber-500 text-white text-xs rounded-full size-4 inline-flex items-center justify-center">
+                    {pendingInvoices.length}
+                  </span>
+                )}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="cotizaciones">
+              <Card className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-medium text-sm">Cotizaciones</h3>
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/cotizaciones/nueva?vendorId=${id}`}>Nueva cotizacion</Link>
+                  </Button>
+                </div>
+                {vendor.quotes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">Sin cotizaciones.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {vendor.quotes.map(q => (
+                      <Link key={q.id} href={`/cotizaciones/${q.id}`}>
+                        <div className="flex items-center justify-between border rounded-lg p-3 hover:border-foreground/20 transition-colors">
+                          <div>
+                            <p className="text-sm font-medium font-mono">{q.quoteNumber}</p>
+                            <p className="text-xs text-muted-foreground">{formatDate(q.date)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-medium">{formatGTQ(q.total)}</p>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${QUOTE_STATUS_COLORS[q.status]}`}>
+                              {QUOTE_STATUSES[q.status]}
+                            </span>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="facturas">
+              <VendorInvoices vendorId={id} invoices={vendor.vendorInvoices} />
+            </TabsContent>
+          </Tabs>
         </div>
 
         <div className="space-y-4">

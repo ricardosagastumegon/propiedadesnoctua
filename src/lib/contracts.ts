@@ -26,10 +26,18 @@ export const STATUS_LABELS: Record<ContractDisplayStatus, string> = {
   TERMINATED: "Terminado",
 }
 
-export const STATUS_VARIANTS: Record<ContractDisplayStatus, "default" | "secondary" | "outline" | "destructive"> = {
+export const STATUS_VARIANTS: Record<ContractDisplayStatus, "default" | "secondary" | "outline"> = {
   DRAFT: "secondary",
   ACTIVE: "default",
   EXPIRING_SOON: "outline",
-  EXPIRED: "destructive",
+  EXPIRED: "outline",
   TERMINATED: "secondary",
+}
+
+export const STATUS_CLASS: Record<ContractDisplayStatus, string> = {
+  DRAFT: "",
+  ACTIVE: "",
+  EXPIRING_SOON: "border-amber-400 text-amber-700",
+  EXPIRED: "border-red-400 text-red-700 bg-red-50",
+  TERMINATED: "",
 }
