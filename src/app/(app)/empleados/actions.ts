@@ -27,7 +27,7 @@ export async function createEmployee(formData: FormData) {
     },
   })
   revalidatePath("/empleados")
-  redirect(`/empleados/${emp.id}`)
+  return { redirectTo: `/empleados/${emp.id}` }
 }
 
 export async function updateEmployee(id: string, formData: FormData) {
@@ -47,7 +47,7 @@ export async function updateEmployee(id: string, formData: FormData) {
   })
   revalidatePath(`/empleados/${id}`)
   revalidatePath("/empleados")
-  redirect(`/empleados/${id}`)
+  return { redirectTo: `/empleados/${id}` }
 }
 
 export async function deleteEmployee(id: string) {

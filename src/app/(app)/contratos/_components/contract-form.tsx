@@ -39,6 +39,7 @@ export function ContractForm({ properties, tenants, defaultPropertyId, defaultTe
     startTransition(async () => {
       const res = await action(fd)
       if (res?.error) toast.error("Verifica los campos requeridos.")
+      else if (res?.redirectTo) router.push(res.redirectTo)
     })
   }
 

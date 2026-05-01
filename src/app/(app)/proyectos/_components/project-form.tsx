@@ -1,5 +1,6 @@
 "use client"
 import { useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -21,6 +22,7 @@ export function ProjectForm({
   defaultValues?: Record<string, any>
   defaultPropertyId?: string
 }) {
+  const router = useRouter()
   const ref = useRef<HTMLFormElement>(null)
   const [type, setType] = useState(defaultValues?.type ?? "RENOVATION")
   const [status, setStatus] = useState(defaultValues?.status ?? "PLANNING")
@@ -38,6 +40,7 @@ export function ProjectForm({
     if (propertyId) fd.set("propertyId", propertyId)
     const res = await action(fd)
     if (res?.error) { setError(res.error); setLoading(false) }
+    else if (res?.redirectTo) router.push(res.redirectTo)
   }
 
   return (

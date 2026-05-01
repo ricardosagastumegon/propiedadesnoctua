@@ -23,7 +23,7 @@ export function PropertyForm({ property, action, submitLabel = "Guardar" }: Prop
   const formRef = useRef<HTMLFormElement>(null)
   const [pending, startTransition] = useTransition()
   const [type, setType] = useState(property?.type ?? "HOUSE")
-  const [status, setStatus] = useState(property?.status ?? "ACTIVE")
+  const [status, setStatus] = useState(property?.status ?? "AVAILABLE")
   const [department, setDepartment] = useState(property?.department ?? "Guatemala")
   const [coverUrl, setCoverUrl] = useState(property?.coverImageUrl ?? "")
   const [uploading, setUploading] = useState(false)
@@ -50,7 +50,11 @@ export function PropertyForm({ property, action, submitLabel = "Guardar" }: Prop
     if (coverUrl) fd.set("coverImageUrl", coverUrl)
     startTransition(async () => {
       const res = await action(fd)
-      if (res?.error) toast.error("Verifica los campos e intenta de nuevo.")
+      if (res?.error) {
+        toast.error("Verifica los campos e intenta de nuevo.")
+      } else if (res?.redirectTo) {
+        router.push(res.redirectTo)
+      }
     })
   }
 

@@ -44,7 +44,7 @@ export async function createContract(formData: FormData) {
     },
   })
   revalidatePath("/contratos")
-  redirect(`/contratos/${contract.id}`)
+  return { redirectTo: `/contratos/${contract.id}` }
 }
 
 export async function updateContractStatus(id: string, status: string) {

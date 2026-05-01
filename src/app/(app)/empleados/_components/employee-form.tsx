@@ -1,5 +1,6 @@
 "use client"
 import { useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -15,6 +16,7 @@ export function EmployeeForm({
   action: (fd: FormData) => Promise<any>
   defaultValues?: Record<string, any>
 }) {
+  const router = useRouter()
   const ref = useRef<HTMLFormElement>(null)
   const [status, setStatus] = useState(defaultValues?.status ?? "ACTIVE")
   const [payPeriod, setPayPeriod] = useState(defaultValues?.payPeriod ?? "MONTHLY")
@@ -30,6 +32,7 @@ export function EmployeeForm({
     fd.set("payPeriod", payPeriod)
     const res = await action(fd)
     if (res?.error) { setError(res.error); setLoading(false) }
+    else if (res?.redirectTo) router.push(res.redirectTo)
   }
 
   return (

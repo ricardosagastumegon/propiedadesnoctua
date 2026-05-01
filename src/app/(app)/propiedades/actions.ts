@@ -26,7 +26,7 @@ export async function createProperty(formData: FormData) {
     },
   })
   revalidatePath("/propiedades")
-  redirect(`/propiedades/${property.id}`)
+  return { redirectTo: `/propiedades/${property.id}` }
 }
 
 export async function updateProperty(id: string, formData: FormData) {
@@ -45,7 +45,7 @@ export async function updateProperty(id: string, formData: FormData) {
   })
   revalidatePath("/propiedades")
   revalidatePath(`/propiedades/${id}`)
-  redirect(`/propiedades/${id}`)
+  return { redirectTo: `/propiedades/${id}` }
 }
 
 export async function deleteProperty(id: string) {

@@ -35,7 +35,7 @@ export async function createTicket(formData: FormData) {
     },
   })
   revalidatePath("/mantenimiento")
-  redirect(`/mantenimiento/${ticket.id}`)
+  return { redirectTo: `/mantenimiento/${ticket.id}` }
 }
 
 export async function updateTicketStatus(id: string, status: string, assigneeId?: string) {

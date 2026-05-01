@@ -21,7 +21,7 @@ export async function createVendor(formData: FormData) {
     data: { organizationId: orgId, ...parsed.data, email: parsed.data.email || null, rating: parsed.data.rating ?? null },
   })
   revalidatePath("/proveedores")
-  redirect(`/proveedores/${vendor.id}`)
+  return { redirectTo: `/proveedores/${vendor.id}` }
 }
 
 export async function updateVendor(id: string, formData: FormData) {
@@ -36,7 +36,7 @@ export async function updateVendor(id: string, formData: FormData) {
   })
   revalidatePath(`/proveedores/${id}`)
   revalidatePath("/proveedores")
-  redirect(`/proveedores/${id}`)
+  return { redirectTo: `/proveedores/${id}` }
 }
 
 export async function deleteVendor(id: string) {

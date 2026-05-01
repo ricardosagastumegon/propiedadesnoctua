@@ -21,7 +21,7 @@ export async function createTenant(formData: FormData) {
     data: { organizationId: orgId, ...parsed.data, email: parsed.data.email || null },
   })
   revalidatePath("/inquilinos")
-  redirect(`/inquilinos/${tenant.id}`)
+  return { redirectTo: `/inquilinos/${tenant.id}` }
 }
 
 export async function updateTenant(id: string, formData: FormData) {
@@ -36,7 +36,7 @@ export async function updateTenant(id: string, formData: FormData) {
   })
   revalidatePath("/inquilinos")
   revalidatePath(`/inquilinos/${id}`)
-  redirect(`/inquilinos/${id}`)
+  return { redirectTo: `/inquilinos/${id}` }
 }
 
 export async function deleteTenant(id: string) {

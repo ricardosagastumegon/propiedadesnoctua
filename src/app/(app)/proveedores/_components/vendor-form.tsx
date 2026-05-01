@@ -1,5 +1,6 @@
 "use client"
 import { useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -15,6 +16,7 @@ export function VendorForm({
   action: (fd: FormData) => Promise<any>
   defaultValues?: Record<string, any>
 }) {
+  const router = useRouter()
   const ref = useRef<HTMLFormElement>(null)
   const [category, setCategory] = useState(defaultValues?.category ?? "OTHER")
   const [type, setType] = useState(defaultValues?.type ?? "COMPANY")
@@ -30,6 +32,7 @@ export function VendorForm({
     fd.set("type", type)
     const res = await action(fd)
     if (res?.error) { setError(res.error); setLoading(false) }
+    else if (res?.redirectTo) router.push(res.redirectTo)
   }
 
   return (

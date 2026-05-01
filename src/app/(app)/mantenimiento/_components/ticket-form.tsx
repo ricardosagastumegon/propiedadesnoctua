@@ -22,6 +22,7 @@ export function TicketForm({
   action: (fd: FormData) => Promise<any>
   defaultValues?: Record<string, any>
 }) {
+  const router = useRouter()
   const ref = useRef<HTMLFormElement>(null)
   const [propertyId, setPropertyId] = useState(defaultValues?.propertyId ?? defaultPropertyId ?? "")
   const [category, setCategory] = useState(defaultValues?.category ?? "OTHER")
@@ -39,6 +40,7 @@ export function TicketForm({
     fd.set("priority", priority)
     const res = await action(fd)
     if (res?.error) { setError(res.error); setLoading(false) }
+    else if (res?.redirectTo) router.push(res.redirectTo)
   }
 
   return (

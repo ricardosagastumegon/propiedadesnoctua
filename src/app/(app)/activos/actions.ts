@@ -27,7 +27,7 @@ export async function createAsset(formData: FormData) {
     },
   })
   revalidatePath("/activos")
-  redirect(`/activos/${asset.id}`)
+  return { redirectTo: `/activos/${asset.id}` }
 }
 
 export async function updateAsset(id: string, formData: FormData) {
@@ -47,7 +47,7 @@ export async function updateAsset(id: string, formData: FormData) {
   })
   revalidatePath(`/activos/${id}`)
   revalidatePath("/activos")
-  redirect(`/activos/${id}`)
+  return { redirectTo: `/activos/${id}` }
 }
 
 export async function deleteAsset(id: string) {

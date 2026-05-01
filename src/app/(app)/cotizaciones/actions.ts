@@ -47,7 +47,7 @@ export async function createQuote(formData: FormData) {
     },
   })
   revalidatePath("/cotizaciones")
-  redirect(`/cotizaciones/${quote.id}`)
+  return { redirectTo: `/cotizaciones/${quote.id}` }
 }
 
 export async function updateQuoteStatus(id: string, status: string) {

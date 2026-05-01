@@ -1,5 +1,6 @@
 "use client"
 import { useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -28,6 +29,7 @@ export function QuoteForm({
   defaultProjectId?: string
   defaultPartidaId?: string
 }) {
+  const router = useRouter()
   const ref = useRef<HTMLFormElement>(null)
   const [vendorId, setVendorId] = useState(defaultVendorId ?? "")
   const [projectId, setProjectId] = useState(defaultProjectId ?? "")
@@ -50,6 +52,7 @@ export function QuoteForm({
     fd.set("total", (subtotal + tax).toString())
     const res = await action(fd)
     if (res?.error) { setError(res.error); setLoading(false) }
+    else if (res?.redirectTo) router.push(res.redirectTo)
   }
 
   return (

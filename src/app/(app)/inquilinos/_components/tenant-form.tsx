@@ -32,6 +32,7 @@ export function TenantForm({ tenant, action, submitLabel = "Guardar" }: Props) {
     startTransition(async () => {
       const res = await action(fd)
       if (res?.error) toast.error("Verifica los campos e intenta de nuevo.")
+      else if (res?.redirectTo) router.push(res.redirectTo)
     })
   }
 

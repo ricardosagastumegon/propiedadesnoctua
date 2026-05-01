@@ -32,7 +32,7 @@ export async function createProject(formData: FormData) {
     },
   })
   revalidatePath("/proyectos")
-  redirect(`/proyectos/${project.id}`)
+  return { redirectTo: `/proyectos/${project.id}` }
 }
 
 export async function updateProject(id: string, formData: FormData) {
@@ -53,7 +53,7 @@ export async function updateProject(id: string, formData: FormData) {
   })
   revalidatePath(`/proyectos/${id}`)
   revalidatePath("/proyectos")
-  redirect(`/proyectos/${id}`)
+  return { redirectTo: `/proyectos/${id}` }
 }
 
 export async function deleteProject(id: string) {

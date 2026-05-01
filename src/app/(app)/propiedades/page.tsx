@@ -17,6 +17,25 @@ const TYPE_LABELS: Record<string, string> = {
   WAREHOUSE: "Bodega",
   BUILDING: "Edificio",
   LAND: "Terreno",
+  VACATION: "Vacacional",
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  AVAILABLE: "bg-emerald-100 text-emerald-800",
+  RENTED: "bg-blue-100 text-blue-800",
+  MAINTENANCE: "bg-amber-100 text-amber-800",
+  INACTIVE: "bg-gray-100 text-gray-600",
+  FOR_SALE: "bg-purple-100 text-purple-800",
+  SOLD: "bg-gray-200 text-gray-500",
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  AVAILABLE: "Disponible",
+  RENTED: "Arrendada",
+  MAINTENANCE: "Mantenimiento",
+  INACTIVE: "Inactiva",
+  FOR_SALE: "En venta",
+  SOLD: "Vendida",
 }
 
 export default async function PropertiesPage() {
@@ -63,9 +82,14 @@ export default async function PropertiesPage() {
                 <div className="p-5">
                   <div className="flex items-start justify-between mb-2 gap-2">
                     <h3 className="font-display text-lg leading-tight">{p.name}</h3>
-                    <Badge variant="secondary" className="text-xs shrink-0">
-                      {TYPE_LABELS[p.type]}
-                    </Badge>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <Badge variant="secondary" className="text-xs">
+                        {TYPE_LABELS[p.type] ?? p.type}
+                      </Badge>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${STATUS_COLORS[p.status] ?? "bg-gray-100 text-gray-700"}`}>
+                        {STATUS_LABELS[p.status] ?? p.status}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 text-xs text-muted-foreground mb-4">
                     <MapPin className="size-3" />
