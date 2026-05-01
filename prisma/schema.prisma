@@ -116,7 +116,7 @@ model Property {
   name            String
   alias           String?
   type            String
-  status          String    @default("ACTIVE")
+  status          String    @default("AVAILABLE")
   addressLine     String
   zone            String?
   city            String
