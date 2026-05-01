@@ -1,11 +1,50 @@
-export default function Page() {
+import { redirect } from "next/navigation"
+import { auth } from "@/auth"
+import { prisma } from "@/lib/prisma"
+import { Card } from "@/components/ui/card"
+import { PageHeader } from "@/components/ui/page-header"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { OrgForm } from "./_org-form"
+import { AccountForm } from "./_account-form"
+import { UsersPanel } from "./_users-panel"
+
+export default async function ConfiguracionPage() {
+  const session = await auth()
+  if (!session) redirect("/login")
+  const orgId = (session.user as any).organizationId as string
+  const userId = session.user!.id!
+
+  const [org, users, me] = await Promise.all([
+    prisma.organization.findUnique({ where: { id: orgId } }),
+    prisma.user.findMany({ where: { organizationId: orgId }, orderBy: { name: "asc" } }),
+    prisma.user.findUnique({ where: { id: userId } }),
+  ])
+
+  if (!org || !me) redirect("/login")
+
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <h1 className="font-display text-3xl tracking-tight">Configuracion</h1>
-      <p className="text-sm text-muted-foreground mt-1">Modulo en construccion.</p>
-      <div className="mt-8 p-12 border border-dashed rounded-xl text-center text-sm text-muted-foreground">
-        Este modulo se construye en la siguiente iteracion.
-      </div>
+    <div className="p-8 max-w-3xl mx-auto">
+      <PageHeader title="Configuracion" description="Ajustes de la organizacion y tu cuenta." />
+
+      <Tabs defaultValue="org">
+        <TabsList className="mb-6">
+          <TabsTrigger value="org">Organizacion</TabsTrigger>
+          <TabsTrigger value="usuarios">Usuarios ({users.length})</TabsTrigger>
+          <TabsTrigger value="cuenta">Mi cuenta</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="org">
+          <OrgForm org={org} />
+        </TabsContent>
+
+        <TabsContent value="usuarios">
+          <UsersPanel users={users} currentUserId={userId} />
+        </TabsContent>
+
+        <TabsContent value="cuenta">
+          <AccountForm me={me} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

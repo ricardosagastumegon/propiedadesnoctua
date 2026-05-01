@@ -1,9 +1,11 @@
 import { auth, signOut } from "@/auth"
 import { redirect } from "next/navigation"
 import Link from "next/link"
+import { NotificationBell } from "@/components/notification-bell"
 import {
   Building2, LayoutDashboard, Users, FileText, Wrench, Boxes,
   FolderKanban, Receipt, Briefcase, BarChart3, Settings, LogOut,
+  FileCheck, UserRound,
 } from "lucide-react"
 
 const nav = [
@@ -16,6 +18,8 @@ const nav = [
   { href: "/activos", label: "Activos", icon: Boxes },
   { href: "/proyectos", label: "Proyectos", icon: FolderKanban },
   { href: "/proveedores", label: "Proveedores", icon: Briefcase },
+  { href: "/cotizaciones", label: "Cotizaciones", icon: FileCheck },
+  { href: "/empleados", label: "Empleados", icon: UserRound },
   { href: "/reportes", label: "Reportes", icon: BarChart3 },
   { href: "/configuracion", label: "Configuracion", icon: Settings },
 ]
@@ -27,12 +31,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen flex">
-      <aside className="w-64 border-r bg-sidebar flex flex-col">
+      <aside className="w-64 border-r bg-sidebar flex flex-col shrink-0">
         <div className="px-5 py-5 border-b">
           <div className="font-display text-lg tracking-tight">Inmobiliaria Pro</div>
           <div className="text-xs text-muted-foreground mt-0.5">{user.organizationName}</div>
         </div>
-        <nav className="flex-1 px-2 py-4 space-y-0.5">
+        <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
           {nav.map((item) => (
             <Link
               key={item.href}
@@ -62,7 +66,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </form>
         </div>
       </aside>
-      <main className="flex-1 bg-background overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="h-12 border-b flex items-center justify-end px-4 gap-2 bg-background shrink-0">
+          <NotificationBell />
+        </header>
+        <main className="flex-1 bg-background overflow-auto">{children}</main>
+      </div>
     </div>
   )
 }

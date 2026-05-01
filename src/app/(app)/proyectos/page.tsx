@@ -1,11 +1,79 @@
-export default function Page() {
+import Link from "next/link"
+import { redirect } from "next/navigation"
+import { auth } from "@/auth"
+import { prisma } from "@/lib/prisma"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { PageHeader } from "@/components/ui/page-header"
+import { EmptyState } from "@/components/ui/empty-state"
+import { formatGTQ, formatDate } from "@/lib/format"
+import { PROJECT_TYPES, PROJECT_STATUSES, PROJECT_STATUS_COLORS } from "@/lib/schemas/project"
+import { FolderOpen, Plus } from "lucide-react"
+
+export default async function ProyectosPage() {
+  const session = await auth()
+  if (!session) redirect("/login")
+  const orgId = (session.user as any).organizationId as string
+
+  const projects = await prisma.project.findMany({
+    where: { organizationId: orgId },
+    include: { property: true, tasks: true, costs: true },
+    orderBy: { createdAt: "desc" },
+  })
+
+  const active = projects.filter(p => p.status === "IN_PROGRESS")
+
   return (
     <div className="p-8 max-w-7xl mx-auto">
-      <h1 className="font-display text-3xl tracking-tight">Proyectos</h1>
-      <p className="text-sm text-muted-foreground mt-1">Modulo en construccion.</p>
-      <div className="mt-8 p-12 border border-dashed rounded-xl text-center text-sm text-muted-foreground">
-        Este modulo se construye en la siguiente iteracion.
-      </div>
+      <PageHeader title="Proyectos" description={`${active.length} en progreso · ${projects.length} total`}>
+        <Button asChild>
+          <Link href="/proyectos/nuevo"><Plus className="size-4 mr-1" />Nuevo proyecto</Link>
+        </Button>
+      </PageHeader>
+
+      {projects.length === 0 ? (
+        <Card><EmptyState icon={FolderOpen} title="Sin proyectos" description="Crea el primer proyecto." action={{ label: "Nuevo proyecto", href: "/proyectos/nuevo" }} /></Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {projects.map(p => {
+            const budgetUsedPct = p.budgetTotal > 0 ? Math.min(100, (p.budgetSpent / p.budgetTotal) * 100) : 0
+            return (
+              <Link key={p.id} href={`/proyectos/${p.id}`}>
+                <Card className="p-4 hover:border-foreground/20 transition-colors cursor-pointer h-full flex flex-col">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PROJECT_STATUS_COLORS[p.status]}`}>
+                      {PROJECT_STATUSES[p.status]}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{PROJECT_TYPES[p.type]}</span>
+                  </div>
+                  <p className="font-medium mb-1">{p.name}</p>
+                  {p.property && <p className="text-xs text-muted-foreground mb-2">{p.property.name}</p>}
+
+                  {/* Progress bar */}
+                  <div className="mt-auto">
+                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                      <span>Avance {p.progressPercent}%</span>
+                      <span>{p.tasks.filter(t => t.status === "DONE").length}/{p.tasks.length} tareas</span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-1.5">
+                      <div className="bg-foreground rounded-full h-1.5 transition-all" style={{ width: `${p.progressPercent}%` }} />
+                    </div>
+                    <div className="mt-2 flex justify-between text-xs">
+                      <span className="text-muted-foreground">Presupuesto</span>
+                      <span className={budgetUsedPct > 90 ? "text-destructive font-medium" : ""}>
+                        {formatGTQ(p.budgetSpent)} / {formatGTQ(p.budgetTotal)}
+                      </span>
+                    </div>
+                    {p.endDate && (
+                      <p className="text-xs text-muted-foreground mt-1">Fecha objetivo: {formatDate(p.endDate)}</p>
+                    )}
+                  </div>
+                </Card>
+              </Link>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
