@@ -6,8 +6,9 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { addTicketQuote, selectTicketQuote } from "../actions"
+import { EscalateButton } from "./_escalate-button"
 import { formatGTQ } from "@/lib/format"
-import { Plus, CheckCircle2, XCircle, Clock } from "lucide-react"
+import { Plus, CheckCircle2, XCircle, Clock, FolderKanban } from "lucide-react"
 
 interface Vendor { id: string; name: string }
 interface Quote { id: string; vendorId: string; vendor: { name: string }; amount: number; status: string; notes: string | null }
@@ -20,14 +21,18 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
 
 export function QuoteSection({
   ticketId,
+  ticketTitle,
   quotes,
   vendors,
   canApprove,
+  escalated,
 }: {
   ticketId: string
+  ticketTitle: string
   quotes: Quote[]
   vendors: Vendor[]
   canApprove: boolean
+  escalated?: boolean
 }) {
   const ref = useRef<HTMLFormElement>(null)
   const [vendorId, setVendorId] = useState("")
@@ -84,6 +89,17 @@ export function QuoteSection({
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {quotes.length >= 2 && !escalated && (
+        <div className="flex items-start gap-3 p-4 rounded-lg border border-blue-200 bg-blue-50/60">
+          <FolderKanban className="size-4 text-blue-600 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-blue-900">¿Listo para ejecutar el trabajo?</p>
+            <p className="text-xs text-blue-700 mt-0.5">Con {quotes.length} cotizaciones puedes convertir este ticket en un proyecto y gestionar partidas y pagos.</p>
+          </div>
+          <EscalateButton ticketId={ticketId} defaultName={ticketTitle} />
         </div>
       )}
 

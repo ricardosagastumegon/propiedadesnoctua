@@ -17,7 +17,7 @@ import { PaymentSection } from "./_payment-section"
 import { EscalateButton } from "./_escalate-button"
 import {
   AlertTriangle, Building2, Calendar, User, Phone, Wrench,
-  Clock, CheckCircle2, FolderKanban, Wallet,
+  Clock, CheckCircle2, FolderKanban, Wallet, ShieldCheck, ShieldAlert, ShieldX, Shield,
 } from "lucide-react"
 
 const STATUS_COLORS: Record<string, string> = {
@@ -63,18 +63,31 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
   })
   if (!ticket) notFound()
 
-  const employees = await prisma.user.findMany({
-    where: { organizationId: orgId, isActive: true },
-    orderBy: { name: "asc" },
-  })
-  const vendors = await prisma.vendor.findMany({
-    where: { organizationId: orgId, isActive: true },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true },
-  })
+  const [employees, vendors, approvalRequest] = await Promise.all([
+    prisma.user.findMany({ where: { organizationId: orgId, isActive: true }, orderBy: { name: "asc" } }),
+    prisma.vendor.findMany({ where: { organizationId: orgId, isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.approvalRequest.findFirst({
+      where: { entityType: "TICKET", entityId: ticket.id, organizationId: orgId },
+      include: {
+        requestedBy: { select: { name: true } },
+        approvedBy: { select: { name: true } },
+        rejectedBy: { select: { name: true } },
+        cosigner: { select: { name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ])
 
   const canApprove = authorityPolicy === "ALONE" || authorityPolicy === "COSIGN_REQUIRED"
   const hasMultipleQuotes = ticket.ticketQuotes.length >= 2
+
+  // Compute total cotizado from quotes (selected quote takes precedence, else highest pending)
+  const selectedQuote = ticket.ticketQuotes.find(q => q.status === "SELECTED")
+  const totalCotizado = selectedQuote?.amount
+    ?? (ticket.ticketQuotes.length > 0 ? Math.max(...ticket.ticketQuotes.map(q => q.amount)) : null)
+  const totalRef = totalCotizado ?? ticket.totalAmount
+  const saldoPendiente = totalRef != null ? Math.max(0, totalRef - ticket.amountPaid) : null
+  const pagosPct = totalRef && totalRef > 0 ? Math.min(100, Math.round((ticket.amountPaid / totalRef) * 100)) : 0
 
   const timelineSteps = [
     { label: "Reportado", date: ticket.reportedAt, done: true },
@@ -169,9 +182,11 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
                 <h3 className="font-medium text-sm mb-4">Cotizaciones</h3>
                 <QuoteSection
                   ticketId={ticket.id}
+                  ticketTitle={ticket.title}
                   quotes={ticket.ticketQuotes}
                   vendors={vendors}
                   canApprove={canApprove}
+                  escalated={!!ticket.escalatedToProjectId}
                 />
               </Card>
             </TabsContent>
@@ -281,25 +296,111 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
           <Card className="p-4 space-y-3">
             <h3 className="font-medium text-sm">Costos</h3>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Estimado</span>
-                <span>{ticket.estimatedCost != null ? formatGTQ(ticket.estimatedCost) : "—"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total cotizado</span>
-                <span>{ticket.totalAmount != null ? formatGTQ(ticket.totalAmount) : "—"}</span>
-              </div>
+              {totalRef != null && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total cotizado</span>
+                  <span className="font-medium">{formatGTQ(totalRef)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Pagado</span>
                 <span className="font-medium text-emerald-600">{formatGTQ(ticket.amountPaid)}</span>
               </div>
+              {saldoPendiente != null && saldoPendiente > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Saldo pendiente</span>
+                  <span className="font-medium text-amber-600">{formatGTQ(saldoPendiente)}</span>
+                </div>
+              )}
               {ticket.actualCost != null && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Costo real</span>
                   <span className="font-medium">{formatGTQ(ticket.actualCost)}</span>
                 </div>
               )}
+              {totalRef != null && totalRef > 0 && (
+                <div className="pt-1">
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Pagado {pagosPct}%</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-1.5">
+                    <div
+                      className={`rounded-full h-1.5 transition-all ${pagosPct >= 100 ? "bg-emerald-500" : "bg-foreground"}`}
+                      style={{ width: `${pagosPct}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
+          </Card>
+
+          {/* Autorización */}
+          <Card className="p-4 space-y-3">
+            <h3 className="font-medium text-sm flex items-center gap-2">
+              <Shield className="size-4 text-muted-foreground" /> Autorización
+            </h3>
+            {!approvalRequest ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <ShieldCheck className="size-4 text-emerald-500 shrink-0" />
+                <span>No requiere autorización</span>
+              </div>
+            ) : approvalRequest.status === "APPROVED" ? (
+              <div className="space-y-1.5 text-sm">
+                <div className="flex items-center gap-2 text-emerald-600 font-medium">
+                  <ShieldCheck className="size-4 shrink-0" /> Aprobada
+                </div>
+                {approvalRequest.approvedBy && (
+                  <p className="text-xs text-muted-foreground">Por {approvalRequest.approvedBy.name}</p>
+                )}
+                {approvalRequest.approvedAt && (
+                  <p className="text-xs text-muted-foreground">{formatDate(approvalRequest.approvedAt)}</p>
+                )}
+              </div>
+            ) : approvalRequest.status === "REJECTED" ? (
+              <div className="space-y-1.5 text-sm">
+                <div className="flex items-center gap-2 text-destructive font-medium">
+                  <ShieldX className="size-4 shrink-0" /> Rechazada
+                </div>
+                {approvalRequest.rejectedBy && (
+                  <p className="text-xs text-muted-foreground">Por {approvalRequest.rejectedBy.name}</p>
+                )}
+                {approvalRequest.rejectionReason && (
+                  <p className="text-xs text-muted-foreground italic">{approvalRequest.rejectionReason}</p>
+                )}
+              </div>
+            ) : approvalRequest.status === "PENDING_COSIGN" ? (
+              <div className="space-y-1.5 text-sm">
+                <div className="flex items-center gap-2 text-amber-600 font-medium">
+                  <ShieldAlert className="size-4 shrink-0" /> Pendiente de co-firma
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Solicitado por {approvalRequest.requestedBy.name}
+                </p>
+                {approvalRequest.cosigner && (
+                  <p className="text-xs text-muted-foreground">
+                    Co-firmante: {approvalRequest.cosigner.name}
+                  </p>
+                )}
+                {approvalRequest.amount != null && (
+                  <p className="text-xs font-medium">{formatGTQ(approvalRequest.amount)}</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1.5 text-sm">
+                <div className="flex items-center gap-2 text-amber-600 font-medium">
+                  <ShieldAlert className="size-4 shrink-0" /> Pendiente
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Solicitado por {approvalRequest.requestedBy.name}
+                </p>
+                {approvalRequest.amount != null && (
+                  <p className="text-xs font-medium">{formatGTQ(approvalRequest.amount)}</p>
+                )}
+                {formatDate(approvalRequest.createdAt) && (
+                  <p className="text-xs text-muted-foreground">{formatDate(approvalRequest.createdAt)}</p>
+                )}
+              </div>
+            )}
           </Card>
         </div>
       </div>
