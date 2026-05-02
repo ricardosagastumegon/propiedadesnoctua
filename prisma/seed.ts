@@ -65,6 +65,7 @@ async function main() {
   })
 
   // ─── CLEAN ──────────────────────────────────────────────────────────────────
+  await prisma.activityLog.deleteMany({ where: { organizationId: org.id } })
   await prisma.notification.deleteMany({ where: { organizationId: org.id } })
   await prisma.approvalRequest.deleteMany({ where: { organizationId: org.id } })
   await prisma.assetRecord.deleteMany({ where: { asset: { organizationId: org.id } } })
@@ -845,6 +846,229 @@ async function main() {
     vendorId: vPintor.id, status: "APPROVED", orderIndex: 3,
   }})
 
+  // ─── SEED v5: PROYECTOS CON AUDIT TRAIL COMPLETO ────────────────────────────
+
+  // Helper: create activity log entry
+  async function log(params: {
+    entityType: string; entityId: string; projectId?: string; action: string
+    actorId: string; actorName: string; metadata?: Record<string, unknown>; daysAgo: number
+  }) {
+    await prisma.activityLog.create({ data: {
+      organizationId: org.id, entityType: params.entityType, entityId: params.entityId,
+      projectId: params.projectId ?? null, action: params.action,
+      actorId: params.actorId, actorName: params.actorName,
+      metadata: params.metadata ? JSON.stringify(params.metadata) : null,
+      createdAt: subDays(now, params.daysAgo),
+    }})
+  }
+
+  // New property for "Torre Reforma"
+  const propTorreReforma = await prisma.property.create({ data: {
+    organizationId: org.id, name: "Torre Reforma Piso 12",
+    type: "APARTMENT", status: "RENTED",
+    addressLine: "Blvd. Los Próceres 18-50 Piso 12", zone: "Zona 10",
+    city: "Guatemala", department: "Guatemala",
+    bedrooms: 3, bathrooms: 2.5, builtArea: 180, currentValue: 2200000,
+  }})
+
+  // ── PROYECTO 1: Remodelación Cocina Monterrico ──────────────────────────────
+  const projCocina = await prisma.project.create({ data: {
+    organizationId: org.id, propertyId: propMonterrico.id,
+    type: "RENOVATION", name: "Remodelación Cocina Monterrico",
+    description: "Remodelación completa de cocina: isla central, gabinetes nuevos, pisos importados y aires acondicionados.",
+    status: "IN_PROGRESS", budgetEstimate: 185000,
+    startDate: subMonths(now, 3), endDate: addMonths(now, 1),
+    progressPercent: 60,
+  }})
+  await log({ entityType: "PROJECT", entityId: projCocina.id, projectId: projCocina.id, action: "CREATED", actorId: admin.id, actorName: "Carlos Mendez", daysAgo: 90 })
+
+  // Partida 1: Demolición
+  const pCocinaDemolicion = await prisma.projectPartida.create({ data: {
+    projectId: projCocina.id, name: "Demolición y preparación",
+    budgetEstimate: 18000, amountApproved: 17500, amountPaid: 17500,
+    vendorId: v3.id, status: "PAID", deliveredAt: subDays(now, 45), orderIndex: 0,
+  }})
+  await log({ entityType: "PARTIDA", entityId: pCocinaDemolicion.id, projectId: projCocina.id, action: "CREATED", actorId: manager.id, actorName: "Sofia Giron", daysAgo: 88, metadata: { name: "Demolición y preparación" } })
+  // Quotes
+  const qCocinaDemol1 = await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v3.id, projectId: projCocina.id, partidaId: pCocinaDemolicion.id,
+    quoteNumber: "COT-C-001", date: subDays(now, 85),
+    subtotal: 17500, taxAmount: 0, total: 17500, status: "APPROVED",
+    approvedAt: subDays(now, 82), approvedBy: admin.name,
+  }})
+  const qCocinaDemol2 = await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v7.id, projectId: projCocina.id, partidaId: pCocinaDemolicion.id,
+    quoteNumber: "COT-C-002", date: subDays(now, 84),
+    subtotal: 21000, taxAmount: 0, total: 21000, status: "PENDING",
+  }})
+  await prisma.projectPartida.update({ where: { id: pCocinaDemolicion.id }, data: { approvedQuoteId: qCocinaDemol1.id } })
+  await log({ entityType: "PARTIDA", entityId: pCocinaDemolicion.id, projectId: projCocina.id, action: "APPROVED", actorId: admin.id, actorName: "Carlos Mendez", daysAgo: 82, metadata: { vendor: "Constructora Vega SA", amount: 17500 } })
+  // Payments
+  const payDemolAnt = await prisma.partidaPayment.create({ data: {
+    partidaId: pCocinaDemolicion.id, amount: 8750, type: "ADVANCE",
+    date: subDays(now, 80), method: "TRANSFER", reference: "TRF-COCINA-001",
+    percentageOfTotal: 50, notes: "Anticipo 50%",
+  }})
+  await log({ entityType: "PAYMENT", entityId: payDemolAnt.id, projectId: projCocina.id, action: "PAYMENT_REGISTERED", actorId: assistant1.id, actorName: "Maria Torres", daysAgo: 80, metadata: { amount: 8750, partida: "Demolición y preparación", vendor: "Constructora Vega SA", percentageOfTotal: 50, method: "TRANSFER" } })
+  const payDemolFinal = await prisma.partidaPayment.create({ data: {
+    partidaId: pCocinaDemolicion.id, amount: 8750, type: "FINAL",
+    date: subDays(now, 45), method: "TRANSFER", reference: "TRF-COCINA-002",
+    percentageOfTotal: 100, notes: "Pago final al entregar",
+  }})
+  await log({ entityType: "PAYMENT", entityId: payDemolFinal.id, projectId: projCocina.id, action: "PAYMENT_REGISTERED", actorId: manager.id, actorName: "Sofia Giron", daysAgo: 45, metadata: { amount: 8750, partida: "Demolición y preparación", vendor: "Constructora Vega SA", percentageOfTotal: 100, method: "TRANSFER" } })
+  await log({ entityType: "PARTIDA", entityId: pCocinaDemolicion.id, projectId: projCocina.id, action: "DELIVERED", actorId: supervisor.id, actorName: "Luis Herrera", daysAgo: 45, metadata: { name: "Demolición y preparación" } })
+
+  // Partida 2: Gabinetes y cocina
+  const pCocinaGabinetes = await prisma.projectPartida.create({ data: {
+    projectId: projCocina.id, name: "Gabinetes y cocina integral",
+    budgetEstimate: 85000, amountApproved: 78000, amountPaid: 39000,
+    vendorId: v8.id, status: "IN_PROGRESS", orderIndex: 1,
+  }})
+  await log({ entityType: "PARTIDA", entityId: pCocinaGabinetes.id, projectId: projCocina.id, action: "CREATED", actorId: supervisor.id, actorName: "Luis Herrera", daysAgo: 75, metadata: { name: "Gabinetes y cocina integral" } })
+  const qGabinetes = await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v8.id, projectId: projCocina.id, partidaId: pCocinaGabinetes.id,
+    quoteNumber: "COT-C-003", date: subDays(now, 72),
+    subtotal: 78000, taxAmount: 0, total: 78000, status: "APPROVED",
+    approvedAt: subDays(now, 68), approvedBy: admin.name,
+  }})
+  await prisma.projectPartida.update({ where: { id: pCocinaGabinetes.id }, data: { approvedQuoteId: qGabinetes.id } })
+  await log({ entityType: "APPROVAL", entityId: "approval-gabinetes", projectId: projCocina.id, action: "APPROVAL_REQUESTED", actorId: manager.id, actorName: "Sofia Giron", daysAgo: 70, metadata: { vendor: "Mobitec Guatemala", amount: 78000, partida: "Gabinetes y cocina integral" } })
+  await log({ entityType: "PARTIDA", entityId: pCocinaGabinetes.id, projectId: projCocina.id, action: "APPROVED", actorId: admin.id, actorName: "Carlos Mendez", daysAgo: 68, metadata: { vendor: "Mobitec Guatemala", amount: 78000 } })
+  const payGabAnt = await prisma.partidaPayment.create({ data: {
+    partidaId: pCocinaGabinetes.id, amount: 39000, type: "ADVANCE",
+    date: subDays(now, 65), method: "TRANSFER", reference: "TRF-MOBITEC-COCI-001",
+    percentageOfTotal: 50, notes: "Anticipo 50% para fabricación",
+  }})
+  await log({ entityType: "PAYMENT", entityId: payGabAnt.id, projectId: projCocina.id, action: "PAYMENT_REGISTERED", actorId: assistant2.id, actorName: "Pedro Vasquez", daysAgo: 65, metadata: { amount: 39000, partida: "Gabinetes y cocina integral", vendor: "Mobitec Guatemala", percentageOfTotal: 50, method: "TRANSFER" } })
+
+  // Partida 3: Aires acondicionados (4 cotizaciones, 1 aprobada, 3 rechazadas)
+  const pCocinaAC = await prisma.projectPartida.create({ data: {
+    projectId: projCocina.id, name: "Aires acondicionados cocina",
+    budgetEstimate: 35000, amountApproved: 32500, amountPaid: 32500,
+    vendorId: v4.id, status: "PAID", deliveredAt: subDays(now, 10), orderIndex: 2,
+  }})
+  await log({ entityType: "PARTIDA", entityId: pCocinaAC.id, projectId: projCocina.id, action: "CREATED", actorId: assistant1.id, actorName: "Maria Torres", daysAgo: 60, metadata: { name: "Aires acondicionados cocina" } })
+  // 4 cotizaciones
+  const qACClima = await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v4.id, projectId: projCocina.id, partidaId: pCocinaAC.id,
+    quoteNumber: "COT-C-AC-001", date: subDays(now, 55),
+    subtotal: 32500, taxAmount: 0, total: 32500, status: "APPROVED",
+    approvedAt: subDays(now, 48), approvedBy: admin.name, notes: "Incluye 2 mini-splits inverter 18000 BTU + instalacion",
+  }})
+  await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v2.id, projectId: projCocina.id, partidaId: pCocinaAC.id,
+    quoteNumber: "COT-C-AC-002", date: subDays(now, 54),
+    subtotal: 38000, taxAmount: 0, total: 38000, status: "REJECTED", notes: "Precio mas alto sin garantia extendida",
+  }})
+  await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v6.id, projectId: projCocina.id, partidaId: pCocinaAC.id,
+    quoteNumber: "COT-C-AC-003", date: subDays(now, 52),
+    subtotal: 41000, taxAmount: 0, total: 41000, status: "REJECTED", notes: "Fuera de presupuesto",
+  }})
+  await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v5.id, projectId: projCocina.id, partidaId: pCocinaAC.id,
+    quoteNumber: "COT-C-AC-004", date: subDays(now, 50),
+    subtotal: 29000, taxAmount: 0, total: 29000, status: "REJECTED", notes: "No incluia mano de obra calificada",
+  }})
+  await prisma.projectPartida.update({ where: { id: pCocinaAC.id }, data: { approvedQuoteId: qACClima.id } })
+  await log({ entityType: "PARTIDA", entityId: pCocinaAC.id, projectId: projCocina.id, action: "QUOTE_ADDED", actorId: assistant1.id, actorName: "Maria Torres", daysAgo: 55, metadata: { amount: 32500, vendorId: v4.id } })
+  await log({ entityType: "APPROVAL", entityId: "approval-ac", projectId: projCocina.id, action: "APPROVAL_REQUESTED", actorId: supervisor.id, actorName: "Luis Herrera", daysAgo: 50, metadata: { vendor: "Clima Total GT", amount: 32500, partida: "Aires acondicionados" } })
+  await log({ entityType: "PARTIDA", entityId: pCocinaAC.id, projectId: projCocina.id, action: "APPROVED", actorId: admin.id, actorName: "Carlos Mendez", daysAgo: 48, metadata: { vendor: "Clima Total GT", amount: 32500 } })
+  const payACAnt = await prisma.partidaPayment.create({ data: {
+    partidaId: pCocinaAC.id, amount: 16250, type: "ADVANCE",
+    date: subDays(now, 45), method: "TRANSFER", reference: "TRF-CLIMA-COCI-001",
+    percentageOfTotal: 50, notes: "Anticipo 50%",
+  }})
+  await log({ entityType: "PAYMENT", entityId: payACAnt.id, projectId: projCocina.id, action: "PAYMENT_REGISTERED", actorId: manager.id, actorName: "Sofia Giron", daysAgo: 45, metadata: { amount: 16250, partida: "Aires acondicionados cocina", vendor: "Clima Total GT", percentageOfTotal: 50, method: "TRANSFER" } })
+  const payACFinal = await prisma.partidaPayment.create({ data: {
+    partidaId: pCocinaAC.id, amount: 16250, type: "FINAL",
+    date: subDays(now, 10), method: "TRANSFER", reference: "TRF-CLIMA-COCI-002",
+    percentageOfTotal: 100, notes: "Pago final tras entrega e inspección",
+  }})
+  await log({ entityType: "PAYMENT", entityId: payACFinal.id, projectId: projCocina.id, action: "PAYMENT_REGISTERED", actorId: admin.id, actorName: "Carlos Mendez", daysAgo: 10, metadata: { amount: 16250, partida: "Aires acondicionados cocina", vendor: "Clima Total GT", percentageOfTotal: 100, method: "TRANSFER" } })
+  await log({ entityType: "PARTIDA", entityId: pCocinaAC.id, projectId: projCocina.id, action: "DELIVERED", actorId: supervisor.id, actorName: "Luis Herrera", daysAgo: 10, metadata: { name: "Aires acondicionados cocina" } })
+  await prisma.projectPartida.update({ where: { id: pCocinaAC.id }, data: { amountPaid: 32500 } })
+
+  // Partida 4: Pisos importados (pendiente)
+  const pCocinaFlooring = await prisma.projectPartida.create({ data: {
+    projectId: projCocina.id, name: "Pisos importados porcelanato",
+    budgetEstimate: 48000, status: "QUOTING", orderIndex: 3,
+  }})
+  await log({ entityType: "PARTIDA", entityId: pCocinaFlooring.id, projectId: projCocina.id, action: "CREATED", actorId: assistant2.id, actorName: "Pedro Vasquez", daysAgo: 20, metadata: { name: "Pisos importados porcelanato" } })
+  await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v3.id, projectId: projCocina.id, partidaId: pCocinaFlooring.id,
+    quoteNumber: "COT-C-F-001", date: subDays(now, 18),
+    subtotal: 45000, taxAmount: 0, total: 45000, status: "PENDING", notes: "Porcelanato italiano 60x60",
+  }})
+
+  // ── PROYECTO 2: Paneles Solares Torre Reforma ───────────────────────────────
+  const projSolar = await prisma.project.create({ data: {
+    organizationId: org.id, propertyId: propTorreReforma.id,
+    type: "ELECTRICAL", name: "Paneles Solares Torre Reforma",
+    description: "Instalación de sistema fotovoltaico 15kW en terraza. Reducción estimada 70% consumo eléctrico.",
+    status: "PLANNING", budgetEstimate: 145000,
+    startDate: addMonths(now, 1), endDate: addMonths(now, 4),
+    progressPercent: 0,
+  }})
+  await log({ entityType: "PROJECT", entityId: projSolar.id, projectId: projSolar.id, action: "CREATED", actorId: admin.id, actorName: "Carlos Mendez", daysAgo: 30, metadata: { name: "Paneles Solares Torre Reforma" } })
+
+  // Partida 1: Paneles y onduladores
+  const pSolarPaneles = await prisma.projectPartida.create({ data: {
+    projectId: projSolar.id, name: "Paneles solares + inversor",
+    budgetEstimate: 105000, status: "QUOTING", orderIndex: 0,
+  }})
+  await log({ entityType: "PARTIDA", entityId: pSolarPaneles.id, projectId: projSolar.id, action: "CREATED", actorId: supervisor.id, actorName: "Luis Herrera", daysAgo: 25, metadata: { name: "Paneles solares + inversor" } })
+  // 2 cotizaciones
+  const qSolar1 = await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v2.id, projectId: projSolar.id, partidaId: pSolarPaneles.id,
+    quoteNumber: "COT-S-001", date: subDays(now, 22),
+    validUntil: addDays(now, 38), subtotal: 98000, taxAmount: 0, total: 98000,
+    status: "PENDING", notes: "Paneles Canadian Solar 400W × 30 + Inversor Fronius 15kW",
+  }})
+  await prisma.quoteItem.createMany({ data: [
+    { quoteId: qSolar1.id, description: "Panel Canadian Solar 400W", quantity: 30, unitPrice: 2800, total: 84000 },
+    { quoteId: qSolar1.id, description: "Inversor Fronius Primo 15kW", quantity: 1, unitPrice: 14000, total: 14000 },
+  ]})
+  await log({ entityType: "PARTIDA", entityId: pSolarPaneles.id, projectId: projSolar.id, action: "QUOTE_ADDED", actorId: assistant1.id, actorName: "Maria Torres", daysAgo: 22, metadata: { amount: 98000, vendorId: v2.id } })
+
+  const qSolar2 = await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v4.id, projectId: projSolar.id, partidaId: pSolarPaneles.id,
+    quoteNumber: "COT-S-002", date: subDays(now, 18),
+    validUntil: addDays(now, 42), subtotal: 112000, taxAmount: 0, total: 112000,
+    status: "PENDING", notes: "Paneles Jinko Tiger 450W × 30 + Inversor SMA 15kW — premium",
+  }})
+  await prisma.quoteItem.createMany({ data: [
+    { quoteId: qSolar2.id, description: "Panel Jinko Tiger 450W", quantity: 30, unitPrice: 3200, total: 96000 },
+    { quoteId: qSolar2.id, description: "Inversor SMA Sunny Boy 15kW", quantity: 1, unitPrice: 16000, total: 16000 },
+  ]})
+  await log({ entityType: "PARTIDA", entityId: pSolarPaneles.id, projectId: projSolar.id, action: "QUOTE_ADDED", actorId: assistant2.id, actorName: "Pedro Vasquez", daysAgo: 18, metadata: { amount: 112000, vendorId: v4.id } })
+
+  // ApprovalRequest PENDING_COSIGN for qSolar1
+  const arSolar = await prisma.approvalRequest.create({ data: {
+    organizationId: org.id, entityType: "PROJECT_PARTIDA", entityId: pSolarPaneles.id,
+    relatedId: qSolar1.id, requestedById: supervisor.id,
+    cosignerId: manager.id, status: "PENDING_COSIGN",
+    title: "Aprobar cotización: Electro Servicios GT — Paneles Solares Torre Reforma",
+    amount: qSolar1.total,
+    notes: "Partida: Paneles solares + inversor",
+    createdAt: subDays(now, 15),
+  }})
+  await log({ entityType: "APPROVAL", entityId: arSolar.id, projectId: projSolar.id, action: "APPROVAL_REQUESTED", actorId: supervisor.id, actorName: "Luis Herrera", daysAgo: 15, metadata: { vendor: "Electro Servicios GT", amount: 98000, partida: "Paneles solares + inversor" } })
+
+  // Partida 2: Instalación eléctrica
+  const pSolarElect = await prisma.projectPartida.create({ data: {
+    projectId: projSolar.id, name: "Instalación eléctrica y conexión a red",
+    budgetEstimate: 40000, status: "QUOTING", orderIndex: 1,
+  }})
+  await log({ entityType: "PARTIDA", entityId: pSolarElect.id, projectId: projSolar.id, action: "CREATED", actorId: manager.id, actorName: "Sofia Giron", daysAgo: 20, metadata: { name: "Instalación eléctrica y conexión a red" } })
+  await prisma.quote.create({ data: {
+    organizationId: org.id, vendorId: v2.id, projectId: projSolar.id, partidaId: pSolarElect.id,
+    quoteNumber: "COT-S-003", date: subDays(now, 12),
+    validUntil: addDays(now, 48), subtotal: 38000, taxAmount: 0, total: 38000,
+    status: "PENDING", notes: "Cableado, tablero de distribución, medidor bidireccional",
+  }})
+  await log({ entityType: "PARTIDA", entityId: pSolarElect.id, projectId: projSolar.id, action: "QUOTE_ADDED", actorId: assistant1.id, actorName: "Maria Torres", daysAgo: 12, metadata: { amount: 38000 } })
+
   // ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
   await prisma.notification.createMany({ data: [
     { organizationId: org.id, userId: admin.id, type: "CONTRACT_EXPIRING", title: "Contrato por vencer", message: "Contrato de Ana Lopez en Casa Cayala vence en 45 dias", link: `/contratos/${c1.id}`, isRead: false },
@@ -854,7 +1078,7 @@ async function main() {
     { organizationId: org.id, userId: admin.id, type: "INVOICE_OVERDUE", title: "Factura vencida", message: "Factura F-2025-003 de Soluciones TI esta vencida", link: `/contratos/${c3.id}`, isRead: true },
   ]})
 
-  console.log("Seed v4 completado exitosamente.")
+  console.log("Seed v5 completado exitosamente.")
   console.log(`Org: ${org.id}`)
   console.log(`Admin: admin@demo.gt / demo1234`)
   console.log(`Manager: gerente@demo.gt / demo1234`)

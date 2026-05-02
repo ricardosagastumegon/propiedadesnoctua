@@ -17,7 +17,7 @@ import { PaymentSection } from "./_payment-section"
 import { EscalateButton } from "./_escalate-button"
 import {
   AlertTriangle, Building2, Calendar, User, Phone, Wrench,
-  Clock, CheckCircle2, FolderKanban, Wallet, ShieldCheck, ShieldAlert, ShieldX, Shield,
+  Clock, CheckCircle2, FolderKanban, Wallet, ShieldCheck, ShieldAlert, ShieldX, Shield, Download,
 } from "lucide-react"
 
 const STATUS_COLORS: Record<string, string> = {
@@ -106,6 +106,11 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
 
       <PageHeader title={ticket.title} description={`${ticket.ticketNumber} — ${ticket.property.name}`}>
         <div className="flex items-center gap-2">
+          <Link href={`/mantenimiento/${ticket.id}/pdf`} target="_blank">
+            <button className="inline-flex items-center gap-1.5 text-xs border rounded-md px-3 py-1.5 hover:bg-muted transition-colors">
+              <Download className="size-3.5" />PDF
+            </button>
+          </Link>
           {hasMultipleQuotes && !ticket.escalatedToProjectId && (
             <EscalateButton ticketId={ticket.id} defaultName={ticket.title} />
           )}

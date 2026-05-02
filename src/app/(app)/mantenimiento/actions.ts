@@ -2,6 +2,7 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { maintenanceSchema } from "@/lib/schemas/maintenance"
+import { logActivity } from "@/lib/activity-log"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
@@ -12,6 +13,7 @@ async function getSession() {
     userId: session.user!.id!,
     orgId: (session.user as any).organizationId as string,
     authorityPolicy: (session.user as any).authorityPolicy as string | undefined,
+    actorName: session.user!.name ?? "Usuario",
   }
 }
 
@@ -25,7 +27,7 @@ async function addTimeline(ticketId: string, type: string, message: string, meta
 }
 
 export async function createTicket(formData: FormData) {
-  const { orgId } = await getSession()
+  const { orgId, userId, actorName } = await getSession()
   const raw = Object.fromEntries(formData)
   const parsed = maintenanceSchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
@@ -43,12 +45,13 @@ export async function createTicket(formData: FormData) {
     },
   })
   await addTimeline(ticket.id, "STATUS_CHANGE", `Ticket creado — ${ticket.title}`)
+  await logActivity({ orgId, entityType: "TICKET", entityId: ticket.id, action: "CREATED", actorId: userId, actorName, metadata: { ticketNumber, title: ticket.title } })
   revalidatePath("/mantenimiento")
   return { redirectTo: `/mantenimiento/${ticket.id}` }
 }
 
 export async function updateTicketStatus(id: string, status: string, assigneeId?: string) {
-  const { orgId } = await getSession()
+  const { orgId, userId, actorName } = await getSession()
   const now = new Date()
   await prisma.maintenanceRequest.updateMany({
     where: { id, organizationId: orgId },
@@ -60,6 +63,7 @@ export async function updateTicketStatus(id: string, status: string, assigneeId?
     },
   })
   await addTimeline(id, "STATUS_CHANGE", `Estado cambiado a: ${status}`)
+  await logActivity({ orgId, entityType: "TICKET", entityId: id, action: "STATUS_CHANGED", actorId: userId, actorName, metadata: { status, assigneeId } })
   revalidatePath(`/mantenimiento/${id}`)
   revalidatePath("/mantenimiento")
 }
@@ -85,7 +89,7 @@ export async function setPaymentMode(id: string, paymentMode: string, vendorId?:
 }
 
 export async function addTicketQuote(ticketId: string, formData: FormData) {
-  const { orgId } = await getSession()
+  const { orgId, userId, actorName } = await getSession()
   const ticket = await prisma.maintenanceRequest.findFirst({ where: { id: ticketId, organizationId: orgId } })
   if (!ticket) throw new Error("Ticket no encontrado")
 
@@ -97,11 +101,12 @@ export async function addTicketQuote(ticketId: string, formData: FormData) {
 
   await prisma.ticketQuote.create({ data: { ticketId, vendorId, amount, notes } })
   await addTimeline(ticketId, "QUOTE_ADDED", `Cotizacion agregada: Q${amount.toFixed(2)}`)
+  await logActivity({ orgId, entityType: "TICKET", entityId: ticketId, action: "QUOTE_ADDED", actorId: userId, actorName, metadata: { amount, vendorId } })
   revalidatePath(`/mantenimiento/${ticketId}`)
 }
 
 export async function selectTicketQuote(ticketId: string, quoteId: string) {
-  const { orgId, authorityPolicy, userId } = await getSession()
+  const { orgId, authorityPolicy, userId, actorName } = await getSession()
   const ticket = await prisma.maintenanceRequest.findFirst({ where: { id: ticketId, organizationId: orgId } })
   if (!ticket) throw new Error("Ticket no encontrado")
 
@@ -118,6 +123,7 @@ export async function selectTicketQuote(ticketId: string, quoteId: string) {
       }),
     ])
     await addTimeline(ticketId, "STATUS_CHANGE", `Cotizacion seleccionada: ${quote.vendor.name} Q${quote.amount.toFixed(2)}`)
+    await logActivity({ orgId, entityType: "TICKET", entityId: ticketId, action: "QUOTE_SELECTED", actorId: userId, actorName, metadata: { vendor: quote.vendor.name, amount: quote.amount } })
   } else if (authorityPolicy === "COSIGN_REQUIRED") {
     const approvalReq = await prisma.approvalRequest.create({
       data: {
@@ -136,6 +142,7 @@ export async function selectTicketQuote(ticketId: string, quoteId: string) {
       data: { approvalRequestId: approvalReq.id },
     })
     await addTimeline(ticketId, "NOTE", `Cotizacion enviada a autorizaciones: ${quote.vendor.name}`)
+    await logActivity({ orgId, entityType: "TICKET", entityId: ticketId, action: "APPROVAL_REQUESTED", actorId: userId, actorName, metadata: { vendor: quote.vendor.name, amount: quote.amount } })
     revalidatePath("/autorizaciones")
   } else {
     throw new Error("Sin autoridad para aprobar")
@@ -144,7 +151,7 @@ export async function selectTicketQuote(ticketId: string, quoteId: string) {
 }
 
 export async function addTicketPayment(ticketId: string, formData: FormData) {
-  const { orgId } = await getSession()
+  const { orgId, userId, actorName } = await getSession()
   const ticket = await prisma.maintenanceRequest.findFirst({ where: { id: ticketId, organizationId: orgId } })
   if (!ticket) throw new Error("Ticket no encontrado")
 
@@ -167,11 +174,12 @@ export async function addTicketPayment(ticketId: string, formData: FormData) {
   const paid = payments.reduce((s, p) => s + p.amount, 0)
   await prisma.maintenanceRequest.update({ where: { id: ticketId }, data: { amountPaid: paid, actualCost: paid } })
   await addTimeline(ticketId, "PAYMENT", `Pago registrado: Q${amount.toFixed(2)} via ${method}`)
+  await logActivity({ orgId, entityType: "TICKET", entityId: ticketId, action: "PAYMENT_REGISTERED", actorId: userId, actorName, metadata: { amount, method, percentageOfTotal, closesWithDiscount, discountAmount } })
   revalidatePath(`/mantenimiento/${ticketId}`)
 }
 
 export async function escalateToProject(ticketId: string, projectName: string) {
-  const { orgId, userId } = await getSession()
+  const { orgId, userId, actorName } = await getSession()
   const ticket = await prisma.maintenanceRequest.findFirst({
     where: { id: ticketId, organizationId: orgId },
     include: { property: true },
@@ -193,6 +201,8 @@ export async function escalateToProject(ticketId: string, projectName: string) {
     data: { escalatedToProjectId: project.id, escalatedAt: new Date(), escalatedById: userId },
   })
   await addTimeline(ticketId, "ESCALATED", `Escalado a proyecto: ${project.name}`)
+  await logActivity({ orgId, entityType: "TICKET", entityId: ticketId, action: "ESCALATED", actorId: userId, actorName, metadata: { projectId: project.id, projectName: project.name } })
+  await logActivity({ orgId, entityType: "PROJECT", entityId: project.id, projectId: project.id, action: "CREATED", actorId: userId, actorName, metadata: { name: project.name, fromTicket: ticketId } })
   revalidatePath(`/mantenimiento/${ticketId}`)
   revalidatePath("/proyectos")
   return { redirectTo: `/proyectos/${project.id}` }
@@ -207,7 +217,9 @@ export async function addTimelineNote(ticketId: string, message: string) {
 }
 
 export async function deleteTicket(id: string) {
-  const { orgId } = await getSession()
+  const { orgId, userId, actorName } = await getSession()
+  const ticket = await prisma.maintenanceRequest.findFirst({ where: { id, organizationId: orgId }, select: { ticketNumber: true, title: true } })
+  await logActivity({ orgId, entityType: "TICKET", entityId: id, action: "DELETED", actorId: userId, actorName, metadata: { ticketNumber: ticket?.ticketNumber, title: ticket?.title } })
   await prisma.maintenanceRequest.deleteMany({ where: { id, organizationId: orgId } })
   revalidatePath("/mantenimiento")
   redirect("/mantenimiento")

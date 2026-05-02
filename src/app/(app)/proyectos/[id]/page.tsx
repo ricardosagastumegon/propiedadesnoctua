@@ -13,8 +13,10 @@ import { TaskList } from "./_task-list"
 import { CostList } from "./_cost-list"
 import { PartidaList } from "./_partida-list"
 import { ProjectApprovals } from "./_project-approvals"
+import { PagosTab } from "./_pagos-tab"
 import { DeleteProjectButton } from "./_delete-button"
-import { Building2, Calendar, CheckSquare2 } from "lucide-react"
+import { getProjectActivityTrail } from "@/lib/project-activity-trail"
+import { Building2, Calendar, CheckSquare2, Download } from "lucide-react"
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -49,16 +51,19 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   })
   if (!project) notFound()
 
-  // Fetch approval requests for this project's partidas
+  // Fetch approval requests for this project's partidas + activity trail
   const partidaIds = project.partidas.map(p => p.id)
-  const approvalRequests = await prisma.approvalRequest.findMany({
-    where: { organizationId: orgId, entityType: "PROJECT_PARTIDA", entityId: { in: partidaIds } },
-    include: {
-      requestedBy: { select: { name: true } },
-      approvedBy: { select: { name: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  })
+  const [approvalRequests, activityTrail] = await Promise.all([
+    prisma.approvalRequest.findMany({
+      where: { organizationId: orgId, entityType: "PROJECT_PARTIDA", entityId: { in: partidaIds } },
+      include: {
+        requestedBy: { select: { name: true } },
+        approvedBy: { select: { name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    getProjectActivityTrail(id, orgId),
+  ])
 
   // KPI computations
   const totalApproved = project.partidas.reduce((s, p) => s + (p.amountApproved ?? 0), 0)
@@ -80,6 +85,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         description={`${PROJECT_TYPES[project.type]} — ${PROJECT_STATUSES[project.status]}`}
       >
         <div className="flex gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/proyectos/${id}/pdf`} target="_blank">
+              <Download className="size-3.5 mr-1.5" />PDF
+            </Link>
+          </Button>
           <Button asChild variant="outline" size="sm">
             <Link href={`/proyectos/${id}/editar`}>Editar</Link>
           </Button>
@@ -124,6 +134,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               <Badge className="ml-1.5 h-4 min-w-4 text-[10px] px-1">{pendingApprovals}</Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="pagos">Pagos</TabsTrigger>
           <TabsTrigger value="tareas">Tareas ({project.tasks.length})</TabsTrigger>
           <TabsTrigger value="costos">Costos ({project.costs.length})</TabsTrigger>
           <TabsTrigger value="info">Informacion</TabsTrigger>
@@ -145,6 +156,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             orgId={orgId}
             currentUserId={userId}
           />
+        </TabsContent>
+
+        <TabsContent value="pagos">
+          <Card className="p-6">
+            <PagosTab partidas={project.partidas as any} trail={activityTrail} />
+          </Card>
         </TabsContent>
 
         <TabsContent value="tareas">

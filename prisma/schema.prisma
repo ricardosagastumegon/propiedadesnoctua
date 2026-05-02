@@ -38,6 +38,7 @@ model Organization {
   assetRecordTypes AssetRecordType[]
   vendorInvoices   VendorInvoice[]
   pettyCashes      PettyCash[]
+  activityLogs     ActivityLog[]
 }
 
 // authorityPolicy: NONE | ALONE | COSIGN_REQUIRED
@@ -903,4 +904,24 @@ model PettyCashMovement {
 
   pettyCash PettyCash           @relation(fields: [pettyCashId], references: [id], onDelete: Cascade)
   ticket    MaintenanceRequest? @relation(fields: [ticketId], references: [id])
+}
+
+// entityType: PROJECT | PARTIDA | TICKET | PAYMENT | QUOTE | APPROVAL
+// action: CREATED | UPDATED | DELETED | STATUS_CHANGED | PAYMENT_REGISTERED | QUOTE_ADDED | QUOTE_SELECTED | APPROVED | REJECTED | COSIGNED | ESCALATED | CANCELLED | DELIVERED | APPROVAL_REQUESTED
+model ActivityLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  entityType     String
+  entityId       String
+  projectId      String?
+  action         String
+  actorId        String?
+  actorName      String?
+  metadata       String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, projectId])
+  @@index([entityType, entityId])
 }

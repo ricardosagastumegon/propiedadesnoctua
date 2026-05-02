@@ -2,6 +2,7 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { projectSchema, projectCostSchema, partidaSchema, partidaPaymentSchema } from "@/lib/schemas/project"
+import { logActivity } from "@/lib/activity-log"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
@@ -12,11 +13,12 @@ async function getSession() {
     userId: session.user!.id!,
     orgId: (session.user as any).organizationId as string,
     authorityPolicy: (session.user as any).authorityPolicy as string | undefined,
+    actorName: session.user!.name ?? "Usuario",
   }
 }
 
 export async function createProject(formData: FormData) {
-  const { orgId } = await getSession()
+  const { orgId, userId, actorName } = await getSession()
   const raw = Object.fromEntries(formData)
   const parsed = projectSchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
@@ -31,12 +33,13 @@ export async function createProject(formData: FormData) {
       budgetEstimate: parsed.data.budgetEstimate ?? null,
     },
   })
+  await logActivity({ orgId, entityType: "PROJECT", entityId: project.id, projectId: project.id, action: "CREATED", actorId: userId, actorName, metadata: { name: project.name } })
   revalidatePath("/proyectos")
   return { redirectTo: `/proyectos/${project.id}` }
 }
 
 export async function updateProject(id: string, formData: FormData) {
-  const { orgId } = await getSession()
+  const { orgId, userId, actorName } = await getSession()
   const raw = Object.fromEntries(formData)
   const parsed = projectSchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
@@ -51,13 +54,16 @@ export async function updateProject(id: string, formData: FormData) {
       budgetEstimate: parsed.data.budgetEstimate ?? null,
     },
   })
+  await logActivity({ orgId, entityType: "PROJECT", entityId: id, projectId: id, action: "UPDATED", actorId: userId, actorName, metadata: { name: parsed.data.name } })
   revalidatePath(`/proyectos/${id}`)
   revalidatePath("/proyectos")
   return { redirectTo: `/proyectos/${id}` }
 }
 
 export async function deleteProject(id: string) {
-  const { orgId } = await getSession()
+  const { orgId, userId, actorName } = await getSession()
+  const project = await prisma.project.findFirst({ where: { id, organizationId: orgId }, select: { name: true } })
+  await logActivity({ orgId, entityType: "PROJECT", entityId: id, projectId: id, action: "DELETED", actorId: userId, actorName, metadata: { name: project?.name } })
   await prisma.project.deleteMany({ where: { id, organizationId: orgId } })
   revalidatePath("/proyectos")
   redirect("/proyectos")
@@ -117,7 +123,7 @@ export async function deleteProjectCost(costId: string, projectId: string) {
 
 // Partidas CRUD
 export async function createPartida(projectId: string, formData: FormData) {
-  const { orgId } = await getSession()
+  const { orgId, userId, actorName } = await getSession()
   const project = await prisma.project.findFirst({ where: { id: projectId, organizationId: orgId } })
   if (!project) return { error: "Proyecto no encontrado" }
 
@@ -126,7 +132,7 @@ export async function createPartida(projectId: string, formData: FormData) {
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
   const maxOrder = await prisma.projectPartida.aggregate({ _max: { orderIndex: true }, where: { projectId } })
-  await prisma.projectPartida.create({
+  const partida = await prisma.projectPartida.create({
     data: {
       projectId,
       name: parsed.data.name,
@@ -136,27 +142,31 @@ export async function createPartida(projectId: string, formData: FormData) {
       orderIndex: (maxOrder._max.orderIndex ?? -1) + 1,
     },
   })
+  await logActivity({ orgId, entityType: "PARTIDA", entityId: partida.id, projectId, action: "CREATED", actorId: userId, actorName, metadata: { name: partida.name } })
   revalidatePath(`/proyectos/${projectId}`)
 }
 
 export async function deletePartida(partidaId: string, projectId: string) {
+  const { orgId, userId, actorName } = await getSession()
+  const partida = await prisma.projectPartida.findUnique({ where: { id: partidaId }, select: { name: true } })
+  await logActivity({ orgId, entityType: "PARTIDA", entityId: partidaId, projectId, action: "DELETED", actorId: userId, actorName, metadata: { name: partida?.name } })
   await prisma.projectPartida.delete({ where: { id: partidaId } })
   revalidatePath(`/proyectos/${projectId}`)
 }
 
 export async function cancelPartida(partidaId: string, projectId: string) {
-  await prisma.projectPartida.update({
-    where: { id: partidaId },
-    data: { status: "CANCELLED" },
-  })
+  const { orgId, userId, actorName } = await getSession()
+  const partida = await prisma.projectPartida.findUnique({ where: { id: partidaId }, select: { name: true } })
+  await prisma.projectPartida.update({ where: { id: partidaId }, data: { status: "CANCELLED" } })
+  await logActivity({ orgId, entityType: "PARTIDA", entityId: partidaId, projectId, action: "CANCELLED", actorId: userId, actorName, metadata: { name: partida?.name } })
   revalidatePath(`/proyectos/${projectId}`)
 }
 
 export async function markPartidaDelivered(partidaId: string, projectId: string) {
-  await prisma.projectPartida.update({
-    where: { id: partidaId },
-    data: { deliveredAt: new Date() },
-  })
+  const { orgId, userId, actorName } = await getSession()
+  const partida = await prisma.projectPartida.findUnique({ where: { id: partidaId }, select: { name: true } })
+  await prisma.projectPartida.update({ where: { id: partidaId }, data: { deliveredAt: new Date() } })
+  await logActivity({ orgId, entityType: "PARTIDA", entityId: partidaId, projectId, action: "DELIVERED", actorId: userId, actorName, metadata: { name: partida?.name } })
   revalidatePath(`/proyectos/${projectId}`)
 }
 
@@ -166,7 +176,7 @@ export async function requestQuoteApprovalForPartida(
   quoteId: string,
   projectId: string,
 ) {
-  const { userId, orgId, authorityPolicy } = await getSession()
+  const { userId, orgId, authorityPolicy, actorName } = await getSession()
 
   const quote = await prisma.quote.findUnique({
     where: { id: quoteId },
@@ -175,7 +185,6 @@ export async function requestQuoteApprovalForPartida(
   if (!quote) throw new Error("Cotizacion no encontrada")
 
   if (authorityPolicy === "ALONE") {
-    // Approve immediately
     await prisma.projectPartida.update({
       where: { id: partidaId },
       data: {
@@ -186,12 +195,13 @@ export async function requestQuoteApprovalForPartida(
       },
     })
     await prisma.quote.update({ where: { id: quoteId }, data: { status: "APPROVED", approvedAt: new Date() } })
+    await logActivity({ orgId, entityType: "PARTIDA", entityId: partidaId, projectId, action: "APPROVED", actorId: userId, actorName, metadata: { vendor: quote.vendor?.name, amount: quote.total } })
   } else if (authorityPolicy === "COSIGN_REQUIRED") {
     const partida = await prisma.projectPartida.findUnique({
       where: { id: partidaId },
       include: { project: { select: { name: true } } },
     })
-    await prisma.approvalRequest.create({
+    const approvalReq = await prisma.approvalRequest.create({
       data: {
         organizationId: orgId,
         requestedById: userId,
@@ -204,8 +214,8 @@ export async function requestQuoteApprovalForPartida(
         status: "PENDING_COSIGN",
       },
     })
-    // Mark quote as pending approval
     await prisma.quote.update({ where: { id: quoteId }, data: { status: "PENDING" } })
+    await logActivity({ orgId, entityType: "APPROVAL", entityId: approvalReq.id, projectId, action: "APPROVAL_REQUESTED", actorId: userId, actorName, metadata: { vendor: quote.vendor?.name, amount: quote.total, partida: partida?.name } })
   } else {
     throw new Error("Sin autoridad para aprobar")
   }
@@ -215,6 +225,7 @@ export async function requestQuoteApprovalForPartida(
 }
 
 export async function addPartidaPayment(partidaId: string, projectId: string, formData: FormData) {
+  const { orgId, userId, actorName } = await getSession()
   const raw = Object.fromEntries(formData)
   const parsed = partidaPaymentSchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
@@ -225,14 +236,14 @@ export async function addPartidaPayment(partidaId: string, projectId: string, fo
   const discountAmount = formData.get("discountAmount") ? parseFloat(formData.get("discountAmount") as string) : null
   const discountReason = formData.get("discountReason") as string || null
 
-  await prisma.partidaPayment.create({
+  const payment = await prisma.partidaPayment.create({
     data: { partidaId, ...parsed.data, type, date: new Date(parsed.data.date), percentageOfTotal, closesWithDiscount, discountAmount, discountReason },
   })
   const payments = await prisma.partidaPayment.findMany({ where: { partidaId } })
   const paid = payments.reduce((s, p) => s + p.amount, 0)
   const partida = await prisma.projectPartida.findUnique({
     where: { id: partidaId },
-    select: { amountApproved: true, deliveredAt: true },
+    select: { amountApproved: true, deliveredAt: true, name: true, vendor: { select: { name: true } } },
   })
   const isFullyPaid = partida && (partida.amountApproved ?? 0) > 0 && paid >= (partida.amountApproved ?? 0)
   const newStatus = partida?.deliveredAt && isFullyPaid
@@ -241,5 +252,10 @@ export async function addPartidaPayment(partidaId: string, projectId: string, fo
     ? "DELIVERED"
     : "IN_PROGRESS"
   await prisma.projectPartida.update({ where: { id: partidaId }, data: { amountPaid: paid, status: newStatus } })
+  await logActivity({
+    orgId, entityType: "PAYMENT", entityId: payment.id, projectId, action: "PAYMENT_REGISTERED",
+    actorId: userId, actorName,
+    metadata: { amount: parsed.data.amount, method: parsed.data.method, type, partida: partida?.name, vendor: partida?.vendor?.name, percentageOfTotal, closesWithDiscount, discountAmount },
+  })
   revalidatePath(`/proyectos/${projectId}`)
 }
