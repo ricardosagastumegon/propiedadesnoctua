@@ -14,6 +14,7 @@ import {
   markPartidaDelivered,
   requestQuoteApprovalForPartida,
 } from "../actions"
+import { PaymentForm, type PaymentFormData } from "@/components/shared/payment-form"
 import { Plus, Trash2, ChevronDown, ChevronRight, Star, ExternalLink, CheckCircle2, XCircle, Package } from "lucide-react"
 
 interface QuoteItem { id: string; description: string; qty: number; unitPrice: number; total: number }
@@ -28,7 +29,10 @@ interface Quote {
   vendor: QuoteVendor
   items: QuoteItem[]
 }
-interface Payment { id: string; amount: number; type: string; date: Date; method: string; reference: string | null }
+interface Payment {
+  id: string; amount: number; type: string; date: Date; method: string; reference: string | null
+  percentageOfTotal: number | null; closesWithDiscount: boolean; discountAmount: number | null
+}
 interface Partida {
   id: string
   name: string
@@ -269,6 +273,10 @@ export function PartidaList({ projectId, partidas, authorityPolicy }: Props) {
                                 {formatDate(pay.date)} — {pay.method}
                                 {pay.reference ? ` (${pay.reference})` : ""}
                                 {" · "}<span className="text-foreground">{PAYMENT_TYPES[pay.type] ?? pay.type}</span>
+                                {pay.percentageOfTotal != null && <span className="ml-1">({pay.percentageOfTotal}%)</span>}
+                                {pay.closesWithDiscount && pay.discountAmount && (
+                                  <span className="ml-1 text-amber-600">desc.{formatGTQ(pay.discountAmount)}</span>
+                                )}
                               </span>
                               <span className="font-medium tabular-nums">{formatGTQ(pay.amount)}</span>
                             </div>
@@ -279,33 +287,31 @@ export function PartidaList({ projectId, partidas, authorityPolicy }: Props) {
 
                     {/* Register payment form */}
                     {!isDone && payForm === p.id ? (
-                      <form action={async (fd) => {
-                        setLoading(true)
-                        await addPartidaPayment(p.id, projectId, fd)
-                        setPayForm(null)
-                        setLoading(false)
-                      }} className="grid grid-cols-2 gap-2 pt-1">
-                        <input name="amount" type="number" step="0.01" placeholder="Monto *" required
-                          className="border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring" />
-                        <input name="date" type="date" required
-                          className="border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring" />
-                        <select name="type" className="border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring">
-                          <option value="ADVANCE">Anticipo</option>
-                          <option value="PARTIAL" selected>Parcial</option>
-                          <option value="FINAL">Pago final</option>
-                        </select>
-                        <select name="method" className="border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring">
-                          <option value="TRANSFER">Transferencia</option>
-                          <option value="CASH">Efectivo</option>
-                          <option value="CHECK">Cheque</option>
-                        </select>
-                        <input name="reference" placeholder="Referencia (opcional)"
-                          className="border rounded px-2 py-1 text-xs col-span-2 focus:outline-none focus:ring-1 focus:ring-ring" />
-                        <div className="col-span-2 flex gap-2">
-                          <Button type="submit" size="sm" disabled={loading}>Registrar pago</Button>
-                          <Button type="button" size="sm" variant="ghost" onClick={() => setPayForm(null)}>Cancelar</Button>
-                        </div>
-                      </form>
+                      <PaymentForm
+                        totalAmount={p.amountApproved > 0 ? p.amountApproved : null}
+                        paidAmount={p.amountPaid}
+                        mode="partida"
+                        loading={loading}
+                        onCancel={() => setPayForm(null)}
+                        onSubmit={async (data: PaymentFormData) => {
+                          setLoading(true)
+                          const fd = new FormData()
+                          fd.set("amount", data.amount.toString())
+                          fd.set("method", data.method)
+                          fd.set("date", data.date)
+                          fd.set("type", data.type ?? "PARTIAL")
+                          if (data.reference) fd.set("reference", data.reference)
+                          if (data.notes) fd.set("notes", data.notes)
+                          if (data.percentageOfTotal != null) fd.set("percentageOfTotal", data.percentageOfTotal.toString())
+                          fd.set("closesWithDiscount", data.closesWithDiscount.toString())
+                          if (data.discountAmount != null) fd.set("discountAmount", data.discountAmount.toString())
+                          if (data.discountReason) fd.set("discountReason", data.discountReason)
+                          const res = await addPartidaPayment(p.id, projectId, fd)
+                          setLoading(false)
+                          if (!res?.error) setPayForm(null)
+                          return res as { error?: string } | undefined
+                        }}
+                      />
                     ) : !isDone && (
                       <Button size="sm" variant="outline" onClick={() => setPayForm(p.id)}>
                         <Plus className="size-3.5 mr-1.5" />Registrar pago

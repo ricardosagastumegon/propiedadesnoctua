@@ -76,11 +76,12 @@ async function main() {
   await prisma.projectPartida.deleteMany({ where: { project: { organizationId: org.id } } })
   await prisma.quoteItem.deleteMany({ where: { quote: { organizationId: org.id } } })
   await prisma.quote.deleteMany({ where: { organizationId: org.id } })
-  await prisma.vendor.deleteMany({ where: { organizationId: org.id } })
   await prisma.projectTask.deleteMany({ where: { project: { organizationId: org.id } } })
   await prisma.projectCost.deleteMany({ where: { project: { organizationId: org.id } } })
   await prisma.project.deleteMany({ where: { organizationId: org.id } })
   await prisma.maintenanceRequest.deleteMany({ where: { organizationId: org.id } })
+  await prisma.vendor.deleteMany({ where: { organizationId: org.id } })
+  await prisma.pettyCash.deleteMany({ where: { organizationId: org.id } })
   await prisma.expense.deleteMany({ where: { organizationId: org.id } })
   await prisma.invoiceItem.deleteMany({ where: { invoice: { organizationId: org.id } } })
   await prisma.payment.deleteMany({ where: { organizationId: org.id } })
@@ -245,14 +246,143 @@ async function main() {
     { organizationId: org.id, propertyId: propBodega.id, category: "MAINTENANCE", amount: 5000, date: subMonths(now, 4), description: "Pintura exterior bodega" },
   ]})
 
+  // ─── PETTY CASH ──────────────────────────────────────────────────────────────
+  async function seedPettyCash(propertyId: string, initialBalance: number, maxBalance: number, movements: Array<{ type: string; amount: number; description: string; category?: string; daysAgo: number }>) {
+    const pc = await prisma.pettyCash.create({ data: { organizationId: org.id, propertyId, balance: initialBalance, maxBalance } })
+    for (const m of movements) {
+      await prisma.pettyCashMovement.create({ data: {
+        pettyCashId: pc.id, type: m.type, amount: m.amount,
+        description: m.description, category: m.category, date: subDays(now, m.daysAgo),
+      }})
+    }
+    return pc
+  }
+
+  await seedPettyCash(propCayala.id, 1450, 3000, [
+    { type: "REPLENISHMENT", amount: 3000, description: "Reposicion inicial caja chica", daysAgo: 60 },
+    { type: "EXPENSE", amount: 350, description: "Materiales limpieza mensual", category: "Limpieza", daysAgo: 45 },
+    { type: "EXPENSE", amount: 280, description: "Focos LED repuesto", category: "Electricidad", daysAgo: 30 },
+    { type: "EXPENSE", amount: 520, description: "Pintura y brochas area jardin", category: "Materiales", daysAgo: 20 },
+    { type: "EXPENSE", amount: 400, description: "Motor puerta garage", category: "Varios", daysAgo: 15 },
+  ])
+
+  await seedPettyCash(propMonterrico.id, 3200, 5000, [
+    { type: "REPLENISHMENT", amount: 5000, description: "Fondos temporada alta", daysAgo: 90 },
+    { type: "EXPENSE", amount: 800, description: "Limpieza playa y terraza", category: "Limpieza", daysAgo: 60 },
+    { type: "EXPENSE", amount: 1000, description: "Materiales mantenimiento lanchas", category: "Materiales", daysAgo: 30 },
+  ])
+
+  await seedPettyCash(propZ14.id, 850, 2000, [
+    { type: "REPLENISHMENT", amount: 2000, description: "Reposicion trimestral", daysAgo: 45 },
+    { type: "EXPENSE", amount: 150, description: "Productos limpieza", category: "Limpieza", daysAgo: 30 },
+    { type: "EXPENSE", amount: 1100, description: "Recarga A/C R-410A (tk3)", category: "Electricidad", daysAgo: 1 },
+    { type: "REPLENISHMENT", amount: 100, description: "Ajuste por diferencia", daysAgo: 1 },
+  ])
+
+  await seedPettyCash(propOficina.id, 2600, 3000, [
+    { type: "REPLENISHMENT", amount: 3000, description: "Fondos caja chica oficina", daysAgo: 30 },
+    { type: "EXPENSE", amount: 200, description: "Articulos de oficina", category: "Varios", daysAgo: 15 },
+    { type: "EXPENSE", amount: 200, description: "Cafe y agua purificada", category: "Varios", daysAgo: 7 },
+  ])
+
+  await seedPettyCash(propBodega.id, 450, 2000, [
+    { type: "REPLENISHMENT", amount: 2000, description: "Fondos iniciales bodega", daysAgo: 90 },
+    { type: "EXPENSE", amount: 300, description: "Candados y cerraduras", category: "Seguridad", daysAgo: 60 },
+    { type: "EXPENSE", amount: 450, description: "Escobas y utensilios limpieza", category: "Limpieza", daysAgo: 40 },
+    { type: "EXPENSE", amount: 800, description: "Materiales menores reparacion", category: "Materiales", daysAgo: 12 },
+  ])
+
   // ─── MAINTENANCE TICKETS ─────────────────────────────────────────────────────
-  await prisma.maintenanceRequest.createMany({ data: [
-    { organizationId: org.id, ticketNumber: "T-001", propertyId: propCayala.id, category: "PLUMBING", priority: "HIGH", status: "IN_PROGRESS", title: "Fuga en tuberia de jardin", description: "Se reporto fuga de agua en area de jardin trasero", reportedBy: "Ana Lopez", reportedAt: subDays(now, 5), assignedToId: supervisor.id },
-    { organizationId: org.id, ticketNumber: "T-002", propertyId: propMonterrico.id, category: "ELECTRICAL", priority: "URGENT", status: "REPORTED", title: "Cortocircuito en sala", description: "Breaker principal salta repetidamente", reportedBy: "Encargado", reportedAt: subDays(now, 2) },
-    { organizationId: org.id, ticketNumber: "T-003", propertyId: propZ14.id, category: "HVAC", priority: "MEDIUM", status: "ASSIGNED", title: "A/C no enfria", description: "Unidad de A/C pierde eficiencia", assignedToId: assistant1.id, assignedAt: subDays(now, 3), reportedAt: subDays(now, 7) },
-    { organizationId: org.id, ticketNumber: "T-004", propertyId: propOficina.id, category: "SECURITY", priority: "LOW", status: "REPORTED", title: "Camara de seguridad sin imagen", description: "Camara exterior del parqueo no transmite", reportedAt: subDays(now, 10) },
-    { organizationId: org.id, ticketNumber: "T-005", propertyId: propCayala.id, category: "GENERAL", priority: "MEDIUM", status: "COMPLETED", title: "Puerta de garage atascada", description: "Motor de puerta automatica falla", reportedAt: subDays(now, 20), completedAt: subDays(now, 15) },
+  const tk1 = await prisma.maintenanceRequest.create({ data: {
+    organizationId: org.id, ticketNumber: "T-001", propertyId: propCayala.id,
+    category: "PLUMBING", priority: "HIGH", status: "IN_PROGRESS",
+    title: "Fuga en tuberia de jardin",
+    description: "Se reporto fuga de agua en area de jardin trasero. Requiere reemplazo de tubo PVC 2 pulgadas.",
+    reportedBy: "Ana Lopez", reportedPhone: "5588-7766",
+    reportedAt: subDays(now, 5), assignedToId: supervisor.id, assignedAt: subDays(now, 4), startedAt: subDays(now, 3),
+    paymentMode: "PROVEEDOR", estimatedCost: 3500,
+  }})
+  await prisma.maintenanceTimelineEvent.createMany({ data: [
+    { ticketId: tk1.id, type: "STATUS_CHANGE", message: "Ticket creado — Fuga en tuberia de jardin", createdAt: subDays(now, 5) },
+    { ticketId: tk1.id, type: "ASSIGNMENT", message: "Asignado a Luis Herrera", createdAt: subDays(now, 4) },
+    { ticketId: tk1.id, type: "STATUS_CHANGE", message: "Estado cambiado a: IN_PROGRESS", createdAt: subDays(now, 3) },
+    { ticketId: tk1.id, type: "NOTE", message: "Modo de pago: PROVEEDOR (con proveedor)", createdAt: subDays(now, 3) },
   ]})
+
+  const tk2 = await prisma.maintenanceRequest.create({ data: {
+    organizationId: org.id, ticketNumber: "T-002", propertyId: propMonterrico.id,
+    category: "ELECTRICAL", priority: "URGENT", status: "REPORTED",
+    title: "Cortocircuito en sala", description: "Breaker principal salta repetidamente al conectar electrodomesticos en sala.",
+    reportedBy: "Encargado Monterrico", reportedPhone: "4422-3311",
+    reportedAt: subDays(now, 2),
+  }})
+  await prisma.maintenanceTimelineEvent.create({ data: {
+    ticketId: tk2.id, type: "STATUS_CHANGE", message: "Ticket creado — Cortocircuito en sala", createdAt: subDays(now, 2),
+  }})
+
+  const tk3 = await prisma.maintenanceRequest.create({ data: {
+    organizationId: org.id, ticketNumber: "T-003", propertyId: propZ14.id,
+    category: "HVAC", priority: "MEDIUM", status: "COMPLETED",
+    title: "A/C no enfria eficientemente",
+    description: "Unidad de A/C Samsung en recamara master pierde eficiencia. Posible bajo nivel de refrigerante.",
+    assignedToId: assistant1.id, assignedAt: subDays(now, 3), startedAt: subDays(now, 2),
+    reportedAt: subDays(now, 7),
+    paymentMode: "CAJA_CHICA", estimatedCost: 1200, totalAmount: 1100, amountPaid: 1100, actualCost: 1100,
+    completedAt: subDays(now, 1),
+  }})
+  await prisma.maintenanceTimelineEvent.createMany({ data: [
+    { ticketId: tk3.id, type: "STATUS_CHANGE", message: "Ticket creado — A/C no enfria", createdAt: subDays(now, 7) },
+    { ticketId: tk3.id, type: "ASSIGNMENT", message: "Asignado a Maria Torres", createdAt: subDays(now, 3) },
+    { ticketId: tk3.id, type: "QUOTE_ADDED", message: "Cotizacion agregada: Q1,100.00", createdAt: subDays(now, 2) },
+    { ticketId: tk3.id, type: "PAYMENT", message: "Pago registrado: Q1,100.00 via CAJA_CHICA", createdAt: subDays(now, 1) },
+    { ticketId: tk3.id, type: "STATUS_CHANGE", message: "Estado cambiado a: COMPLETED", createdAt: subDays(now, 1) },
+  ]})
+  await prisma.ticketPayment.create({ data: {
+    ticketId: tk3.id, amount: 1100, method: "CAJA_CHICA",
+    date: subDays(now, 1), reference: "CAJA-Z14-001", notes: "Recarga de refrigerante R-410A",
+  }})
+
+  const tk4 = await prisma.maintenanceRequest.create({ data: {
+    organizationId: org.id, ticketNumber: "T-004", propertyId: propOficina.id,
+    category: "SECURITY", priority: "LOW", status: "REPORTED",
+    title: "Camara de seguridad sin imagen",
+    description: "Camara exterior del parqueo no transmite señal. Posible problema en cable o en cabeza de camara.",
+    reportedAt: subDays(now, 10),
+  }})
+  await prisma.maintenanceTimelineEvent.create({ data: {
+    ticketId: tk4.id, type: "STATUS_CHANGE", message: "Ticket creado — Camara de seguridad sin imagen", createdAt: subDays(now, 10),
+  }})
+
+  const tk5 = await prisma.maintenanceRequest.create({ data: {
+    organizationId: org.id, ticketNumber: "T-005", propertyId: propCayala.id,
+    category: "OTHER", priority: "MEDIUM", status: "COMPLETED",
+    title: "Puerta de garage atascada",
+    description: "Motor de puerta automatica presenta falla al abrir. Se reviso y ajusto cadena + cambio de motor.",
+    reportedAt: subDays(now, 20), assignedAt: subDays(now, 19), startedAt: subDays(now, 18), completedAt: subDays(now, 15),
+    paymentMode: "CAJA_CHICA", estimatedCost: 2800, actualCost: 2500, totalAmount: 2500, amountPaid: 2500,
+  }})
+  await prisma.maintenanceTimelineEvent.createMany({ data: [
+    { ticketId: tk5.id, type: "STATUS_CHANGE", message: "Ticket creado — Puerta de garage atascada", createdAt: subDays(now, 20) },
+    { ticketId: tk5.id, type: "PAYMENT", message: "Pago registrado: Q2,500.00 via CAJA_CHICA", createdAt: subDays(now, 15) },
+    { ticketId: tk5.id, type: "STATUS_CHANGE", message: "Estado cambiado a: COMPLETED", createdAt: subDays(now, 15) },
+  ]})
+
+  // T-006: Ticket con 2 cotizaciones (apto para mostrar botón "Convertir a proyecto")
+  const tk6 = await prisma.maintenanceRequest.create({ data: {
+    organizationId: org.id, ticketNumber: "T-006", propertyId: propBodega.id,
+    category: "STRUCTURAL", priority: "HIGH", status: "ASSIGNED",
+    title: "Filtracion de agua en techo",
+    description: "Se detectaron filtraciones en 3 puntos del techo metálico. Requiere sellado y posiblemente reemplazo de láminas.",
+    reportedBy: "Encargado Bodega", reportedAt: subDays(now, 12),
+    assignedToId: supervisor.id, assignedAt: subDays(now, 11),
+    paymentMode: "PROVEEDOR", estimatedCost: 18000,
+  }})
+  await prisma.maintenanceTimelineEvent.createMany({ data: [
+    { ticketId: tk6.id, type: "STATUS_CHANGE", message: "Ticket creado — Filtracion de agua en techo", createdAt: subDays(now, 12) },
+    { ticketId: tk6.id, type: "ASSIGNMENT", message: "Asignado a Luis Herrera", createdAt: subDays(now, 11) },
+    { ticketId: tk6.id, type: "NOTE", message: "Se solicitaron 2 cotizaciones a proveedores", createdAt: subDays(now, 8) },
+  ]})
+  // ticketQuotes para tk6 added after vendors section below
 
   // ─── VENDORS ────────────────────────────────────────────────────────────────
   const v1 = await prisma.vendor.create({ data: {
@@ -284,6 +414,12 @@ async function main() {
     organizationId: org.id, name: "Seguridad Integral", category: "SECURITY",
     phone: "7788-9900", isActive: true,
   }})
+
+  // TicketQuotes for tk6 (needs v1, v3)
+  await prisma.ticketQuote.createMany({ data: [
+    { ticketId: tk6.id, vendorId: v3.id, amount: 22000, notes: "Reemplazo completo de secciones afectadas + sellador", status: "PENDING" },
+    { ticketId: tk6.id, vendorId: v1.id, amount: 15500, notes: "Sellado de juntas + impermeabilizacion", status: "PENDING" },
+  ]})
 
   // ─── QUOTES ─────────────────────────────────────────────────────────────────
   const q1 = await prisma.quote.create({ data: {
@@ -661,6 +797,54 @@ async function main() {
     notes: "Camas metalicas e instalacion",
   }})
 
+  // ─── SEED v4: RICH PAYMENT DATA ─────────────────────────────────────────────
+
+  // 1. Constructora Vega (partida2): mark existing payment as 50% anticipo
+  await prisma.partidaPayment.updateMany({
+    where: { partidaId: partida2.id },
+    data: { type: "ADVANCE", percentageOfTotal: 50 },
+  })
+
+  // 2. Clima Total GT (v4): new partida + 50% anticipo payment
+  const partida8 = await prisma.projectPartida.create({ data: {
+    projectId: proj2.id, name: "Instalacion equipos A/C",
+    budgetEstimate: 20160, amountApproved: 20160, amountPaid: 10080,
+    vendorId: v4.id, status: "IN_PROGRESS", orderIndex: 2,
+  }})
+  await prisma.partidaPayment.create({ data: {
+    partidaId: partida8.id, amount: 10080, type: "ADVANCE",
+    date: subDays(now, 12), method: "TRANSFER", reference: "TRF-CLIMA-001",
+    percentageOfTotal: 50, notes: "Anticipo 50% para iniciar instalacion",
+  }})
+
+  // 3. Mobitec (partida7): final payment with Q200 discount
+  const mobitecRemaining = 8960 - 8000  // Q960 remaining after Q8000 advance
+  const mobitecDiscount = 200
+  await prisma.partidaPayment.create({ data: {
+    partidaId: partida7.id, amount: mobitecRemaining - mobitecDiscount,
+    type: "FINAL", date: subDays(now, 1),
+    method: "TRANSFER", reference: "TRF-MOBITEC-002",
+    percentageOfTotal: 100, closesWithDiscount: true,
+    discountAmount: mobitecDiscount, discountReason: "Retencion por ajuste de instalacion",
+    notes: "Liquidacion final con descuento negociado",
+  }})
+  await prisma.projectPartida.update({
+    where: { id: partida7.id },
+    data: { amountPaid: 8000 + (mobitecRemaining - mobitecDiscount), status: "PAID" },
+  })
+
+  // 4. Pintor Don Mario: new vendor + partida sin pagos
+  const vPintor = await prisma.vendor.create({ data: {
+    organizationId: org.id, name: "Pintor Don Mario",
+    category: "PAINTING", contactName: "Mario Solis", phone: "5533-9977",
+    notes: "Trabaja por días, pago en efectivo",
+  }})
+  const partida9 = await prisma.projectPartida.create({ data: {
+    projectId: proj1.id, name: "Pintura interior recamaras",
+    budgetEstimate: 8500, amountApproved: 8000, amountPaid: 0,
+    vendorId: vPintor.id, status: "APPROVED", orderIndex: 3,
+  }})
+
   // ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
   await prisma.notification.createMany({ data: [
     { organizationId: org.id, userId: admin.id, type: "CONTRACT_EXPIRING", title: "Contrato por vencer", message: "Contrato de Ana Lopez en Casa Cayala vence en 45 dias", link: `/contratos/${c1.id}`, isRead: false },
@@ -670,7 +854,7 @@ async function main() {
     { organizationId: org.id, userId: admin.id, type: "INVOICE_OVERDUE", title: "Factura vencida", message: "Factura F-2025-003 de Soluciones TI esta vencida", link: `/contratos/${c3.id}`, isRead: true },
   ]})
 
-  console.log("Seed v2 completado exitosamente.")
+  console.log("Seed v4 completado exitosamente.")
   console.log(`Org: ${org.id}`)
   console.log(`Admin: admin@demo.gt / demo1234`)
   console.log(`Manager: gerente@demo.gt / demo1234`)

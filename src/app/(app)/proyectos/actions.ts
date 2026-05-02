@@ -220,8 +220,13 @@ export async function addPartidaPayment(partidaId: string, projectId: string, fo
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
   const type = (formData.get("type") as string) || "PARTIAL"
+  const percentageOfTotal = formData.get("percentageOfTotal") ? parseFloat(formData.get("percentageOfTotal") as string) : null
+  const closesWithDiscount = formData.get("closesWithDiscount") === "true"
+  const discountAmount = formData.get("discountAmount") ? parseFloat(formData.get("discountAmount") as string) : null
+  const discountReason = formData.get("discountReason") as string || null
+
   await prisma.partidaPayment.create({
-    data: { partidaId, ...parsed.data, type, date: new Date(parsed.data.date) },
+    data: { partidaId, ...parsed.data, type, date: new Date(parsed.data.date), percentageOfTotal, closesWithDiscount, discountAmount, discountReason },
   })
   const payments = await prisma.partidaPayment.findMany({ where: { partidaId } })
   const paid = payments.reduce((s, p) => s + p.amount, 0)

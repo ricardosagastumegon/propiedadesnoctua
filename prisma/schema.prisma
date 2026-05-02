@@ -37,6 +37,7 @@ model Organization {
   approvalRequests ApprovalRequest[]
   assetRecordTypes AssetRecordType[]
   vendorInvoices   VendorInvoice[]
+  pettyCashes      PettyCash[]
 }
 
 // authorityPolicy: NONE | ALONE | COSIGN_REQUIRED
@@ -77,7 +78,7 @@ model CosignPolicy {
   allowedCosigners User[] @relation("CosignAllowed")
 }
 
-// entityType: QUOTE | CONTRACT | VENDOR_INVOICE | INVOICE_MODIFIED | VENDOR | PARTIDA
+// entityType: QUOTE | CONTRACT | VENDOR_INVOICE | INVOICE_MODIFIED | VENDOR | PARTIDA | TICKET
 // status: PENDING | PENDING_COSIGN | APPROVED | REJECTED
 model ApprovalRequest {
   id              String    @id @default(cuid())
@@ -96,15 +97,16 @@ model ApprovalRequest {
   notes           String?
   title           String?
   amount          Float?
-  relatedId       String?   // aux FK (e.g. quoteId when entityType=PROJECT_PARTIDA)
+  relatedId       String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  requestedBy  User         @relation("ApprovalRequested", fields: [requestedById], references: [id])
-  cosigner     User?        @relation("ApprovalCosigner", fields: [cosignerId], references: [id])
-  approvedBy   User?        @relation("ApprovalApproved", fields: [approvedById], references: [id])
-  rejectedBy   User?        @relation("ApprovalRejected", fields: [rejectedById], references: [id])
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy    User                @relation("ApprovalRequested", fields: [requestedById], references: [id])
+  cosigner       User?               @relation("ApprovalCosigner", fields: [cosignerId], references: [id])
+  approvedBy     User?               @relation("ApprovalApproved", fields: [approvedById], references: [id])
+  rejectedBy     User?               @relation("ApprovalRejected", fields: [rejectedById], references: [id])
+  ticketApproval MaintenanceRequest? @relation("TicketApproval")
 
   @@index([organizationId, status])
   @@index([entityType, entityId])
@@ -151,6 +153,7 @@ model Property {
   plans          Plan[]
   utilities      UtilityAccount[]
   vendorInvoices VendorInvoice[]
+  pettyCash      PettyCash?
 
   @@index([organizationId])
   @@index([status])
@@ -254,7 +257,7 @@ model Invoice {
   currency           String    @default("GTQ")
   status             String    @default("DRAFT")
   isModified         Boolean   @default(false)
-  modificationType   String?   // DISCOUNT | SURCHARGE | PARTIAL_WRITE_OFF
+  modificationType   String?
   modificationAmount Float?
   modificationReason String?
   notes              String?
@@ -359,35 +362,51 @@ model UtilityBill {
   account UtilityAccount @relation(fields: [utilityAccountId], references: [id], onDelete: Cascade)
 }
 
+// paymentMode: CAJA_CHICA | PROVEEDOR | EFECTIVO_RESPONSABLE | REEMBOLSO
 model MaintenanceRequest {
-  id              String    @id @default(cuid())
-  organizationId  String
-  ticketNumber    String
-  propertyId      String
-  assetId         String?
-  category        String
-  priority        String    @default("MEDIUM")
-  status          String    @default("REPORTED")
-  title           String
-  description     String
-  reportedBy      String?
-  reportedPhone   String?
-  reportedAt      DateTime  @default(now())
-  assignedToId    String?
-  assignedAt      DateTime?
-  startedAt       DateTime?
-  completedAt     DateTime?
-  estimatedCost   Float?
-  actualCost      Float?
-  resolutionNotes String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  organizationId       String
+  ticketNumber         String
+  propertyId           String
+  assetId              String?
+  category             String
+  priority             String    @default("MEDIUM")
+  status               String    @default("REPORTED")
+  title                String
+  description          String
+  reportedBy           String?
+  reportedPhone        String?
+  reportedAt           DateTime  @default(now())
+  assignedToId         String?
+  assignedAt           DateTime?
+  startedAt            DateTime?
+  completedAt          DateTime?
+  estimatedCost        Float?
+  actualCost           Float?
+  resolutionNotes      String?
+  paymentMode          String?
+  vendorId             String?
+  totalAmount          Float?
+  amountPaid           Float     @default(0)
+  escalatedToProjectId String?   @unique
+  escalatedAt          DateTime?
+  escalatedById        String?
+  approvalRequestId    String?   @unique
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  property     Property           @relation(fields: [propertyId], references: [id])
-  asset        Asset?             @relation(fields: [assetId], references: [id])
-  assignedTo   User?              @relation("AssignedTo", fields: [assignedToId], references: [id])
-  photos       MaintenancePhoto[]
+  organization     Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property         Property                  @relation(fields: [propertyId], references: [id])
+  asset            Asset?                    @relation(fields: [assetId], references: [id])
+  assignedTo       User?                     @relation("AssignedTo", fields: [assignedToId], references: [id])
+  vendor           Vendor?                   @relation("TicketVendor", fields: [vendorId], references: [id])
+  escalatedProject Project?                  @relation("EscalatedProject", fields: [escalatedToProjectId], references: [id])
+  approvalRequest  ApprovalRequest?          @relation("TicketApproval", fields: [approvalRequestId], references: [id])
+  photos           MaintenancePhoto[]
+  ticketQuotes     TicketQuote[]
+  ticketPayments   TicketPayment[]
+  timelineEvents   MaintenanceTimelineEvent[]
+  pettyCashMovements PettyCashMovement[]
 
   @@unique([organizationId, ticketNumber])
   @@index([status])
@@ -403,6 +422,51 @@ model MaintenancePhoto {
   createdAt DateTime @default(now())
 
   request MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}
+
+// status: PENDING | SELECTED | REJECTED
+model TicketQuote {
+  id        String   @id @default(cuid())
+  ticketId  String
+  vendorId  String
+  amount    Float
+  fileUrl   String?
+  notes     String?
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+
+  ticket MaintenanceRequest @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  vendor Vendor             @relation("TicketQuoteVendor", fields: [vendorId], references: [id])
+}
+
+// method: CAJA_CHICA | TRANSFER | CASH | REIMBURSEMENT
+model TicketPayment {
+  id                 String   @id @default(cuid())
+  ticketId           String
+  amount             Float
+  method             String
+  date               DateTime
+  reference          String?
+  notes              String?
+  percentageOfTotal  Float?
+  closesWithDiscount Boolean  @default(false)
+  discountAmount     Float?
+  discountReason     String?
+  createdAt          DateTime @default(now())
+
+  ticket MaintenanceRequest @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+// type: STATUS_CHANGE | NOTE | QUOTE_ADDED | PAYMENT | ASSIGNMENT | PHOTO | ESCALATED
+model MaintenanceTimelineEvent {
+  id        String   @id @default(cuid())
+  ticketId  String
+  type      String
+  message   String
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  ticket MaintenanceRequest @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 }
 
 model Asset {
@@ -448,8 +512,6 @@ model AssetServiceLog {
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
 }
 
-// Configurable document type catalog per organization
-// code examples: INSURANCE, REGISTRATION, LICENSE, INSPECTION, WARRANTY
 model AssetRecordType {
   id               String   @id @default(cuid())
   organizationId   String
@@ -519,6 +581,7 @@ model Project {
   assignments    EmployeeAssignment[]
   partidas       ProjectPartida[]
   vendorInvoices VendorInvoice[]
+  escalatedTicket MaintenanceRequest? @relation("EscalatedProject")
 
   @@index([organizationId])
   @@index([status])
@@ -570,27 +633,31 @@ model ProjectPartida {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  approvedQuote Quote?           @relation("PartidaApprovedQuote", fields: [approvedQuoteId], references: [id])
-  vendor        Vendor?          @relation(fields: [vendorId], references: [id])
-  quotes        Quote[]          @relation("PartidaQuotes")
-  payments      PartidaPayment[]
+  project        Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  approvedQuote  Quote?           @relation("PartidaApprovedQuote", fields: [approvedQuoteId], references: [id])
+  vendor         Vendor?          @relation(fields: [vendorId], references: [id])
+  quotes         Quote[]          @relation("PartidaQuotes")
+  payments       PartidaPayment[]
   vendorInvoices VendorInvoice[]
 
   @@index([projectId])
 }
 
 model PartidaPayment {
-  id         String   @id @default(cuid())
-  partidaId  String
-  amount     Float
-  type       String   @default("PARTIAL")
-  date       DateTime
-  method     String
-  reference  String?
-  receiptUrl String?
-  notes      String?
-  createdAt  DateTime @default(now())
+  id                 String   @id @default(cuid())
+  partidaId          String
+  amount             Float
+  type               String   @default("PARTIAL")
+  date               DateTime
+  method             String
+  reference          String?
+  receiptUrl         String?
+  notes              String?
+  percentageOfTotal  Float?
+  closesWithDiscount Boolean  @default(false)
+  discountAmount     Float?
+  discountReason     String?
+  createdAt          DateTime @default(now())
 
   partida ProjectPartida @relation(fields: [partidaId], references: [id], onDelete: Cascade)
 }
@@ -618,6 +685,8 @@ model Vendor {
   projectCosts   ProjectCost[]
   partidas       ProjectPartida[]
   vendorInvoices VendorInvoice[]
+  maintenances   MaintenanceRequest[] @relation("TicketVendor")
+  ticketQuotes   TicketQuote[]        @relation("TicketQuoteVendor")
 
   @@index([organizationId])
 }
@@ -798,4 +867,40 @@ model Notification {
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
+}
+
+// type: EXPENSE | REPLENISHMENT | ADJUSTMENT
+model PettyCash {
+  id             String   @id @default(cuid())
+  organizationId String
+  propertyId     String   @unique
+  balance        Float    @default(0)
+  maxBalance     Float    @default(2000)
+  currency       String   @default("GTQ")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  movements    PettyCashMovement[]
+
+  @@index([organizationId])
+}
+
+model PettyCashMovement {
+  id          String   @id @default(cuid())
+  pettyCashId String
+  type        String
+  amount      Float
+  description String
+  category    String?
+  date        DateTime
+  reference   String?
+  ticketId    String?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  pettyCash PettyCash           @relation(fields: [pettyCashId], references: [id], onDelete: Cascade)
+  ticket    MaintenanceRequest? @relation(fields: [ticketId], references: [id])
 }
