@@ -26,10 +26,12 @@ export function TaskList({ projectId, tasks }: { projectId: string; tasks: Task[
   async function handleAdd() {
     if (!newName.trim()) return
     setAdding(true)
-    const fd = new FormData()
-    fd.set("name", newName)
-    await createTask(projectId, fd)
+    const name = newName.trim()
+    setItems(prev => [...prev, { id: `tmp-${Date.now()}`, name, status: "TODO", completedAt: null }])
     setNewName("")
+    const fd = new FormData()
+    fd.set("name", name)
+    await createTask(projectId, fd)
     setAdding(false)
   }
 

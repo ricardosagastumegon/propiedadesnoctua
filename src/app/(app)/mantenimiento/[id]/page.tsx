@@ -15,6 +15,8 @@ import { DeleteTicketButton } from "./_delete-button"
 import { QuoteSection } from "./_quote-section"
 import { PaymentSection } from "./_payment-section"
 import { EscalateButton } from "./_escalate-button"
+import { TICKET_AUTH_THRESHOLD, TICKET_PROJECT_THRESHOLD } from "../constants"
+import { getPrepaymentCap } from "@/lib/service-acceptance"
 import {
   AlertTriangle, Building2, Calendar, User, Phone, Wrench,
   Clock, CheckCircle2, FolderKanban, Wallet, ShieldCheck, ShieldAlert, ShieldX, Shield, Download,
@@ -56,14 +58,14 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
       assignedTo: true,
       vendor: { select: { id: true, name: true, phone: true } },
       ticketQuotes: { include: { vendor: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
-      ticketPayments: { orderBy: { date: "asc" } },
+      ticketPayments: { include: { vendor: { select: { id: true, name: true } } }, orderBy: { date: "asc" } },
       timelineEvents: { orderBy: { createdAt: "asc" } },
       escalatedProject: { select: { id: true, name: true } },
     },
   })
   if (!ticket) notFound()
 
-  const [employees, vendors, approvalRequest] = await Promise.all([
+  const [employees, vendors, approvalRequest, ticketAcceptance, cap] = await Promise.all([
     prisma.user.findMany({ where: { organizationId: orgId, isActive: true }, orderBy: { name: "asc" } }),
     prisma.vendor.findMany({ where: { organizationId: orgId, isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.approvalRequest.findFirst({
@@ -76,15 +78,32 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
       },
       orderBy: { createdAt: "desc" },
     }),
+    prisma.serviceAcceptance.findFirst({
+      where: { organizationId: orgId, entityType: "TICKET", entityId: ticket.id, status: { in: ["PENDING", "ACCEPTED"] } },
+      include: { acceptedBy: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
+    getPrepaymentCap(orgId),
   ])
 
-  const canApprove = authorityPolicy === "ALONE" || authorityPolicy === "COSIGN_REQUIRED"
-  const hasMultipleQuotes = ticket.ticketQuotes.length >= 2
+  const acceptanceCtx = {
+    cap,
+    hasAcceptance: ticketAcceptance?.status === "ACCEPTED",
+    acceptanceStatus: (ticketAcceptance?.status as any) ?? null,
+    acceptedByName: ticketAcceptance?.acceptedBy?.name ?? null,
+    acceptedAt: ticketAcceptance?.acceptedAt?.toISOString() ?? null,
+    acceptanceId: ticketAcceptance?.id ?? null,
+  }
 
-  // Compute total cotizado from quotes (selected quote takes precedence, else highest pending)
-  const selectedQuote = ticket.ticketQuotes.find(q => q.status === "SELECTED")
-  const totalCotizado = selectedQuote?.amount
-    ?? (ticket.ticketQuotes.length > 0 ? Math.max(...ticket.ticketQuotes.map(q => q.amount)) : null)
+  const canApprove = authorityPolicy === "ALONE" || authorityPolicy === "COSIGN_REQUIRED"
+  const hasSelectedQuote = ticket.ticketQuotes.some(q => q.status === "SELECTED")
+  const maxQuoteAmount = ticket.ticketQuotes.length > 0 ? Math.max(...ticket.ticketQuotes.map(q => q.amount)) : 0
+  const forceEscalate = maxQuoteAmount >= TICKET_PROJECT_THRESHOLD
+
+  const selectedQuotes = ticket.ticketQuotes.filter(q => q.status === "SELECTED")
+  const totalCotizado = selectedQuotes.length > 0
+    ? selectedQuotes.reduce((s, q) => s + q.amount, 0)
+    : null
   const totalRef = totalCotizado ?? ticket.totalAmount
   const saldoPendiente = totalRef != null ? Math.max(0, totalRef - ticket.amountPaid) : null
   const pagosPct = totalRef && totalRef > 0 ? Math.min(100, Math.round((ticket.amountPaid / totalRef) * 100)) : 0
@@ -111,7 +130,7 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
               <Download className="size-3.5" />PDF
             </button>
           </Link>
-          {hasMultipleQuotes && !ticket.escalatedToProjectId && (
+          {!ticket.escalatedToProjectId && !hasSelectedQuote && forceEscalate && (
             <EscalateButton ticketId={ticket.id} defaultName={ticket.title} />
           )}
           <StatusActions ticketId={ticket.id} currentStatus={ticket.status} employees={employees} />
@@ -192,6 +211,9 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
                   vendors={vendors}
                   canApprove={canApprove}
                   escalated={!!ticket.escalatedToProjectId}
+                  authThreshold={TICKET_AUTH_THRESHOLD}
+                  projectThreshold={TICKET_PROJECT_THRESHOLD}
+                  approvalPending={!!approvalRequest && ["PENDING", "PENDING_COSIGN"].includes(approvalRequest.status)}
                 />
               </Card>
             </TabsContent>
@@ -203,6 +225,8 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
                   ticketId={ticket.id}
                   payments={ticket.ticketPayments}
                   totalAmount={ticket.totalAmount}
+                  selectedQuotes={ticket.ticketQuotes.filter(q => q.status === "SELECTED")}
+                  acceptanceCtx={acceptanceCtx}
                 />
               </Card>
             </TabsContent>

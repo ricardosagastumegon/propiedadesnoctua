@@ -7,7 +7,7 @@ const ACTION_LABELS: Record<string, string> = {
   UPDATED: "Actualizado",
   DELETED: "Eliminado",
   STATUS_CHANGED: "Cambio de estado",
-  PAYMENT_REGISTERED: "Pago registrado",
+  PAYMENT_REGISTERED: "💸 Pago registrado",
   QUOTE_ADDED: "Cotización agregada",
   QUOTE_SELECTED: "Cotización seleccionada",
   APPROVED: "Aprobado",
@@ -17,6 +17,9 @@ const ACTION_LABELS: Record<string, string> = {
   CANCELLED: "Cancelado",
   DELIVERED: "Marcado entregado",
   APPROVAL_REQUESTED: "Autorización solicitada",
+  ACCEPTANCE_REQUESTED: "📋 Aceptación solicitada",
+  SERVICE_ACCEPTED: "✓ Servicio aceptado",
+  SERVICE_REJECTED: "❌ Aceptación rechazada",
 }
 
 const ACTION_COLORS: Record<string, string> = {
@@ -34,6 +37,9 @@ const ACTION_COLORS: Record<string, string> = {
   ESCALATED: "bg-indigo-500",
   STATUS_CHANGED: "bg-slate-400",
   UPDATED: "bg-slate-400",
+  ACCEPTANCE_REQUESTED: "bg-cyan-500",
+  SERVICE_ACCEPTED: "bg-emerald-600",
+  SERVICE_REJECTED: "bg-red-600",
 }
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -57,6 +63,8 @@ function formatMeta(action: string, meta: Record<string, unknown> | null): strin
   if (meta.status) parts.push(`→ ${meta.status}`)
   if (meta.reason) parts.push(`Motivo: ${meta.reason}`)
   if (meta.projectName) parts.push(`Proyecto: ${meta.projectName}`)
+  if (meta.rating) parts.push(`★${meta.rating}/5`)
+  if (meta.hash) parts.push(`hash:${meta.hash}`)
   return parts.join(" · ")
 }
 

@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { maintenanceSchema } from "@/lib/schemas/maintenance"
 import { logActivity } from "@/lib/activity-log"
+import { canMakePayment } from "@/lib/service-acceptance"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
@@ -105,49 +106,78 @@ export async function addTicketQuote(ticketId: string, formData: FormData) {
   revalidatePath(`/mantenimiento/${ticketId}`)
 }
 
-export async function selectTicketQuote(ticketId: string, quoteId: string) {
+import { TICKET_AUTH_THRESHOLD, TICKET_PROJECT_THRESHOLD } from "./constants"
+
+export async function finalizeTicketSelection(ticketId: string, selectedIds: string[]) {
   const { orgId, authorityPolicy, userId, actorName } = await getSession()
   const ticket = await prisma.maintenanceRequest.findFirst({ where: { id: ticketId, organizationId: orgId } })
   if (!ticket) throw new Error("Ticket no encontrado")
+  if (!selectedIds.length) return { error: "Selecciona al menos una cotización" }
 
-  const quote = await prisma.ticketQuote.findUnique({ where: { id: quoteId }, include: { vendor: { select: { name: true } } } })
-  if (!quote) throw new Error("Cotizacion no encontrada")
+  const selected = await prisma.ticketQuote.findMany({
+    where: { id: { in: selectedIds }, ticketId },
+    include: { vendor: { select: { name: true } } },
+  })
+  if (selected.length !== selectedIds.length) return { error: "Cotizaciones inválidas" }
 
-  if (authorityPolicy === "ALONE") {
-    await prisma.$transaction([
-      prisma.ticketQuote.updateMany({ where: { ticketId }, data: { status: "REJECTED" } }),
-      prisma.ticketQuote.update({ where: { id: quoteId }, data: { status: "SELECTED" } }),
-      prisma.maintenanceRequest.update({
-        where: { id: ticketId },
-        data: { vendorId: quote.vendorId, totalAmount: quote.amount, status: "IN_PROGRESS" },
-      }),
-    ])
-    await addTimeline(ticketId, "STATUS_CHANGE", `Cotizacion seleccionada: ${quote.vendor.name} Q${quote.amount.toFixed(2)}`)
-    await logActivity({ orgId, entityType: "TICKET", entityId: ticketId, action: "QUOTE_SELECTED", actorId: userId, actorName, metadata: { vendor: quote.vendor.name, amount: quote.amount } })
-  } else if (authorityPolicy === "COSIGN_REQUIRED") {
+  const total = selected.reduce((s, q) => s + q.amount, 0)
+  const vendorNames = selected.map(q => q.vendor.name).join(", ")
+  const primaryVendorId = selected.length === 1 ? selected[0].vendorId : null
+
+  // >Q4,000 total → must convert to project
+  if (total >= TICKET_PROJECT_THRESHOLD) {
+    return { error: `El total (Q${total.toFixed(2)}) supera Q${TICKET_PROJECT_THRESHOLD.toLocaleString()}. Debe convertir a proyecto.` }
+  }
+
+  // Q1,000–Q4,000 total → requires authorization
+  if (total >= TICKET_AUTH_THRESHOLD) {
+    if (!authorityPolicy || authorityPolicy === "NONE") return { error: "Sin autoridad para solicitar aprobación" }
+    if (ticket.approvalRequestId) return { requiresApproval: true }
+    const status = authorityPolicy === "ALONE" ? "PENDING" : "PENDING_COSIGN"
     const approvalReq = await prisma.approvalRequest.create({
       data: {
         organizationId: orgId,
         requestedById: userId,
         entityType: "TICKET",
         entityId: ticketId,
-        relatedId: quoteId,
-        title: `Aprobar cotizacion ticket ${ticket.ticketNumber}: ${quote.vendor.name}`,
-        amount: quote.amount,
-        status: "PENDING_COSIGN",
+        title: `Aprobar mantenimiento ${ticket.ticketNumber}: ${vendorNames}`,
+        amount: total,
+        notes: `Total requiere autorización (≥ Q${TICKET_AUTH_THRESHOLD.toLocaleString()})`,
+        status,
       },
     })
-    await prisma.maintenanceRequest.update({
-      where: { id: ticketId },
-      data: { approvalRequestId: approvalReq.id },
+    await prisma.$transaction(async (tx) => {
+      await tx.ticketQuote.updateMany({ where: { ticketId }, data: { status: "REJECTED" } })
+      await tx.ticketQuote.updateMany({ where: { id: { in: selectedIds } }, data: { status: "SELECTED" } })
+      await tx.maintenanceRequest.update({
+        where: { id: ticketId },
+        data: { totalAmount: total, approvalRequestId: approvalReq.id, vendorId: primaryVendorId },
+      })
     })
-    await addTimeline(ticketId, "NOTE", `Cotizacion enviada a autorizaciones: ${quote.vendor.name}`)
-    await logActivity({ orgId, entityType: "TICKET", entityId: ticketId, action: "APPROVAL_REQUESTED", actorId: userId, actorName, metadata: { vendor: quote.vendor.name, amount: quote.amount } })
+    await addTimeline(ticketId, "NOTE", `Cotizaciones enviadas a autorización: ${vendorNames} — Total Q${total.toFixed(2)}`)
+    await logActivity({ orgId, entityType: "TICKET", entityId: ticketId, action: "APPROVAL_REQUESTED", actorId: userId, actorName, metadata: { vendors: vendorNames, amount: total } })
     revalidatePath("/autorizaciones")
+    revalidatePath(`/mantenimiento/${ticketId}`)
+    return { requiresApproval: true }
+  }
+
+  // <Q1,000 total → direct, no authorization needed
+  if (authorityPolicy === "ALONE" || authorityPolicy === "COSIGN_REQUIRED") {
+    await prisma.$transaction(async (tx) => {
+      await tx.ticketQuote.updateMany({ where: { ticketId }, data: { status: "REJECTED" } })
+      await tx.ticketQuote.updateMany({ where: { id: { in: selectedIds } }, data: { status: "SELECTED" } })
+      await tx.maintenanceRequest.update({
+        where: { id: ticketId },
+        data: { totalAmount: total, status: "IN_PROGRESS", vendorId: primaryVendorId },
+      })
+    })
+    await addTimeline(ticketId, "STATUS_CHANGE", `Cotizaciones seleccionadas: ${vendorNames} — Total Q${total.toFixed(2)}`)
+    await logActivity({ orgId, entityType: "TICKET", entityId: ticketId, action: "QUOTE_SELECTED", actorId: userId, actorName, metadata: { vendors: vendorNames, amount: total } })
   } else {
-    throw new Error("Sin autoridad para aprobar")
+    return { error: "Sin autoridad para seleccionar cotizaciones" }
   }
   revalidatePath(`/mantenimiento/${ticketId}`)
+  return { ok: true }
 }
 
 export async function addTicketPayment(ticketId: string, formData: FormData) {
@@ -158,6 +188,7 @@ export async function addTicketPayment(ticketId: string, formData: FormData) {
   const amount = parseFloat(formData.get("amount") as string) || 0
   const method = formData.get("method") as string
   const dateRaw = formData.get("date") as string
+  const vendorId = formData.get("vendorId") as string || null
   const reference = formData.get("reference") as string || null
   const notes = formData.get("notes") as string || null
   const percentageOfTotal = formData.get("percentageOfTotal") ? parseFloat(formData.get("percentageOfTotal") as string) : null
@@ -167,8 +198,17 @@ export async function addTicketPayment(ticketId: string, formData: FormData) {
 
   if (!amount || !method || !dateRaw) return { error: "Monto, método y fecha requeridos" }
 
+  // Service Acceptance cap enforcement
+  const check = await canMakePayment({
+    entityType: "TICKET", entityId: ticketId,
+    proposedAmount: amount, paymentMethod: method, orgId,
+  })
+  if (!check.allowed) {
+    return { error: check.reason ?? "Pago bloqueado por la regla de aceptación de servicios" }
+  }
+
   await prisma.ticketPayment.create({
-    data: { ticketId, amount, method, date: new Date(dateRaw), reference, notes, percentageOfTotal, closesWithDiscount, discountAmount, discountReason },
+    data: { ticketId, vendorId, amount, method, date: new Date(dateRaw), reference, notes, percentageOfTotal, closesWithDiscount, discountAmount, discountReason },
   })
   const payments = await prisma.ticketPayment.findMany({ where: { ticketId } })
   const paid = payments.reduce((s, p) => s + p.amount, 0)

@@ -10,8 +10,34 @@ import {
   Briefcase, Wallet, Wrench, Building2, FolderKanban,
   User, Phone, Calendar, Mail, Tag, CheckCircle2,
   XCircle, PenLine, Check, X, AlertTriangle, Hash,
-  Clock, CreditCard, ArrowRight,
+  Clock, CreditCard, ArrowRight, ExternalLink,
 } from "lucide-react"
+
+function entityDetailUrl(entity: EntityData, entityId: string): string | null {
+  if (!entity || entity.type === "UNKNOWN") return null
+  switch (entity.type) {
+    case "TICKET":           return `/mantenimiento/${entityId}`
+    case "PARTIDA":          return `/proyectos/${entity.projectId}`
+    case "QUOTE":            return entity.projectId ? `/proyectos/${entity.projectId}` : null
+    case "CONTRACT":         return `/contratos/${entityId}`
+    case "VENDOR_INVOICE":   return entity.projectId ? `/proyectos/${entity.projectId}` : `/proveedores/${entity.vendorId}`
+    case "INVOICE_MODIFIED": return `/cobros`
+    case "VENDOR":           return `/proveedores/${entity.vendorId}`
+    case "PETTY_CASH":       return `/caja-chica/${entity.propertyId}`
+    default:                 return null
+  }
+}
+
+const ENTITY_DETAIL_LABEL: Record<string, string> = {
+  TICKET:           "Ver ticket",
+  PARTIDA:          "Ver proyecto",
+  QUOTE:            "Ver proyecto",
+  CONTRACT:         "Ver contrato",
+  VENDOR_INVOICE:   "Ver factura",
+  INVOICE_MODIFIED: "Ver factura",
+  VENDOR:           "Ver proveedor",
+  PETTY_CASH:       "Ver caja chica",
+}
 
 // ── Labels ──────────────────────────────────────────────────────────────
 
@@ -209,9 +235,10 @@ interface Props {
   item: EnrichedItem
   currentUserId: string
   authorityPolicy: string
+  role: string
 }
 
-export function ApprovalCard({ item, currentUserId, authorityPolicy }: Props) {
+export function ApprovalCard({ item, currentUserId, authorityPolicy, role }: Props) {
   const { request: r, entity } = item
   const [rejectMode, setRejectMode] = useState(false)
   const [reason, setReason] = useState("")
@@ -225,16 +252,27 @@ export function ApprovalCard({ item, currentUserId, authorityPolicy }: Props) {
   }
   const EntityIcon = meta.icon
 
+  const isSuperAdmin = role === "ADMIN"
   const isRequester = r.requestedBy.id === currentUserId
   const isCosigner = r.cosigner?.id === currentUserId
-  const canApprove = !isRequester && authorityPolicy !== "NONE" && r.status === "PENDING"
-  const canCosign = isCosigner && r.status === "PENDING_COSIGN"
-  const canReject = !isRequester && (r.status === "PENDING" || r.status === "PENDING_COSIGN")
+  // Super admin bypasses the "no self-approval" rule
+  const canApprove = (isSuperAdmin || !isRequester) && authorityPolicy !== "NONE" && r.status === "PENDING"
+  const canCosign = r.status === "PENDING_COSIGN" && (isSuperAdmin || !isRequester) &&
+    (isCosigner || isSuperAdmin || (!r.cosigner && authorityPolicy === "ALONE"))
+  const canReject = (isSuperAdmin || !isRequester) && (r.status === "PENDING" || r.status === "PENDING_COSIGN")
   const isStuck = (r.status === "PENDING" || r.status === "PENDING_COSIGN") &&
     Date.now() - new Date(r.updatedAt).getTime() > 72 * 3600 * 1000
   const isPending = r.status === "PENDING" || r.status === "PENDING_COSIGN"
 
   const contextLinks = buildContextLinks(entity, r.entityId)
+
+  // Property name to show in header (when applicable)
+  const headerPropertyName = entity && entity.type !== "UNKNOWN" && "propertyName" in entity
+    ? entity.propertyName as string | undefined
+    : undefined
+
+  const detailUrl = entity ? entityDetailUrl(entity, r.entityId) : null
+  const detailLabel = ENTITY_DETAIL_LABEL[r.entityType] ?? "Ver detalle"
 
   // Displayed amount: use request.amount; fall back to entity total
   const displayAmount = r.amount ?? (() => {
@@ -259,24 +297,54 @@ export function ApprovalCard({ item, currentUserId, authorityPolicy }: Props) {
     >
       {/* ── Header ── */}
       <div className="flex items-start justify-between mb-3 gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
           <div className={`size-8 rounded-lg flex items-center justify-center shrink-0 ${meta.bg}`}>
             <EntityIcon className={`size-4 ${meta.fg}`} />
           </div>
-          <span className="text-xs uppercase tracking-wider font-medium text-muted-foreground">
+          <span className="text-xs uppercase tracking-wider font-medium text-muted-foreground shrink-0">
             {meta.label}
           </span>
+          {headerPropertyName && (
+            <span className="text-xs px-2 py-0.5 rounded-md bg-muted text-foreground font-medium flex items-center gap-1 min-w-0 max-w-[280px]">
+              <Building2 className="size-3 shrink-0" />
+              <span className="truncate">{headerPropertyName}</span>
+            </span>
+          )}
+          {isRequester && (r.status === "PENDING" || r.status === "PENDING_COSIGN") && (
+            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-medium shrink-0">
+              Tú la creaste
+            </span>
+          )}
           {isStuck && <AlertTriangle className="size-3.5 text-destructive shrink-0" />}
         </div>
-        {displayAmount != null && (
-          <p className="font-display text-xl tabular-nums shrink-0">{formatGTQ(displayAmount)}</p>
-        )}
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          {displayAmount != null && (
+            <p className="font-display text-xl tabular-nums leading-none">{formatGTQ(displayAmount)}</p>
+          )}
+          {detailUrl && (
+            <Link
+              href={detailUrl}
+              onClick={e => e.stopPropagation()}
+              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-foreground/15 hover:border-foreground/30 hover:bg-muted transition-colors"
+            >
+              <ExternalLink className="size-3" />{detailLabel}
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* ── Title ── */}
-      <p className="font-medium text-sm mb-3 line-clamp-2">
-        {r.title ?? `${meta.label} ${r.entityId.slice(0, 8)}`}
-      </p>
+      {detailUrl ? (
+        <Link href={detailUrl} className="block mb-3 hover:underline">
+          <p className="font-medium text-sm line-clamp-2">
+            {r.title ?? `${meta.label} ${r.entityId.slice(0, 8)}`}
+          </p>
+        </Link>
+      ) : (
+        <p className="font-medium text-sm mb-3 line-clamp-2">
+          {r.title ?? `${meta.label} ${r.entityId.slice(0, 8)}`}
+        </p>
+      )}
 
       {/* ── Context links ── */}
       {contextLinks.length > 0 && (
@@ -312,8 +380,11 @@ export function ApprovalCard({ item, currentUserId, authorityPolicy }: Props) {
             {r.status === "PENDING_COSIGN" && (
               <p className="text-xs text-muted-foreground">
                 1ra firma: <span className="font-medium text-foreground">{r.requestedBy.name}</span>
-                {" · "}Esperando co-firma de:{" "}
-                <span className="font-medium text-foreground">{r.cosigner?.name ?? "—"}</span>
+                {" · "}
+                {r.cosigner
+                  ? <>Esperando co-firma de: <span className="font-medium text-foreground">{r.cosigner.name}</span></>
+                  : <span className="text-amber-700">Requiere co-firma de un autorizador</span>
+                }
               </p>
             )}
             {r.status === "APPROVED" && r.approvedBy && (
@@ -366,7 +437,7 @@ export function ApprovalCard({ item, currentUserId, authorityPolicy }: Props) {
                   <X className="size-3.5 mr-1" />Rechazar
                 </Button>
               )}
-              {isRequester && (
+              {isRequester && !canApprove && !canCosign && !canReject && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <Clock className="size-3" />Esperando aprobación
                 </p>

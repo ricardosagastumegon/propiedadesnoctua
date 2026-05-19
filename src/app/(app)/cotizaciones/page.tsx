@@ -18,7 +18,7 @@ export default async function CotizacionesPage() {
 
   const quotes = await prisma.quote.findMany({
     where: { organizationId: orgId },
-    include: { vendor: true, project: true },
+    include: { vendor: true, project: true, partida: { select: { name: true } } },
     orderBy: { date: "desc" },
   })
 
@@ -58,7 +58,7 @@ export default async function CotizacionesPage() {
               <TableRow>
                 <TableHead>Numero</TableHead>
                 <TableHead>Proveedor</TableHead>
-                <TableHead>Proyecto</TableHead>
+                <TableHead>Proyecto / Partida</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Valida hasta</TableHead>
                 <TableHead>Total</TableHead>
@@ -72,7 +72,12 @@ export default async function CotizacionesPage() {
                     <Link href={`/cotizaciones/${q.id}`} className="font-mono text-sm hover:underline">{q.quoteNumber}</Link>
                   </TableCell>
                   <TableCell>{q.vendor.name}</TableCell>
-                  <TableCell>{q.project?.name ?? "—"}</TableCell>
+                  <TableCell>
+                    <span className="text-sm">{q.project?.name ?? "—"}</span>
+                    {q.partida && (
+                      <span className="block text-xs text-muted-foreground">{q.partida.name}</span>
+                    )}
+                  </TableCell>
                   <TableCell>{formatDate(q.date)}</TableCell>
                   <TableCell>{q.validUntil ? formatDate(q.validUntil) : "—"}</TableCell>
                   <TableCell className="tabular-nums font-medium">{formatGTQ(q.total)}</TableCell>

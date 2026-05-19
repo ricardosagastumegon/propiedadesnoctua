@@ -14,17 +14,19 @@ export default async function ConfiguracionPage() {
   const orgId = (session.user as any).organizationId as string
   const userId = session.user!.id!
 
-  const [org, users, me] = await Promise.all([
+  const [org, users, me, settings] = await Promise.all([
     prisma.organization.findUnique({ where: { id: orgId } }),
     prisma.user.findMany({
       where: { organizationId: orgId },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, email: true, role: true, authorityPolicy: true, isActive: true },
+      select: { id: true, name: true, email: true, role: true, authorityPolicy: true, isActive: true, canAcceptServices: true },
     }),
     prisma.user.findUnique({ where: { id: userId } }),
+    prisma.organizationSettings.findUnique({ where: { organizationId: orgId } }),
   ])
 
   if (!org || !me) redirect("/login")
+  const prepaymentCap = settings?.prepaymentCapPercentage ?? 80
 
   return (
     <div className="p-8 max-w-3xl mx-auto">
@@ -38,11 +40,11 @@ export default async function ConfiguracionPage() {
         </TabsList>
 
         <TabsContent value="org">
-          <OrgForm org={org} />
+          <OrgForm org={org} prepaymentCap={prepaymentCap} />
         </TabsContent>
 
         <TabsContent value="usuarios">
-          <UsersPanel users={users} currentUserId={userId} />
+          <UsersPanel users={users} currentUserId={userId} currentUserRole={me.role} />
         </TabsContent>
 
         <TabsContent value="cuenta">

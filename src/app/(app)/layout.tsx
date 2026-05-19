@@ -12,9 +12,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = session.user as any
   const orgId = user.organizationId as string
 
-  const pendingApprovals = await prisma.approvalRequest.count({
-    where: { organizationId: orgId, status: { in: ["PENDING", "PENDING_COSIGN"] } },
-  })
+  const [pendingApprovals, pendingAcceptances] = await Promise.all([
+    prisma.approvalRequest.count({
+      where: { organizationId: orgId, status: { in: ["PENDING", "PENDING_COSIGN"] } },
+    }),
+    prisma.serviceAcceptance.count({
+      where: { organizationId: orgId, status: "PENDING" },
+    }),
+  ])
 
   return (
     <div className="min-h-screen flex">
@@ -26,7 +31,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="text-xs text-muted-foreground mt-0.5">{user.organizationName}</div>
         </div>
         <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
-          <SidebarNav pendingApprovals={pendingApprovals} />
+          <SidebarNav
+            pendingApprovals={pendingApprovals}
+            pendingAcceptances={pendingAcceptances}
+            canAcceptServices={!!user.canAcceptServices}
+            role={user.role}
+          />
         </nav>
         <div className="p-3 border-t">
           <div className="px-3 py-2 mb-2">

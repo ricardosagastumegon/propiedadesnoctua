@@ -59,6 +59,7 @@ interface Props {
   enriched: EnrichedItem[]
   currentUserId: string
   authorityPolicy: string
+  role: string
   properties: { id: string; name: string }[]
   users: { id: string; name: string }[]
 }
@@ -68,7 +69,8 @@ type GroupBy = "" | "property" | "type" | "vendor" | "requester"
 
 // ── Component ────────────────────────────────────────────────────────────
 
-export function ApprovalsClient({ enriched, currentUserId, authorityPolicy, properties, users }: Props) {
+export function ApprovalsClient({ enriched, currentUserId, authorityPolicy, role, properties, users }: Props) {
+  const isSuperAdmin = role === "ADMIN"
   // Filters
   const [filterTypes, setFilterTypes] = useState<string[]>([])
   const [filterProperty, setFilterProperty] = useState("")
@@ -87,12 +89,13 @@ export function ApprovalsClient({ enriched, currentUserId, authorityPolicy, prop
   const pendingForMe = useMemo(
     () =>
       pendingAll.filter(i => {
-        if (i.request.requestedBy.id === currentUserId) return false
+        // Super admin can act on everything including own requests
+        if (!isSuperAdmin && i.request.requestedBy.id === currentUserId) return false
         if (i.request.status === "PENDING") return true
-        if (i.request.status === "PENDING_COSIGN" && i.request.cosigner?.id === currentUserId) return true
+        if (i.request.status === "PENDING_COSIGN" && (i.request.cosigner?.id === currentUserId || isSuperAdmin)) return true
         return false
       }),
-    [pendingAll, currentUserId]
+    [pendingAll, currentUserId, isSuperAdmin]
   )
   const totalPendingAmount = useMemo(
     () => pendingAll.reduce((s, i) => s + (i.request.amount ?? 0), 0),
@@ -382,6 +385,7 @@ export function ApprovalsClient({ enriched, currentUserId, authorityPolicy, prop
                     item={item}
                     currentUserId={currentUserId}
                     authorityPolicy={authorityPolicy}
+                    role={role}
                   />
                 ))}
               </div>

@@ -105,6 +105,35 @@ export async function updateUserAuthorityPolicy(userId: string, authorityPolicy:
   revalidatePath("/configuracion")
 }
 
+export async function updateUserCanAcceptServices(userId: string, canAcceptServices: boolean) {
+  const session = await auth()
+  if (!session) throw new Error("No autenticado")
+  const me = session.user as any
+  if (me.role !== "ADMIN" && me.role !== "OWNER") return { error: "Sólo administradores pueden cambiar este permiso" }
+  const orgId = me.organizationId as string
+  await prisma.user.updateMany({ where: { id: userId, organizationId: orgId }, data: { canAcceptServices } })
+  revalidatePath("/configuracion")
+}
+
+export async function updatePrepaymentCap(formData: FormData) {
+  const session = await auth()
+  if (!session) throw new Error("No autenticado")
+  const me = session.user as any
+  if (me.role !== "ADMIN" && me.role !== "OWNER") return { error: "Sólo administradores pueden cambiar reglas de negocio" }
+  const orgId = me.organizationId as string
+
+  const raw = formData.get("prepaymentCapPercentage")
+  const value = parseInt(raw as string, 10)
+  if (Number.isNaN(value) || value < 0 || value > 100) return { error: "El porcentaje debe estar entre 0 y 100" }
+
+  await prisma.organizationSettings.upsert({
+    where: { organizationId: orgId },
+    update: { prepaymentCapPercentage: value },
+    create: { organizationId: orgId, prepaymentCapPercentage: value },
+  })
+  revalidatePath("/configuracion")
+}
+
 export async function setCosignPolicy(userId: string, cosignerIds: string[]) {
   const orgId = await getOrgId()
   const user = await prisma.user.findFirst({ where: { id: userId, organizationId: orgId } })

@@ -1,13 +1,24 @@
 "use server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { logActivity } from "@/lib/activity-log"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
-async function getOrgId() {
+async function getSession() {
   const session = await auth()
   if (!session) throw new Error("No autenticado")
-  return (session.user as any).organizationId as string
+  return {
+    orgId: (session.user as any).organizationId as string,
+    userId: session.user!.id!,
+    actorName: session.user!.name ?? "Usuario",
+    authorityPolicy: (session.user as any).authorityPolicy as string | undefined,
+  }
+}
+
+async function getOrgId() {
+  const { orgId } = await getSession()
+  return orgId
 }
 
 async function nextQuoteNumber(orgId: string) {
@@ -16,7 +27,7 @@ async function nextQuoteNumber(orgId: string) {
 }
 
 export async function createQuote(formData: FormData) {
-  const orgId = await getOrgId()
+  const { orgId, userId, actorName, authorityPolicy } = await getSession()
   const vendorId = formData.get("vendorId") as string
   const projectId = formData.get("projectId") as string || null
   const partidaId = formData.get("partidaId") as string || null
@@ -46,8 +57,50 @@ export async function createQuote(formData: FormData) {
       notes,
     },
   })
+
+  const vendor = await prisma.vendor.findUnique({ where: { id: vendorId }, select: { name: true } })
+  await logActivity({
+    orgId, entityType: "QUOTE", entityId: quote.id,
+    projectId,
+    action: "CREATED",
+    actorId: userId, actorName,
+    metadata: { vendor: vendor?.name, total, partida: partidaId },
+  })
+
+  // When creating from a partida, auto-create approval request for COSIGN_REQUIRED users
+  if (partidaId && projectId && authorityPolicy === "COSIGN_REQUIRED") {
+    const partida = await prisma.projectPartida.findUnique({
+      where: { id: partidaId },
+      include: { project: { select: { name: true } } },
+    })
+    const approvalReq = await prisma.approvalRequest.create({
+      data: {
+        organizationId: orgId,
+        requestedById: userId,
+        entityType: "PROJECT_PARTIDA",
+        entityId: partidaId,
+        relatedId: quote.id,
+        title: `Aprobar cotización: ${vendor?.name ?? "proveedor"} — ${partida?.project?.name ?? "proyecto"}`,
+        amount: total,
+        notes: `Partida: ${partida?.name ?? partidaId}`,
+        status: "PENDING_COSIGN",
+      },
+    })
+    await logActivity({
+      orgId, entityType: "APPROVAL", entityId: approvalReq.id, projectId,
+      action: "APPROVAL_REQUESTED", actorId: userId, actorName,
+      metadata: { vendor: vendor?.name, amount: total, partida: partida?.name },
+    })
+    revalidatePath("/autorizaciones")
+  }
+
   revalidatePath("/cotizaciones")
-  return { redirectTo: `/cotizaciones/${quote.id}` }
+  if (projectId) revalidatePath(`/proyectos/${projectId}`)
+
+  if (projectId && partidaId) {
+    return { redirectTo: `/proyectos/${projectId}?expandPartida=${partidaId}` }
+  }
+  return { redirectTo: projectId ? `/proyectos/${projectId}` : `/cotizaciones/${quote.id}` }
 }
 
 export async function updateQuoteStatus(id: string, status: string) {

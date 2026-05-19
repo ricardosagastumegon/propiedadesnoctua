@@ -14,7 +14,8 @@ import {
   markPartidaDelivered,
   requestQuoteApprovalForPartida,
 } from "../actions"
-import { PaymentForm, type PaymentFormData } from "@/components/shared/payment-form"
+import { PaymentForm, type PaymentFormData, type AcceptanceContext } from "@/components/shared/payment-form"
+import { requestAcceptance } from "../../aceptaciones/actions"
 import { Plus, Trash2, ChevronDown, ChevronRight, Star, ExternalLink, CheckCircle2, XCircle, Package } from "lucide-react"
 
 interface QuoteItem { id: string; description: string; qty: number; unitPrice: number; total: number }
@@ -49,10 +50,21 @@ interface Partida {
   quotes: Quote[]
 }
 
+export interface PartidaAcceptanceInfo {
+  cap: number
+  hasAcceptance: boolean
+  acceptanceStatus: "PENDING" | "ACCEPTED" | "REJECTED" | "SUPERSEDED" | null
+  acceptedByName: string | null
+  acceptedAt: string | null
+  acceptanceId: string | null
+}
+
 interface Props {
   projectId: string
   partidas: Partida[]
   authorityPolicy: string
+  expandPartidaId?: string
+  acceptanceByPartidaId?: Record<string, PartidaAcceptanceInfo>
 }
 
 function computeStatus(p: Partida): string {
@@ -155,9 +167,9 @@ function QuoteCard({
   )
 }
 
-export function PartidaList({ projectId, partidas, authorityPolicy }: Props) {
+export function PartidaList({ projectId, partidas, authorityPolicy, expandPartidaId, acceptanceByPartidaId }: Props) {
   const [showForm, setShowForm] = useState(false)
-  const [expanded, setExpanded] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(expandPartidaId ?? null)
   const [payForm, setPayForm] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -169,7 +181,7 @@ export function PartidaList({ projectId, partidas, authorityPolicy }: Props) {
         const paidPct = p.amountApproved > 0 ? Math.min(100, (p.amountPaid / p.amountApproved) * 100) : 0
         const isExpanded = expanded === p.id
         const hasApprovedQuote = !!p.approvedQuoteId
-        const isDone = computed === "PAID" || computed === "DELIVERED" || computed === "CANCELLED"
+        const isDone = computed === "PAID" || computed === "CANCELLED"
 
         return (
           <Card key={p.id} className="overflow-hidden">
@@ -293,6 +305,18 @@ export function PartidaList({ projectId, partidas, authorityPolicy }: Props) {
                         mode="partida"
                         loading={loading}
                         onCancel={() => setPayForm(null)}
+                        acceptanceCtx={acceptanceByPartidaId?.[p.id] ? {
+                          cap: acceptanceByPartidaId[p.id].cap,
+                          hasAcceptance: acceptanceByPartidaId[p.id].hasAcceptance,
+                          acceptanceStatus: acceptanceByPartidaId[p.id].acceptanceStatus,
+                          acceptedByName: acceptanceByPartidaId[p.id].acceptedByName,
+                          acceptedAt: acceptanceByPartidaId[p.id].acceptedAt,
+                          acceptanceId: acceptanceByPartidaId[p.id].acceptanceId,
+                          requestAcceptance: async () => {
+                            const res = await requestAcceptance("PARTIDA", p.id)
+                            return res
+                          },
+                        } : undefined}
                         onSubmit={async (data: PaymentFormData) => {
                           setLoading(true)
                           const fd = new FormData()

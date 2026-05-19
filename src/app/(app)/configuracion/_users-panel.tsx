@@ -7,8 +7,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
-import { createUser, toggleUserActive, updateUserRole, updateUserAuthorityPolicy } from "./actions"
-import { Plus, ChevronDown, ChevronRight } from "lucide-react"
+import { createUser, toggleUserActive, updateUserRole, updateUserAuthorityPolicy, updateUserCanAcceptServices } from "./actions"
+import { Plus, ChevronDown, ChevronRight, BadgeCheck } from "lucide-react"
 
 interface User {
   id: string
@@ -17,6 +17,7 @@ interface User {
   role: string
   authorityPolicy: string
   isActive: boolean
+  canAcceptServices?: boolean
 }
 
 const ROLES: Record<string, string> = {
@@ -33,7 +34,8 @@ const AUTHORITY_POLICIES: Record<string, string> = {
   COSIGN_REQUIRED: "Requiere co-firma",
 }
 
-export function UsersPanel({ users, currentUserId }: { users: User[]; currentUserId: string }) {
+export function UsersPanel({ users, currentUserId, currentUserRole = "VIEWER" }: { users: User[]; currentUserId: string; currentUserRole?: string }) {
+  const isAdmin = currentUserRole === "ADMIN" || currentUserRole === "OWNER"
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [role, setRole] = useState("VIEWER")
@@ -84,25 +86,43 @@ export function UsersPanel({ users, currentUserId }: { users: User[]; currentUse
             </div>
 
             {expanded === u.id && (
-              <div className="px-3 pb-3 border-t pt-3 grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground">Rol</label>
-                  <Select defaultValue={u.role} onValueChange={v => updateUserRole(u.id, v)}>
-                    <SelectTrigger className="mt-0.5 h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(ROLES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+              <div className="px-3 pb-3 border-t pt-3 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground">Rol</label>
+                    <Select defaultValue={u.role} onValueChange={v => updateUserRole(u.id, v)}>
+                      <SelectTrigger className="mt-0.5 h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(ROLES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Politica de autoridad</label>
+                    <Select defaultValue={u.authorityPolicy} onValueChange={v => updateUserAuthorityPolicy(u.id, v)}>
+                      <SelectTrigger className="mt-0.5 h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(AUTHORITY_POLICIES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Politica de autoridad</label>
-                  <Select defaultValue={u.authorityPolicy} onValueChange={v => updateUserAuthorityPolicy(u.id, v)}>
-                    <SelectTrigger className="mt-0.5 h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(AUTHORITY_POLICIES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <div className="flex items-center justify-between p-2 bg-muted/40 rounded">
+                  <div>
+                    <div className="text-xs font-medium flex items-center gap-1">
+                      <BadgeCheck className="size-3.5" />Puede aceptar servicios
+                    </div>
+                    <p className="text-xs text-muted-foreground">Habilita resolver aceptaciones antes del pago final.</p>
+                  </div>
+                  <Switch
+                    checked={!!u.canAcceptServices}
+                    onCheckedChange={v => updateUserCanAcceptServices(u.id, v)}
+                    disabled={!isAdmin}
+                  />
                 </div>
+                {!isAdmin && (
+                  <p className="text-xs text-muted-foreground italic">Sólo administradores pueden modificar el permiso de aceptación.</p>
+                )}
               </div>
             )}
           </div>

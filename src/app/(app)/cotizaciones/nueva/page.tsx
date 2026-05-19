@@ -33,6 +33,7 @@ export default async function NuevaCotizacionPage({ searchParams }: { searchPara
         defaultVendorId={sp.vendorId}
         defaultProjectId={sp.projectId}
         defaultPartidaId={sp.partidaId}
+        isFromProject={!!sp.projectId}
         action={createQuote}
       />
     </div>

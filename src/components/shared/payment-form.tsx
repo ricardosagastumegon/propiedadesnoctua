@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatGTQ } from "@/lib/format"
+import { AlertTriangle, BadgeCheck, ShieldAlert } from "lucide-react"
 
 const METHODS_TICKET = [
   { value: "CAJA_CHICA", label: "Caja Chica" },
@@ -36,6 +37,16 @@ export interface PaymentFormData {
   discountReason: string | null
 }
 
+export interface AcceptanceContext {
+  cap: number
+  hasAcceptance: boolean
+  acceptanceStatus?: "PENDING" | "ACCEPTED" | "REJECTED" | "SUPERSEDED" | null
+  acceptedByName?: string | null
+  acceptedAt?: string | null
+  acceptanceId?: string | null
+  requestAcceptance?: () => Promise<{ acceptanceId?: string; error?: string } | void>
+}
+
 interface Props {
   totalAmount: number | null
   paidAmount: number
@@ -43,9 +54,10 @@ interface Props {
   onSubmit: (data: PaymentFormData) => Promise<{ error?: string } | undefined>
   onCancel: () => void
   loading?: boolean
+  acceptanceCtx?: AcceptanceContext
 }
 
-export function PaymentForm({ totalAmount, paidAmount, mode, onSubmit, onCancel, loading: externalLoading }: Props) {
+export function PaymentForm({ totalAmount, paidAmount, mode, onSubmit, onCancel, loading: externalLoading, acceptanceCtx }: Props) {
   const ref = useRef<HTMLFormElement>(null)
   const [method, setMethod] = useState("")
   const [payType, setPayType] = useState("PARTIAL")
@@ -54,6 +66,9 @@ export function PaymentForm({ totalAmount, paidAmount, mode, onSubmit, onCancel,
   const [applyDiscount, setApplyDiscount] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [reqLoading, setReqLoading] = useState(false)
+  const [reqSent, setReqSent] = useState(false)
+  const [proposedAmount, setProposedAmount] = useState<number | null>(null)
 
   const pending = (totalAmount ?? 0) - paidAmount
   const methods = mode === "ticket" ? METHODS_TICKET : METHODS_PARTIDA
@@ -61,6 +76,19 @@ export function PaymentForm({ totalAmount, paidAmount, mode, onSubmit, onCancel,
   const computedAmount = calcMode === "percentage" && totalAmount
     ? Math.max(0, (totalAmount * pct) / 100 - (applyDiscount ? (parseFloat((ref.current?.querySelector("[name=discountAmount]") as HTMLInputElement)?.value) || 0) : 0))
     : null
+
+  const cap = acceptanceCtx?.cap ?? 80
+  const isPettyCash = method === "CAJA_CHICA"
+  const currentPct = totalAmount && totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0
+  // Effective proposed amount preview
+  const previewAmount = calcMode === "percentage" && totalAmount
+    ? (totalAmount * pct) / 100
+    : (proposedAmount ?? 0)
+  const newPct = totalAmount && totalAmount > 0 ? ((paidAmount + previewAmount) / totalAmount) * 100 : 0
+  const exceedsCap = !isPettyCash && !acceptanceCtx?.hasAcceptance && totalAmount != null && totalAmount > 0 && newPct > cap + 0.001
+  const maxWithoutAcceptance = totalAmount && totalAmount > 0 ? Math.max(0, (totalAmount * cap) / 100 - paidAmount) : 0
+  const acceptanceRequested = acceptanceCtx?.acceptanceStatus === "PENDING" || reqSent
+  const acceptanceGranted = !!acceptanceCtx?.hasAcceptance
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -121,6 +149,65 @@ export function PaymentForm({ totalAmount, paidAmount, mode, onSubmit, onCancel,
         </div>
       )}
 
+      {/* Acceptance status banners */}
+      {acceptanceCtx && totalAmount != null && totalAmount > 0 && (
+        <>
+          {acceptanceGranted ? (
+            <div className="flex items-start gap-2 p-3 rounded-md bg-emerald-50 border border-emerald-200 text-sm">
+              <BadgeCheck className="size-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-emerald-900">Aceptación otorgada — pago final permitido</p>
+                <p className="text-xs text-emerald-700">
+                  {acceptanceCtx.acceptedByName ? `Por ${acceptanceCtx.acceptedByName}` : "Aceptación válida"}
+                  {acceptanceCtx.acceptedAt ? ` · ${new Date(acceptanceCtx.acceptedAt).toLocaleDateString("es-GT")}` : ""}
+                </p>
+              </div>
+            </div>
+          ) : isPettyCash ? (
+            <div className="flex items-start gap-2 p-3 rounded-md bg-blue-50 border border-blue-200 text-sm">
+              <BadgeCheck className="size-4 text-blue-600 shrink-0 mt-0.5" />
+              <p className="text-blue-900">Caja Chica exceptuada del límite del {cap}%.</p>
+            </div>
+          ) : exceedsCap ? (
+            <div className="flex items-start gap-2 p-3 rounded-md bg-red-50 border border-red-200 text-sm">
+              <ShieldAlert className="size-4 text-red-600 shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-2">
+                <p className="font-medium text-red-900">El pago excede el {cap}% sin Aceptación de Servicio</p>
+                <p className="text-xs text-red-800">
+                  Acumulado actual: <strong>{currentPct.toFixed(1)}%</strong> · con este pago: <strong>{newPct.toFixed(1)}%</strong>.
+                  Sin aceptación, máximo permitido: <strong>{formatGTQ(maxWithoutAcceptance)}</strong>.
+                </p>
+                {acceptanceCtx.requestAcceptance && !acceptanceRequested && (
+                  <Button size="sm" type="button" variant="outline" disabled={reqLoading}
+                    onClick={async () => {
+                      if (!acceptanceCtx.requestAcceptance) return
+                      setReqLoading(true)
+                      const r = await acceptanceCtx.requestAcceptance()
+                      setReqLoading(false)
+                      if (r && "error" in r && r.error) setError(r.error)
+                      else setReqSent(true)
+                    }}>
+                    {reqLoading ? "Solicitando…" : "Solicitar Aceptación de Servicio"}
+                  </Button>
+                )}
+                {acceptanceRequested && (
+                  <p className="text-xs text-amber-800 font-medium">📋 Aceptación solicitada — espera la resolución del aceptador autorizado.</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2 p-3 rounded-md bg-amber-50 border border-amber-200 text-sm">
+              <AlertTriangle className="size-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-amber-900">
+                  Acumulado: <strong>{currentPct.toFixed(1)}%</strong>. Sin aceptación, máximo permitido: <strong>{formatGTQ(maxWithoutAcceptance)}</strong> ({cap}% del compromiso).
+                </p>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
       {/* Type (partida only) */}
       {mode === "partida" && (
         <div className="space-y-1.5">
@@ -174,7 +261,9 @@ export function PaymentForm({ totalAmount, paidAmount, mode, onSubmit, onCancel,
         <div className="space-y-1.5">
           <Label className="text-xs font-medium">Monto (Q) *</Label>
           <Input name="amount" type="number" min="0.01" step="0.01" placeholder="0.00"
-            defaultValue={pending > 0 ? pending.toFixed(2) : ""} required />
+            defaultValue={pending > 0 ? pending.toFixed(2) : ""}
+            onChange={e => setProposedAmount(parseFloat(e.target.value) || 0)}
+            required />
         </div>
       ) : (
         <div className="space-y-2">
@@ -257,7 +346,9 @@ export function PaymentForm({ totalAmount, paidAmount, mode, onSubmit, onCancel,
       {error && <p className="text-xs text-destructive">{error}</p>}
 
       <div className="flex gap-2">
-        <Button size="sm" type="submit" disabled={isLoading}>{isLoading ? "..." : "Registrar pago"}</Button>
+        <Button size="sm" type="submit" disabled={isLoading || exceedsCap}>
+          {isLoading ? "..." : exceedsCap ? "Pago bloqueado por regla 80%" : "Registrar pago"}
+        </Button>
         <Button size="sm" type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>
       </div>
     </form>

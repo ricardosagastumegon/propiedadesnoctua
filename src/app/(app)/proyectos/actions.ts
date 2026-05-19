@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { projectSchema, projectCostSchema, partidaSchema, partidaPaymentSchema } from "@/lib/schemas/project"
 import { logActivity } from "@/lib/activity-log"
+import { canMakePayment } from "@/lib/service-acceptance"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
@@ -235,6 +236,17 @@ export async function addPartidaPayment(partidaId: string, projectId: string, fo
   const closesWithDiscount = formData.get("closesWithDiscount") === "true"
   const discountAmount = formData.get("discountAmount") ? parseFloat(formData.get("discountAmount") as string) : null
   const discountReason = formData.get("discountReason") as string || null
+
+  // Service Acceptance cap enforcement
+  const check = await canMakePayment({
+    entityType: "PARTIDA", entityId: partidaId,
+    proposedAmount: parsed.data.amount,
+    paymentMethod: parsed.data.method,
+    orgId,
+  })
+  if (!check.allowed) {
+    return { error: check.reason ?? "Pago bloqueado por la regla de aceptación de servicios" }
+  }
 
   const payment = await prisma.partidaPayment.create({
     data: { partidaId, ...parsed.data, type, date: new Date(parsed.data.date), percentageOfTotal, closesWithDiscount, discountAmount, discountReason },

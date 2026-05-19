@@ -12,6 +12,7 @@ export default async function AutorizacionesPage() {
   const userId = session.user!.id!
   const orgId = (session.user as any).organizationId as string
   const authorityPolicy = ((session.user as any).authorityPolicy ?? "NONE") as string
+  const role = ((session.user as any).role ?? "VIEWER") as string
 
   const allRequests = await prisma.approvalRequest.findMany({
     where: { organizationId: orgId },
@@ -289,6 +290,7 @@ export default async function AutorizacionesPage() {
       enriched={enriched}
       currentUserId={userId}
       authorityPolicy={authorityPolicy}
+      role={role}
       properties={properties}
       users={users}
     />

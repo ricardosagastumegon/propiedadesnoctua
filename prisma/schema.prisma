@@ -39,6 +39,17 @@ model Organization {
   vendorInvoices   VendorInvoice[]
   pettyCashes      PettyCash[]
   activityLogs     ActivityLog[]
+  settings         OrganizationSettings?
+  serviceAcceptances ServiceAcceptance[]
+}
+
+model OrganizationSettings {
+  organizationId          String @id
+  prepaymentCapPercentage Int    @default(80)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 // authorityPolicy: NONE | ALONE | COSIGN_REQUIRED
@@ -51,6 +62,7 @@ model User {
   image           String?
   role            String    @default("VIEWER") // ADMIN | MANAGER | SUPERVISOR | ASSISTANT | VIEWER
   authorityPolicy String    @default("NONE")   // NONE | ALONE | COSIGN_REQUIRED
+  canAcceptServices Boolean @default(false)
   phone           String?
   organizationId  String
   isActive        Boolean   @default(true)
@@ -67,8 +79,57 @@ model User {
   approvalsCosign      ApprovalRequest[]    @relation("ApprovalCosigner")
   approvalsApproved    ApprovalRequest[]    @relation("ApprovalApproved")
   approvalsRejected    ApprovalRequest[]    @relation("ApprovalRejected")
+  serviceAcceptancesRequested ServiceAcceptance[] @relation("AcceptanceRequested")
+  serviceAcceptancesAccepted  ServiceAcceptance[] @relation("AcceptanceAccepted")
+  serviceAcceptancesRejected  ServiceAcceptance[] @relation("AcceptanceRejected")
 
   @@index([organizationId])
+}
+
+// entityType: PARTIDA | TICKET
+// status: PENDING | ACCEPTED | REJECTED | SUPERSEDED
+model ServiceAcceptance {
+  id                  String    @id @default(cuid())
+  organizationId      String
+  entityType          String
+  entityId            String
+  projectId           String?
+  status              String    @default("PENDING")
+  requestedById       String
+  acceptedById        String?
+  rejectedById        String?
+  requestedAt         DateTime  @default(now())
+  acceptedAt          DateTime?
+  rejectedAt          DateTime?
+  checklist           String?
+  rating              Int?
+  notes               String?
+  rejectionReason     String?
+  requiredCorrections String?
+  verificationHash    String?
+  contextSnapshot     String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  organization Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy  User                      @relation("AcceptanceRequested", fields: [requestedById], references: [id])
+  acceptedBy   User?                     @relation("AcceptanceAccepted", fields: [acceptedById], references: [id])
+  rejectedBy   User?                     @relation("AcceptanceRejected", fields: [rejectedById], references: [id])
+  photos       ServiceAcceptancePhoto[]
+
+  @@index([organizationId, status])
+  @@index([entityType, entityId])
+  @@index([projectId])
+}
+
+model ServiceAcceptancePhoto {
+  id           String   @id @default(cuid())
+  acceptanceId String
+  url          String
+  caption      String?
+  createdAt    DateTime @default(now())
+
+  acceptance ServiceAcceptance @relation(fields: [acceptanceId], references: [id], onDelete: Cascade)
 }
 
 model CosignPolicy {
@@ -444,6 +505,7 @@ model TicketQuote {
 model TicketPayment {
   id                 String   @id @default(cuid())
   ticketId           String
+  vendorId           String?
   amount             Float
   method             String
   date               DateTime
@@ -456,6 +518,7 @@ model TicketPayment {
   createdAt          DateTime @default(now())
 
   ticket MaintenanceRequest @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  vendor Vendor?            @relation("TicketPaymentVendor", fields: [vendorId], references: [id])
 }
 
 // type: STATUS_CHANGE | NOTE | QUOTE_ADDED | PAYMENT | ASSIGNMENT | PHOTO | ESCALATED
@@ -688,6 +751,7 @@ model Vendor {
   vendorInvoices VendorInvoice[]
   maintenances   MaintenanceRequest[] @relation("TicketVendor")
   ticketQuotes   TicketQuote[]        @relation("TicketQuoteVendor")
+  ticketPayments TicketPayment[]      @relation("TicketPaymentVendor")
 
   @@index([organizationId])
 }

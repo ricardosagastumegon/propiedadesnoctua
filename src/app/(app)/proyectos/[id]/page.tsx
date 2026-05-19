@@ -16,15 +16,24 @@ import { ProjectApprovals } from "./_project-approvals"
 import { PagosTab } from "./_pagos-tab"
 import { DeleteProjectButton } from "./_delete-button"
 import { getProjectActivityTrail } from "@/lib/project-activity-trail"
+import { getPrepaymentCap } from "@/lib/service-acceptance"
 import { Building2, Calendar, CheckSquare2, Download } from "lucide-react"
 
-export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ProjectDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ expandPartida?: string }>
+}) {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = (session.user as any).organizationId as string
   const userId = session.user!.id!
   const authorityPolicy = (session.user as any).authorityPolicy as string | undefined
   const { id } = await params
+  const sp = await searchParams
+  const expandPartida = sp.expandPartida
 
   const project = await prisma.project.findFirst({
     where: { id, organizationId: orgId },
@@ -53,17 +62,42 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   // Fetch approval requests for this project's partidas + activity trail
   const partidaIds = project.partidas.map(p => p.id)
-  const [approvalRequests, activityTrail] = await Promise.all([
+  const [approvalRequests, activityTrail, acceptances, cap] = await Promise.all([
     prisma.approvalRequest.findMany({
       where: { organizationId: orgId, entityType: "PROJECT_PARTIDA", entityId: { in: partidaIds } },
       include: {
         requestedBy: { select: { name: true } },
         approvedBy: { select: { name: true } },
+        cosigner: { select: { name: true } },
       },
       orderBy: { createdAt: "desc" },
     }),
     getProjectActivityTrail(id, orgId),
+    partidaIds.length > 0
+      ? prisma.serviceAcceptance.findMany({
+          where: { organizationId: orgId, entityType: "PARTIDA", entityId: { in: partidaIds }, status: { in: ["PENDING", "ACCEPTED"] } },
+          include: { acceptedBy: { select: { name: true } } },
+          orderBy: { createdAt: "desc" },
+        })
+      : Promise.resolve([]),
+    getPrepaymentCap(orgId),
   ])
+  const acceptanceByPartidaId: Record<string, {
+    cap: number; hasAcceptance: boolean
+    acceptanceStatus: "PENDING" | "ACCEPTED" | "REJECTED" | "SUPERSEDED" | null
+    acceptedByName: string | null; acceptedAt: string | null; acceptanceId: string | null
+  }> = {}
+  for (const p of project.partidas) {
+    const a = acceptances.find(x => x.entityId === p.id)
+    acceptanceByPartidaId[p.id] = {
+      cap,
+      hasAcceptance: a?.status === "ACCEPTED",
+      acceptanceStatus: (a?.status as any) ?? null,
+      acceptedByName: a?.acceptedBy?.name ?? null,
+      acceptedAt: a?.acceptedAt?.toISOString() ?? null,
+      acceptanceId: a?.id ?? null,
+    }
+  }
 
   // KPI computations
   const totalApproved = project.partidas.reduce((s, p) => s + (p.amountApproved ?? 0), 0)
@@ -82,7 +116,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     <div className="p-8 max-w-5xl mx-auto">
       <PageHeader
         title={project.name}
-        description={`${PROJECT_TYPES[project.type]} — ${PROJECT_STATUSES[project.status]}`}
+        description={`${PROJECT_TYPES[project.type] ?? project.type ?? "Proyecto"} — ${PROJECT_STATUSES[project.status] ?? project.status}`}
       >
         <div className="flex gap-2">
           <Button asChild variant="outline" size="sm">
@@ -145,6 +179,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             projectId={id}
             partidas={project.partidas as any}
             authorityPolicy={authorityPolicy ?? "NONE"}
+            expandPartidaId={expandPartida}
+            acceptanceByPartidaId={acceptanceByPartidaId}
           />
         </TabsContent>
 
@@ -155,6 +191,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             partidas={project.partidas as any}
             orgId={orgId}
             currentUserId={userId}
+            authorityPolicy={authorityPolicy ?? "NONE"}
           />
         </TabsContent>
 

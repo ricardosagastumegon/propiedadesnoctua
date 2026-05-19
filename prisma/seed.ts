@@ -14,40 +14,60 @@ async function main() {
   const hash = await bcrypt.hash("demo1234", 10)
 
   // ─── USERS ──────────────────────────────────────────────────────────────────
+  // Juan Mendez (owner-style admin) — approves but cannot accept services
   const admin = await prisma.user.upsert({
     where: { email: "admin@demo.gt" },
-    update: {},
-    create: { email: "admin@demo.gt", name: "Carlos Mendez", passwordHash: hash, role: "ADMIN", authorityPolicy: "ALONE", organizationId: org.id },
+    update: { authorityPolicy: "ALONE", role: "ADMIN", canAcceptServices: false, name: "Juan Mendez" },
+    create: { email: "admin@demo.gt", name: "Juan Mendez", passwordHash: hash, role: "ADMIN", authorityPolicy: "ALONE", canAcceptServices: false, organizationId: org.id },
   })
 
+  // Sofia Giron (manager) — CAN accept services
   const manager = await prisma.user.upsert({
     where: { email: "gerente@demo.gt" },
-    update: {},
-    create: { email: "gerente@demo.gt", name: "Sofia Giron", passwordHash: hash, role: "MANAGER", authorityPolicy: "COSIGN_REQUIRED", organizationId: org.id },
+    update: { authorityPolicy: "COSIGN_REQUIRED", role: "MANAGER", canAcceptServices: true },
+    create: { email: "gerente@demo.gt", name: "Sofia Giron", passwordHash: hash, role: "MANAGER", authorityPolicy: "COSIGN_REQUIRED", canAcceptServices: true, organizationId: org.id },
   })
 
+  // Luis Herrera (supervisor) — no accept
   const supervisor = await prisma.user.upsert({
     where: { email: "super@demo.gt" },
-    update: {},
-    create: { email: "super@demo.gt", name: "Luis Herrera", passwordHash: hash, role: "SUPERVISOR", authorityPolicy: "COSIGN_REQUIRED", organizationId: org.id },
+    update: { authorityPolicy: "COSIGN_REQUIRED", role: "SUPERVISOR", canAcceptServices: false },
+    create: { email: "super@demo.gt", name: "Luis Herrera", passwordHash: hash, role: "SUPERVISOR", authorityPolicy: "COSIGN_REQUIRED", canAcceptServices: false, organizationId: org.id },
   })
 
+  // Maria Gonzalez (admin-level accept) — CAN accept services. Originally Maria Torres.
   const assistant1 = await prisma.user.upsert({
     where: { email: "asist1@demo.gt" },
-    update: {},
-    create: { email: "asist1@demo.gt", name: "Maria Torres", passwordHash: hash, role: "ASSISTANT", authorityPolicy: "NONE", organizationId: org.id },
+    update: { authorityPolicy: "NONE", role: "ADMIN", canAcceptServices: true, name: "Maria Gonzalez" },
+    create: { email: "asist1@demo.gt", name: "Maria Gonzalez", passwordHash: hash, role: "ADMIN", authorityPolicy: "NONE", canAcceptServices: true, organizationId: org.id },
   })
 
+  // Pedro Vasquez (assistant) — no accept; he is the one who solicits acceptances
   const assistant2 = await prisma.user.upsert({
     where: { email: "asist2@demo.gt" },
-    update: {},
-    create: { email: "asist2@demo.gt", name: "Pedro Vasquez", passwordHash: hash, role: "ASSISTANT", authorityPolicy: "NONE", organizationId: org.id },
+    update: { authorityPolicy: "NONE", role: "ASSISTANT", canAcceptServices: false },
+    create: { email: "asist2@demo.gt", name: "Pedro Vasquez", passwordHash: hash, role: "ASSISTANT", authorityPolicy: "NONE", canAcceptServices: false, organizationId: org.id },
   })
 
+  // Ana Morales (viewer) — no accept
   const viewer = await prisma.user.upsert({
     where: { email: "demo@inmobiliaria.gt" },
-    update: {},
-    create: { email: "demo@inmobiliaria.gt", name: "Ana Morales", passwordHash: hash, role: "VIEWER", authorityPolicy: "NONE", organizationId: org.id },
+    update: { authorityPolicy: "NONE", role: "VIEWER", canAcceptServices: false },
+    create: { email: "demo@inmobiliaria.gt", name: "Ana Morales", passwordHash: hash, role: "VIEWER", authorityPolicy: "NONE", canAcceptServices: false, organizationId: org.id },
+  })
+
+  // Roberto Castillo (extra assistant) — no accept
+  const roberto = await prisma.user.upsert({
+    where: { email: "roberto@demo.gt" },
+    update: { authorityPolicy: "NONE", role: "ASSISTANT", canAcceptServices: false },
+    create: { email: "roberto@demo.gt", name: "Roberto Castillo", passwordHash: hash, role: "ASSISTANT", authorityPolicy: "NONE", canAcceptServices: false, organizationId: org.id },
+  })
+
+  // OrganizationSettings — default 80% cap
+  await prisma.organizationSettings.upsert({
+    where: { organizationId: org.id },
+    update: { prepaymentCapPercentage: 80 },
+    create: { organizationId: org.id, prepaymentCapPercentage: 80 },
   })
 
   // ─── COSIGN POLICIES ────────────────────────────────────────────────────────
@@ -65,6 +85,8 @@ async function main() {
   })
 
   // ─── CLEAN ──────────────────────────────────────────────────────────────────
+  await prisma.serviceAcceptancePhoto.deleteMany({ where: { acceptance: { organizationId: org.id } } })
+  await prisma.serviceAcceptance.deleteMany({ where: { organizationId: org.id } })
   await prisma.activityLog.deleteMany({ where: { organizationId: org.id } })
   await prisma.notification.deleteMany({ where: { organizationId: org.id } })
   await prisma.approvalRequest.deleteMany({ where: { organizationId: org.id } })
@@ -974,18 +996,19 @@ async function main() {
   await log({ entityType: "PARTIDA", entityId: pCocinaAC.id, projectId: projCocina.id, action: "QUOTE_ADDED", actorId: assistant1.id, actorName: "Maria Torres", daysAgo: 55, metadata: { amount: 32500, vendorId: v4.id } })
   await log({ entityType: "APPROVAL", entityId: "approval-ac", projectId: projCocina.id, action: "APPROVAL_REQUESTED", actorId: supervisor.id, actorName: "Luis Herrera", daysAgo: 50, metadata: { vendor: "Clima Total GT", amount: 32500, partida: "Aires acondicionados" } })
   await log({ entityType: "PARTIDA", entityId: pCocinaAC.id, projectId: projCocina.id, action: "APPROVED", actorId: admin.id, actorName: "Carlos Mendez", daysAgo: 48, metadata: { vendor: "Clima Total GT", amount: 32500 } })
+  // CASE 1: 80% anticipo + ACCEPTED + 20% final
   const payACAnt = await prisma.partidaPayment.create({ data: {
-    partidaId: pCocinaAC.id, amount: 16250, type: "ADVANCE",
+    partidaId: pCocinaAC.id, amount: 26000, type: "ADVANCE",
     date: subDays(now, 45), method: "TRANSFER", reference: "TRF-CLIMA-COCI-001",
-    percentageOfTotal: 50, notes: "Anticipo 50%",
+    percentageOfTotal: 80, notes: "Anticipo 80% (límite sin aceptación)",
   }})
-  await log({ entityType: "PAYMENT", entityId: payACAnt.id, projectId: projCocina.id, action: "PAYMENT_REGISTERED", actorId: manager.id, actorName: "Sofia Giron", daysAgo: 45, metadata: { amount: 16250, partida: "Aires acondicionados cocina", vendor: "Clima Total GT", percentageOfTotal: 50, method: "TRANSFER" } })
+  await log({ entityType: "PAYMENT", entityId: payACAnt.id, projectId: projCocina.id, action: "PAYMENT_REGISTERED", actorId: manager.id, actorName: "Sofia Giron", daysAgo: 45, metadata: { amount: 26000, partida: "Aires acondicionados cocina", vendor: "Clima Total GT", percentageOfTotal: 80, method: "TRANSFER" } })
   const payACFinal = await prisma.partidaPayment.create({ data: {
-    partidaId: pCocinaAC.id, amount: 16250, type: "FINAL",
-    date: subDays(now, 10), method: "TRANSFER", reference: "TRF-CLIMA-COCI-002",
-    percentageOfTotal: 100, notes: "Pago final tras entrega e inspección",
+    partidaId: pCocinaAC.id, amount: 6500, type: "FINAL",
+    date: subDays(now, 9), method: "TRANSFER", reference: "TRF-CLIMA-COCI-002",
+    percentageOfTotal: 100, notes: "Pago final 20% tras aceptación de servicio",
   }})
-  await log({ entityType: "PAYMENT", entityId: payACFinal.id, projectId: projCocina.id, action: "PAYMENT_REGISTERED", actorId: admin.id, actorName: "Carlos Mendez", daysAgo: 10, metadata: { amount: 16250, partida: "Aires acondicionados cocina", vendor: "Clima Total GT", percentageOfTotal: 100, method: "TRANSFER" } })
+  await log({ entityType: "PAYMENT", entityId: payACFinal.id, projectId: projCocina.id, action: "PAYMENT_REGISTERED", actorId: admin.id, actorName: "Juan Mendez", daysAgo: 9, metadata: { amount: 6500, partida: "Aires acondicionados cocina", vendor: "Clima Total GT", percentageOfTotal: 100, method: "TRANSFER" } })
   await log({ entityType: "PARTIDA", entityId: pCocinaAC.id, projectId: projCocina.id, action: "DELIVERED", actorId: supervisor.id, actorName: "Luis Herrera", daysAgo: 10, metadata: { name: "Aires acondicionados cocina" } })
   await prisma.projectPartida.update({ where: { id: pCocinaAC.id }, data: { amountPaid: 32500 } })
 
@@ -1078,12 +1101,161 @@ async function main() {
     { organizationId: org.id, userId: admin.id, type: "INVOICE_OVERDUE", title: "Factura vencida", message: "Factura F-2025-003 de Soluciones TI esta vencida", link: `/contratos/${c3.id}`, isRead: true },
   ]})
 
-  console.log("Seed v5 completado exitosamente.")
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SEED v6: SERVICE ACCEPTANCE SCENARIOS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  const crypto = await import("crypto")
+  function hashFor(payload: unknown): string {
+    return crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex")
+  }
+
+  function snapshotPartida(p: { id: string; name: string; amountApproved: number | null; amountPaid: number; approvedQuoteId: string | null; projectId: string }, vendorName: string, projectName: string) {
+    return {
+      entityType: "PARTIDA", entityId: p.id, entityName: p.name,
+      vendor: { id: "vendor", name: vendorName },
+      amountApproved: p.amountApproved, amountPaid: p.amountPaid,
+      approvedQuoteId: p.approvedQuoteId, projectId: p.projectId, projectName,
+      capturedAt: new Date().toISOString(),
+    }
+  }
+
+  // ── CASE 1: Aires acondicionados cocina — ACCEPTED ────────────────────────
+  const acCase1 = await prisma.serviceAcceptance.create({ data: {
+    organizationId: org.id, entityType: "PARTIDA", entityId: pCocinaAC.id, projectId: projCocina.id,
+    status: "ACCEPTED",
+    requestedById: assistant2.id,
+    acceptedById: assistant1.id,
+    requestedAt: subDays(now, 12), acceptedAt: subDays(now, 10),
+    checklist: JSON.stringify([
+      { key: "completed_on_time", checked: true },
+      { key: "quality_as_expected", checked: true },
+      { key: "equipment_working", checked: true },
+      { key: "no_observations", checked: true },
+      { key: "documentation_delivered", checked: true },
+    ]),
+    rating: 5,
+    notes: "Instalación impecable, prueba de funcionamiento de ambos splits OK.",
+    verificationHash: hashFor({ partida: pCocinaAC.id, rating: 5, acceptor: assistant1.id, timestamp: subDays(now, 10).toISOString() }),
+    contextSnapshot: JSON.stringify(snapshotPartida({ id: pCocinaAC.id, name: "Aires acondicionados cocina", amountApproved: 32500, amountPaid: 26000, approvedQuoteId: qACClima.id, projectId: projCocina.id }, "Clima Total GT", "Remodelación Cocina Monterrico")),
+    photos: { create: [
+      { url: "evidencia/ac-cocina-1.jpg", caption: "Split master room instalado" },
+      { url: "evidencia/ac-cocina-2.jpg", caption: "Prueba de funcionamiento" },
+    ]},
+  }})
+  await log({ entityType: "PARTIDA", entityId: pCocinaAC.id, projectId: projCocina.id, action: "ACCEPTANCE_REQUESTED", actorId: assistant2.id, actorName: "Pedro Vasquez", daysAgo: 12, metadata: { acceptanceId: acCase1.id, name: "Aires acondicionados cocina", vendor: "Clima Total GT" } })
+  await log({ entityType: "PARTIDA", entityId: pCocinaAC.id, projectId: projCocina.id, action: "SERVICE_ACCEPTED", actorId: assistant1.id, actorName: "Maria Gonzalez", daysAgo: 10, metadata: { acceptanceId: acCase1.id, name: "Aires acondicionados cocina", vendor: "Clima Total GT", rating: 5, hash: acCase1.verificationHash?.slice(0, 12) } })
+
+  // ── CASE 2: Cableado eléctrico Solar — PENDING ────────────────────────────
+  // Approve pSolarElect with q (need a vendor + amount). Use v2 (Electro Servicios)
+  const qElectApproved = await prisma.quote.findFirst({ where: { partidaId: pSolarElect.id } })
+  if (qElectApproved) {
+    await prisma.quote.update({ where: { id: qElectApproved.id }, data: { status: "APPROVED", approvedAt: subDays(now, 8), approvedBy: admin.name } })
+    await prisma.projectPartida.update({
+      where: { id: pSolarElect.id },
+      data: {
+        approvedQuoteId: qElectApproved.id, vendorId: qElectApproved.vendorId,
+        amountApproved: qElectApproved.total, amountPaid: Math.round(qElectApproved.total * 0.8),
+        status: "IN_PROGRESS",
+      },
+    })
+    await prisma.partidaPayment.create({ data: {
+      partidaId: pSolarElect.id, amount: Math.round(qElectApproved.total * 0.8), type: "ADVANCE",
+      date: subDays(now, 5), method: "TRANSFER", reference: "TRF-CABLEADO-001",
+      percentageOfTotal: 80, notes: "Anticipo 80% — sin aceptación aún",
+    }})
+    await prisma.approvalRequest.create({ data: {
+      organizationId: org.id, entityType: "PROJECT_PARTIDA", entityId: pSolarElect.id,
+      relatedId: qElectApproved.id, requestedById: manager.id, approvedById: admin.id,
+      status: "APPROVED", approvedAt: subDays(now, 8),
+      title: "Aprobar cotización Cableado eléctrico", amount: qElectApproved.total,
+    }})
+    const acCase2 = await prisma.serviceAcceptance.create({ data: {
+      organizationId: org.id, entityType: "PARTIDA", entityId: pSolarElect.id, projectId: projSolar.id,
+      status: "PENDING",
+      requestedById: assistant2.id,
+      requestedAt: subDays(now, 1),
+      contextSnapshot: JSON.stringify(snapshotPartida({ id: pSolarElect.id, name: "Instalación eléctrica y conexión a red", amountApproved: qElectApproved.total, amountPaid: Math.round(qElectApproved.total * 0.8), approvedQuoteId: qElectApproved.id, projectId: projSolar.id }, "Electro Servicios GT", "Paneles Solares Torre Reforma")),
+    }})
+    await log({ entityType: "PARTIDA", entityId: pSolarElect.id, projectId: projSolar.id, action: "ACCEPTANCE_REQUESTED", actorId: assistant2.id, actorName: "Pedro Vasquez", daysAgo: 1, metadata: { acceptanceId: acCase2.id, name: "Instalación eléctrica y conexión a red", vendor: "Electro Servicios GT" } })
+    // Notify acceptors
+    for (const u of [assistant1, manager]) {
+      await prisma.notification.create({ data: {
+        organizationId: org.id, userId: u.id,
+        type: "SERVICE_ACCEPTANCE_PENDING",
+        title: "Aceptación de servicio pendiente",
+        message: "Pedro Vasquez solicita aceptar Cableado eléctrico Torre Reforma",
+        link: `/aceptaciones/${acCase2.id}`,
+      }})
+    }
+  }
+
+  // ── CASE 3: Pintura interior recamaras — REJECTED ─────────────────────────
+  // Use existing partida9 — but it has no amountPaid yet. Make it 80% paid + REJECTED acceptance.
+  await prisma.partidaPayment.create({ data: {
+    partidaId: partida9.id, amount: 6400, type: "ADVANCE",
+    date: subDays(now, 14), method: "TRANSFER", reference: "TRF-PINTOR-001",
+    percentageOfTotal: 80, notes: "Anticipo 80%",
+  }})
+  await prisma.projectPartida.update({ where: { id: partida9.id }, data: { amountPaid: 6400, status: "IN_PROGRESS" } })
+  const acCase3 = await prisma.serviceAcceptance.create({ data: {
+    organizationId: org.id, entityType: "PARTIDA", entityId: partida9.id, projectId: proj1.id,
+    status: "REJECTED",
+    requestedById: assistant2.id,
+    rejectedById: manager.id,
+    requestedAt: subDays(now, 6), rejectedAt: subDays(now, 4),
+    rejectionReason: "Falta documentación de garantía y manchas en pared norte sin corregir",
+    requiredCorrections: "Entregar garantía firmada y resanar pared norte antes de re-solicitar",
+    contextSnapshot: JSON.stringify(snapshotPartida({ id: partida9.id, name: "Pintura interior recamaras", amountApproved: 8000, amountPaid: 6400, approvedQuoteId: null, projectId: proj1.id }, "Pintor Don Mario", "Remodelacion Terraza Monterrico")),
+  }})
+  await log({ entityType: "PARTIDA", entityId: partida9.id, projectId: proj1.id, action: "ACCEPTANCE_REQUESTED", actorId: assistant2.id, actorName: "Pedro Vasquez", daysAgo: 6, metadata: { acceptanceId: acCase3.id, name: "Pintura interior recamaras", vendor: "Pintor Don Mario" } })
+  await log({ entityType: "PARTIDA", entityId: partida9.id, projectId: proj1.id, action: "SERVICE_REJECTED", actorId: manager.id, actorName: "Sofia Giron", daysAgo: 4, metadata: { acceptanceId: acCase3.id, name: "Pintura interior recamaras", reason: "Falta documentación de garantía y manchas en pared norte sin corregir" } })
+
+  // ── CASE 4: Ticket reparación cisterna Q8,000 ─────────────────────────────
+  const tkCisterna = await prisma.maintenanceRequest.create({ data: {
+    organizationId: org.id, ticketNumber: "M-2026-CIST",
+    propertyId: propCayala.id,
+    category: "PLUMBING", priority: "HIGH", status: "IN_PROGRESS",
+    title: "Reparación de cisterna principal",
+    description: "Cisterna 2500 L presenta fuga en lateral inferior. Requiere drenaje, reparación y prueba.",
+    reportedAt: subDays(now, 8),
+    assignedToId: supervisor.id, assignedAt: subDays(now, 7), startedAt: subDays(now, 6),
+    paymentMode: "PROVEEDOR", vendorId: v1.id,
+    estimatedCost: 8000, totalAmount: 8000, amountPaid: 4000,
+  }})
+  await prisma.ticketQuote.create({ data: {
+    ticketId: tkCisterna.id, vendorId: v1.id, amount: 8000,
+    status: "SELECTED", notes: "Reparación + prueba 24h",
+  }})
+  await prisma.ticketPayment.create({ data: {
+    ticketId: tkCisterna.id, vendorId: v1.id, amount: 4000, method: "TRANSFER",
+    date: subDays(now, 5), reference: "TRF-CIST-001",
+    percentageOfTotal: 50, notes: "Anticipo 50% — siguiente pago requerirá aceptación",
+  }})
+  await prisma.maintenanceTimelineEvent.createMany({ data: [
+    { ticketId: tkCisterna.id, type: "STATUS_CHANGE", message: "Ticket creado — Reparación de cisterna principal", createdAt: subDays(now, 8) },
+    { ticketId: tkCisterna.id, type: "ASSIGNMENT", message: "Asignado a Luis Herrera", createdAt: subDays(now, 7) },
+    { ticketId: tkCisterna.id, type: "QUOTE_ADDED", message: "Cotización agregada: Q8,000.00", createdAt: subDays(now, 6) },
+    { ticketId: tkCisterna.id, type: "PAYMENT", message: "Pago registrado: Q4,000.00 via TRANSFER", createdAt: subDays(now, 5) },
+  ]})
+
+  // ── CASE 5: Ticket A/C Z14 — 100% caja chica (tk3 ya existe), no requiere aceptación ──
+  await prisma.maintenanceTimelineEvent.create({ data: {
+    ticketId: tk3.id, type: "NOTE",
+    message: "Pago 100% vía CAJA_CHICA — exceptuado de aceptación de servicio",
+    createdAt: subDays(now, 1),
+  }})
+
+  console.log("Seed v6 (Service Acceptance) completado exitosamente.")
   console.log(`Org: ${org.id}`)
-  console.log(`Admin: admin@demo.gt / demo1234`)
-  console.log(`Manager: gerente@demo.gt / demo1234`)
-  console.log(`Supervisor: super@demo.gt / demo1234`)
-  console.log(`Viewer: demo@inmobiliaria.gt / demo1234`)
+  console.log(`Owner/Admin (Juan Mendez, NO acepta):     admin@demo.gt / demo1234`)
+  console.log(`Manager (Sofia Giron, ACEPTA):            gerente@demo.gt / demo1234`)
+  console.log(`Supervisor (Luis Herrera):                super@demo.gt / demo1234`)
+  console.log(`Admin (Maria Gonzalez, ACEPTA):           asist1@demo.gt / demo1234`)
+  console.log(`Assistant (Pedro Vasquez, solicita):      asist2@demo.gt / demo1234`)
+  console.log(`Viewer (Ana Morales):                     demo@inmobiliaria.gt / demo1234`)
+  console.log(`Assistant (Roberto Castillo):             roberto@demo.gt / demo1234`)
+  console.log(`Cap de prepago: 80%`)
 }
 
 main()

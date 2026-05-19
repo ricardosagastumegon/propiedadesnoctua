@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { getProjectActivityTrail } from "@/lib/project-activity-trail"
 import { PrintTrigger } from "./_print-trigger"
+import { PrintButton } from "./_print-button"
 
 const STATUS_LABELS: Record<string, string> = {
   PLANNING: "Planificación", IN_PROGRESS: "En progreso", COMPLETED: "Completado",
@@ -70,59 +71,49 @@ export default async function ProjectPDFPage({ params }: { params: Promise<{ id:
   const totalPaid = project.partidas.reduce((s, p) => s + p.amountPaid, 0)
 
   return (
-    <html lang="es">
-      <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>{project.name} — Informe de proyecto</title>
-        <style>{`
-          * { box-sizing: border-box; margin: 0; padding: 0; }
-          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #1a1a1a; background: white; }
-          @page { size: A4; margin: 18mm 16mm; }
-          @media print { .no-print { display: none !important; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
-          .btn { display: inline-flex; align-items: center; gap: 6px; background: #0f172a; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 12px; cursor: pointer; margin-bottom: 24px; }
-          .btn:hover { background: #1e293b; }
-          h1 { font-size: 20pt; font-weight: 700; margin-bottom: 4px; }
-          h2 { font-size: 13pt; font-weight: 600; margin-bottom: 10px; margin-top: 20px; padding-bottom: 4px; border-bottom: 1.5px solid #e2e8f0; color: #0f172a; }
-          h3 { font-size: 10pt; font-weight: 600; color: #475569; margin-bottom: 6px; }
-          .subtitle { font-size: 10pt; color: #64748b; margin-bottom: 16px; }
-          .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px; }
-          .kpi { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; }
-          .kpi-label { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; }
-          .kpi-val { font-size: 14pt; font-weight: 700; color: #0f172a; margin-top: 2px; }
-          .kpi-val.green { color: #16a34a; }
-          .kpi-val.red { color: #dc2626; }
-          table { width: 100%; border-collapse: collapse; font-size: 10pt; margin-bottom: 12px; }
-          th { background: #f1f5f9; text-align: left; padding: 7px 8px; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; font-weight: 600; }
-          td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
-          tr:last-child td { border-bottom: none; }
-          .badge { display: inline-block; padding: 2px 7px; border-radius: 100px; font-size: 8pt; font-weight: 600; }
-          .badge-green { background: #dcfce7; color: #166534; }
-          .badge-blue { background: #dbeafe; color: #1d4ed8; }
-          .badge-amber { background: #fef3c7; color: #92400e; }
-          .badge-gray { background: #f1f5f9; color: #475569; }
-          .badge-red { background: #fee2e2; color: #991b1b; }
-          .partida-card { border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 12px; overflow: hidden; }
-          .partida-header { background: #f8fafc; padding: 10px 12px; display: flex; justify-content: space-between; align-items: flex-start; }
-          .partida-body { padding: 10px 12px; }
-          .trail-row { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid #f1f5f9; align-items: flex-start; }
-          .trail-dot { width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; margin-top: 4px; flex-shrink: 0; }
-          .trail-dot.green { background: #16a34a; }
-          .trail-dot.blue { background: #2563eb; }
-          .trail-dot.amber { background: #d97706; }
-          .trail-dot.purple { background: #7c3aed; }
-          .trail-dot.red { background: #dc2626; }
-          .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 8pt; color: #94a3b8; display: flex; justify-content: space-between; }
-          .page-break { page-break-before: always; }
-        `}</style>
-      </head>
-      <body>
-        <PrintTrigger />
+    <>
+      <style>{`
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        @page { size: A4; margin: 18mm 16mm; }
+        @media print {
+          aside, header, nav, [data-sidebar], .no-print { display: none !important; }
+          main { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
+          body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        }
+        .pdf-body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #1a1a1a; background: white; padding: 16px; max-width: 900px; margin: 0 auto; }
+        h1 { font-size: 20pt; font-weight: 700; margin-bottom: 4px; }
+        h2 { font-size: 13pt; font-weight: 600; margin-bottom: 10px; margin-top: 20px; padding-bottom: 4px; border-bottom: 1.5px solid #e2e8f0; color: #0f172a; }
+        h3 { font-size: 10pt; font-weight: 600; color: #475569; margin-bottom: 6px; }
+        .subtitle { font-size: 10pt; color: #64748b; margin-bottom: 16px; }
+        .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px; }
+        .kpi { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; }
+        .kpi-label { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; }
+        .kpi-val { font-size: 14pt; font-weight: 700; color: #0f172a; margin-top: 2px; }
+        .kpi-val.green { color: #16a34a; }
+        .kpi-val.red { color: #dc2626; }
+        table { width: 100%; border-collapse: collapse; font-size: 10pt; margin-bottom: 12px; }
+        th { background: #f1f5f9; text-align: left; padding: 7px 8px; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; font-weight: 600; }
+        td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+        tr:last-child td { border-bottom: none; }
+        .badge { display: inline-block; padding: 2px 7px; border-radius: 100px; font-size: 8pt; font-weight: 600; }
+        .badge-green { background: #dcfce7; color: #166534; }
+        .badge-blue { background: #dbeafe; color: #1d4ed8; }
+        .badge-amber { background: #fef3c7; color: #92400e; }
+        .badge-gray { background: #f1f5f9; color: #475569; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+        .partida-card { border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 12px; overflow: hidden; }
+        .partida-header { background: #f8fafc; padding: 10px 12px; display: flex; justify-content: space-between; align-items: flex-start; }
+        .partida-body { padding: 10px 12px; }
+        .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 8pt; color: #94a3b8; display: flex; justify-content: space-between; }
+        .page-break { page-break-before: always; }
+      `}</style>
 
-        <div className="no-print" style={{ padding: "16px" }}>
-          <button className="btn" onClick={() => { if (typeof window !== "undefined") window.print() }}>
-            ⬇ Descargar / Imprimir PDF
-          </button>
+      <PrintTrigger />
+
+      <div className="pdf-body">
+        {/* Print button — hidden when printing */}
+        <div className="no-print" style={{ marginBottom: 24 }}>
+          <PrintButton />
         </div>
 
         {/* Header */}
@@ -169,7 +160,6 @@ export default async function ProjectPDFPage({ params }: { params: Promise<{ id:
         <h2>Partidas y cotizaciones</h2>
         {project.partidas.map(p => {
           const approval = approvalMap.get(p.id)
-          const paidPct = (p.amountApproved ?? 0) > 0 ? Math.min(100, (p.amountPaid / p.amountApproved!) * 100) : 0
           return (
             <div key={p.id} className="partida-card">
               <div className="partida-header">
@@ -219,7 +209,7 @@ export default async function ProjectPDFPage({ params }: { params: Promise<{ id:
                 {/* Approval info */}
                 {approval && (
                   <div style={{ marginTop: 8, padding: "8px 10px", background: "#f8fafc", borderRadius: 4, fontSize: "9pt" }}>
-                    <strong>Autorización:</strong> {" "}
+                    <strong>Autorización:</strong>{" "}
                     <span className={`badge ${approval.status === "APPROVED" ? "badge-green" : approval.status === "REJECTED" ? "badge-red" : "badge-amber"}`}>
                       {approval.status === "APPROVED" ? "Aprobada" : approval.status === "REJECTED" ? "Rechazada" : approval.status === "PENDING_COSIGN" ? "Pendiente co-firma" : "Pendiente"}
                     </span>
@@ -324,7 +314,7 @@ export default async function ProjectPDFPage({ params }: { params: Promise<{ id:
           <span>TU PROPIEDAD — Sistema de Gestión Inmobiliaria</span>
           <span>Generado el {fmtDate(new Date())}</span>
         </div>
-      </body>
-    </html>
+      </div>
+    </>
   )
 }
