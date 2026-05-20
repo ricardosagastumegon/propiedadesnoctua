@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Star, X, Camera, CheckCircle2 } from "lucide-react"
 import { acceptServiceAction, rejectServiceAction } from "../actions"
-import { ACCEPTANCE_CHECKLIST_ITEMS } from "@/lib/service-acceptance"
+import { ACCEPTANCE_CHECKLIST_ITEMS } from "@/lib/service-acceptance-constants"
 
 const CHECKLIST = ACCEPTANCE_CHECKLIST_ITEMS
 

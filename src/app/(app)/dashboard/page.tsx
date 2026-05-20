@@ -308,7 +308,7 @@ export default async function DashboardPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {activeProjects.map(p => {
-              const totalApproved = p.partidas.reduce((s, pa) => s + pa.amountApproved, 0)
+              const totalApproved = p.partidas.reduce((s, pa) => s + (pa.amountApproved ?? 0), 0)
               const totalPaid = p.partidas.reduce((s, pa) => s + pa.amountPaid, 0)
               const pct = totalApproved > 0
                 ? Math.min(100, Math.round((totalPaid / totalApproved) * 100))
