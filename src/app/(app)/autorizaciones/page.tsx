@@ -177,7 +177,7 @@ export default async function AutorizacionesPage() {
         entity = q
           ? {
               type: "QUOTE",
-              quoteNumber: q.quoteNumber,
+              quoteNumber: q.quoteNumber ?? "—",
               vendorId: q.vendorId, vendorName: q.vendor.name, vendorPhone: q.vendor.phone,
               projectId: q.project?.id ?? null, projectName: q.project?.name ?? null,
               propertyId: q.project?.property?.id ?? null, propertyName: q.project?.property?.name ?? null,

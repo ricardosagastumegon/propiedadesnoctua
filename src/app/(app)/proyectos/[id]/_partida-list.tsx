@@ -9,12 +9,14 @@ import { PARTIDA_STATUS_COLORS, PAYMENT_TYPES } from "@/lib/schemas/project"
 import {
   createPartida,
   addPartidaPayment,
+  addPartidaQuote,
   deletePartida,
   cancelPartida,
   markPartidaDelivered,
   requestQuoteApprovalForPartida,
 } from "../actions"
 import { PaymentForm, type PaymentFormData, type AcceptanceContext } from "@/components/shared/payment-form"
+import { QuoteForm, type QuoteFormData, type QuoteVendor as SharedQuoteVendor } from "@/components/shared/quote-form"
 import { requestAcceptance } from "../../aceptaciones/actions"
 import { Plus, Trash2, ChevronDown, ChevronRight, Star, ExternalLink, CheckCircle2, XCircle, Package } from "lucide-react"
 
@@ -65,6 +67,7 @@ interface Props {
   authorityPolicy: string
   expandPartidaId?: string
   acceptanceByPartidaId?: Record<string, PartidaAcceptanceInfo>
+  vendors?: SharedQuoteVendor[]
 }
 
 function computeStatus(p: Partida): string {
@@ -167,10 +170,11 @@ function QuoteCard({
   )
 }
 
-export function PartidaList({ projectId, partidas, authorityPolicy, expandPartidaId, acceptanceByPartidaId }: Props) {
+export function PartidaList({ projectId, partidas, authorityPolicy, expandPartidaId, acceptanceByPartidaId, vendors = [] as SharedQuoteVendor[] }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(expandPartidaId ?? null)
   const [payForm, setPayForm] = useState<string | null>(null)
+  const [quoteForm, setQuoteForm] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   return (
@@ -234,11 +238,31 @@ export function PartidaList({ projectId, partidas, authorityPolicy, expandPartid
                         ))}
                       </div>
                     )}
-                    <Button asChild variant="outline" size="sm" className="mt-3 h-7 text-xs">
-                      <Link href={`/cotizaciones/nueva?projectId=${projectId}&partidaId=${p.id}`}>
-                        <Plus className="size-3 mr-1" />Agregar cotizacion
-                      </Link>
-                    </Button>
+                    {quoteForm === p.id ? (
+                      <div className="mt-3 border rounded-lg p-4">
+                        <QuoteForm
+                          context={{ type: "PARTIDA", id: p.id }}
+                          vendors={vendors}
+                          onCancel={() => setQuoteForm(null)}
+                          onSubmit={async (data) => {
+                            const fd = new FormData()
+                            fd.set("vendorId", data.vendorId)
+                            fd.set("taxPercent", data.taxPercent.toString())
+                            if (data.vendorReference) fd.set("vendorReference", data.vendorReference)
+                            if (data.validUntil) fd.set("validUntil", data.validUntil)
+                            if (data.notes) fd.set("notes", data.notes)
+                            fd.set("items", JSON.stringify(data.items))
+                            const res = await addPartidaQuote(p.id, projectId, fd)
+                            if (!res?.error) setQuoteForm(null)
+                            return res
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <Button variant="outline" size="sm" className="mt-3 h-7 text-xs" onClick={() => setQuoteForm(p.id)}>
+                        <Plus className="size-3 mr-1" />Agregar cotización
+                      </Button>
+                    )}
                   </div>
                 )}
 

@@ -62,7 +62,7 @@ export async function getPaymentProgress(
   if (!t) return { total: 0, totalPaid: 0, totalPaidExcludingPettyCash: 0, percentage: 0, percentageExcludingPettyCash: 0, pending: 0 }
   const selected = t.ticketQuotes.filter(q => q.status === "SELECTED")
   const total = selected.length > 0
-    ? selected.reduce((s, q) => s + q.amount, 0)
+    ? selected.reduce((s, q) => s + q.total, 0)
     : (t.totalAmount ?? 0)
   const totalPaid = t.ticketPayments.reduce((s, x) => s + x.amount, 0)
   const totalPaidExcludingPettyCash = t.ticketPayments

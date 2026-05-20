@@ -83,6 +83,7 @@ model User {
   serviceAcceptancesRequested ServiceAcceptance[] @relation("AcceptanceRequested")
   serviceAcceptancesAccepted  ServiceAcceptance[] @relation("AcceptanceAccepted")
   serviceAcceptancesRejected  ServiceAcceptance[] @relation("AcceptanceRejected")
+  createdQuotes        Quote[]              @relation("QuoteCreator")
 
   @@index([organizationId])
 }
@@ -170,6 +171,7 @@ model ApprovalRequest {
   approvedBy     User?               @relation("ApprovalApproved", fields: [approvedById], references: [id])
   rejectedBy     User?               @relation("ApprovalRejected", fields: [rejectedById], references: [id])
   ticketApproval MaintenanceRequest? @relation("TicketApproval")
+  quote          Quote?              @relation("QuoteApproval")
 
   @@index([organizationId, status])
   @@index([entityType, entityId])
@@ -466,7 +468,7 @@ model MaintenanceRequest {
   escalatedProject Project?                  @relation("EscalatedProject", fields: [escalatedToProjectId], references: [id])
   approvalRequest  ApprovalRequest?          @relation("TicketApproval", fields: [approvalRequestId], references: [id])
   photos           MaintenancePhoto[]
-  ticketQuotes     TicketQuote[]
+  ticketQuotes     Quote[]                   @relation("TicketQuotes")
   ticketPayments   TicketPayment[]
   timelineEvents   MaintenanceTimelineEvent[]
   pettyCashMovements PettyCashMovement[]
@@ -485,21 +487,6 @@ model MaintenancePhoto {
   createdAt DateTime @default(now())
 
   request MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-}
-
-// status: PENDING | SELECTED | REJECTED
-model TicketQuote {
-  id        String   @id @default(cuid())
-  ticketId  String
-  vendorId  String
-  amount    Float
-  fileUrl   String?
-  notes     String?
-  status    String   @default("PENDING")
-  createdAt DateTime @default(now())
-
-  ticket MaintenanceRequest @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  vendor Vendor             @relation("TicketQuoteVendor", fields: [vendorId], references: [id])
 }
 
 // method: CAJA_CHICA | TRANSFER | CASH | REIMBURSEMENT
@@ -751,44 +738,63 @@ model Vendor {
   partidas       ProjectPartida[]
   vendorInvoices VendorInvoice[]
   maintenances   MaintenanceRequest[] @relation("TicketVendor")
-  ticketQuotes   TicketQuote[]        @relation("TicketQuoteVendor")
   ticketPayments TicketPayment[]      @relation("TicketPaymentVendor")
 
   @@index([organizationId])
 }
 
+// Polymorphic quote: belongs to a partida (project) OR a ticket (maintenance)
+// status: DRAFT | PENDING | APPROVED | REJECTED | SELECTED (ticket-only, when chosen but not approved)
 model Quote {
-  id              String    @id @default(cuid())
-  organizationId  String
-  vendorId        String
-  projectId       String?
-  propertyId      String?
-  partidaId       String?
-  quoteNumber     String
-  vendorReference String?
-  date            DateTime
-  validUntil      DateTime?
-  subtotal        Float
-  taxAmount       Float     @default(0)
-  total           Float
-  currency        String    @default("GTQ")
-  status          String    @default("PENDING")
-  approvedAt      DateTime?
-  approvedBy      String?
-  notes           String?
-  pdfUrl          String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  organizationId    String
 
-  organization       Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  vendor             Vendor           @relation(fields: [vendorId], references: [id])
-  project            Project?         @relation(fields: [projectId], references: [id])
-  partida            ProjectPartida?  @relation("PartidaQuotes", fields: [partidaId], references: [id])
-  approvedInPartidas ProjectPartida[] @relation("PartidaApprovedQuote")
+  // Polymorphic owner
+  partidaId         String?
+  ticketId          String?
+  projectId         String?   // optional convenience for partida quotes
+  propertyId        String?
+
+  vendorId          String
+
+  quoteNumber       String?
+  vendorReference   String?
+  date              DateTime  @default(now())
+  validUntil        DateTime?
+
+  subtotal          Float
+  taxAmount         Float     @default(0)
+  taxPercent        Float?    @default(12)
+  total             Float
+  currency          String    @default("GTQ")
+
+  status            String    @default("DRAFT")
+  approvalRequestId String?   @unique
+  approvedAt        DateTime? // legacy
+  approvedBy        String?   // legacy text
+
+  notes             String?
+  documentUrl       String?
+  pdfUrl            String?   // legacy
+  createdById       String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendor             Vendor              @relation(fields: [vendorId], references: [id])
+  project            Project?            @relation(fields: [projectId], references: [id])
+  partida            ProjectPartida?     @relation("PartidaQuotes", fields: [partidaId], references: [id], onDelete: Cascade)
+  ticket             MaintenanceRequest? @relation("TicketQuotes", fields: [ticketId], references: [id], onDelete: Cascade)
+  approvalRequest    ApprovalRequest?    @relation("QuoteApproval", fields: [approvalRequestId], references: [id])
+  approvedInPartidas ProjectPartida[]    @relation("PartidaApprovedQuote")
+  createdBy          User?               @relation("QuoteCreator", fields: [createdById], references: [id])
   items              QuoteItem[]
 
-  @@index([organizationId])
-  @@index([status])
+  @@index([organizationId, status])
+  @@index([partidaId])
+  @@index([ticketId])
+  @@index([vendorId])
 }
 
 model QuoteItem {
@@ -799,6 +805,7 @@ model QuoteItem {
   unit        String?
   unitPrice   Float
   total       Float
+  orderIndex  Int     @default(0)
 
   quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 }

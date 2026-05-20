@@ -11,12 +11,14 @@ import { formatDate, formatGTQ } from "@/lib/format"
 import { CATEGORIES, PRIORITIES, TICKET_STATUSES } from "@/lib/schemas/maintenance"
 import { StatusActions } from "./_status-actions"
 import { CostForm } from "./_cost-form"
+import { PaymentModeSelector } from "./_payment-mode-selector"
 import { DeleteTicketButton } from "./_delete-button"
 import { QuoteSection } from "./_quote-section"
 import { PaymentSection } from "./_payment-section"
 import { EscalateButton } from "./_escalate-button"
 import { TICKET_AUTH_THRESHOLD, TICKET_PROJECT_THRESHOLD } from "../constants"
 import { getPrepaymentCap } from "@/lib/service-acceptance"
+import { computeTicketState } from "@/lib/ticket-state"
 import {
   AlertTriangle, Building2, Calendar, User, Phone, Wrench,
   Clock, CheckCircle2, FolderKanban, Wallet, ShieldCheck, ShieldAlert, ShieldX, Shield, Download,
@@ -39,7 +41,8 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 const PAYMENT_MODE_LABELS: Record<string, string> = {
   CAJA_CHICA: "Caja Chica",
-  PROVEEDOR: "Proveedor (cotizacion)",
+  PROVEEDOR: "Proveedor (cotización)",
+  CONTADO: "Contado (100% en un solo pago)",
   EFECTIVO_RESPONSABLE: "Efectivo responsable",
   REEMBOLSO: "Reembolso",
 }
@@ -57,7 +60,13 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
       property: true,
       assignedTo: true,
       vendor: { select: { id: true, name: true, phone: true } },
-      ticketQuotes: { include: { vendor: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
+      ticketQuotes: {
+        include: {
+          vendor: { select: { id: true, name: true, phone: true, rating: true } },
+          items: { orderBy: { orderIndex: "asc" } },
+        },
+        orderBy: { createdAt: "asc" },
+      },
       ticketPayments: { include: { vendor: { select: { id: true, name: true } } }, orderBy: { date: "asc" } },
       timelineEvents: { orderBy: { createdAt: "asc" } },
       escalatedProject: { select: { id: true, name: true } },
@@ -67,7 +76,11 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
 
   const [employees, vendors, approvalRequest, ticketAcceptance, cap] = await Promise.all([
     prisma.user.findMany({ where: { organizationId: orgId, isActive: true }, orderBy: { name: "asc" } }),
-    prisma.vendor.findMany({ where: { organizationId: orgId, isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.vendor.findMany({
+      where: { organizationId: orgId, isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, category: true, contactName: true, phone: true, email: true, rating: true },
+    }),
     prisma.approvalRequest.findFirst({
       where: { entityType: "TICKET", entityId: ticket.id, organizationId: orgId },
       include: {
@@ -95,14 +108,30 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
     acceptanceId: ticketAcceptance?.id ?? null,
   }
 
+  // Auto-computed ticket state
+  const computedState = computeTicketState({
+    status: ticket.status,
+    assignedToId: ticket.assignedToId,
+    paymentMode: ticket.paymentMode,
+    amountPaid: ticket.amountPaid,
+    totalAmount: ticket.totalAmount,
+    completedAt: ticket.completedAt,
+    escalatedToProjectId: ticket.escalatedToProjectId,
+    hasApprovalPending: !!approvalRequest && ["PENDING", "PENDING_COSIGN"].includes(approvalRequest.status),
+    hasApprovalApproved: approvalRequest?.status === "APPROVED",
+    hasAcceptancePending: ticketAcceptance?.status === "PENDING",
+    hasAcceptanceAccepted: ticketAcceptance?.status === "ACCEPTED",
+    prepaymentCapPercentage: cap,
+  })
+
   const canApprove = authorityPolicy === "ALONE" || authorityPolicy === "COSIGN_REQUIRED"
   const hasSelectedQuote = ticket.ticketQuotes.some(q => q.status === "SELECTED")
-  const maxQuoteAmount = ticket.ticketQuotes.length > 0 ? Math.max(...ticket.ticketQuotes.map(q => q.amount)) : 0
+  const maxQuoteAmount = ticket.ticketQuotes.length > 0 ? Math.max(...ticket.ticketQuotes.map(q => q.total)) : 0
   const forceEscalate = maxQuoteAmount >= TICKET_PROJECT_THRESHOLD
 
   const selectedQuotes = ticket.ticketQuotes.filter(q => q.status === "SELECTED")
   const totalCotizado = selectedQuotes.length > 0
-    ? selectedQuotes.reduce((s, q) => s + q.amount, 0)
+    ? selectedQuotes.reduce((s, q) => s + q.total, 0)
     : null
   const totalRef = totalCotizado ?? ticket.totalAmount
   const saldoPendiente = totalRef != null ? Math.max(0, totalRef - ticket.amountPaid) : null
@@ -174,8 +203,11 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
               {/* Status badges */}
               <Card className="p-6">
                 <div className="flex flex-wrap gap-2 mb-4">
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[ticket.status]}`}>
-                    {TICKET_STATUSES[ticket.status]}
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full font-medium ${computedState.color}`}
+                    title={computedState.reason}
+                  >
+                    {computedState.label}
                   </span>
                   <span className={`text-xs font-medium flex items-center gap-1 ${PRIORITY_COLORS[ticket.priority]}`}>
                     {ticket.priority === "URGENT" && <AlertTriangle className="size-3" />}
@@ -191,6 +223,9 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed">{ticket.description}</p>
               </Card>
+
+              {/* Payment mode selector */}
+              <PaymentModeSelector ticketId={ticket.id} current={ticket.paymentMode} />
 
               {/* Cost closure form */}
               <CostForm

@@ -40,7 +40,7 @@ interface SelectedQuote {
   id: string
   vendorId: string
   vendor: { id: string; name: string }
-  amount: number
+  total: number
 }
 
 function VendorPaymentBlock({
@@ -194,7 +194,7 @@ export function PaymentSection({
               key={q.id}
               ticketId={ticketId}
               vendor={q.vendor}
-              quoteAmount={q.amount}
+              quoteAmount={q.total}
               payments={vendorPayments}
               acceptanceCtx={acceptanceCtx}
             />

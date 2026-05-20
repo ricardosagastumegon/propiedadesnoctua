@@ -438,11 +438,19 @@ async function main() {
     phone: "7788-9900", isActive: true,
   }})
 
-  // TicketQuotes for tk6 (needs v1, v3)
-  await prisma.ticketQuote.createMany({ data: [
-    { ticketId: tk6.id, vendorId: v3.id, amount: 22000, notes: "Reemplazo completo de secciones afectadas + sellador", status: "PENDING" },
-    { ticketId: tk6.id, vendorId: v1.id, amount: 15500, notes: "Sellado de juntas + impermeabilizacion", status: "PENDING" },
-  ]})
+  // Quotes for tk6 (needs v1, v3) — v7: Quote replaces TicketQuote
+  await prisma.quote.create({ data: {
+    organizationId: org.id, ticketId: tk6.id, vendorId: v3.id,
+    subtotal: 22000, total: 22000, taxAmount: 0, taxPercent: 0,
+    notes: "Reemplazo completo de secciones afectadas + sellador", status: "PENDING",
+    items: { create: [{ description: "Reemplazo completo de secciones afectadas + sellador", quantity: 1, unit: "global", unitPrice: 22000, total: 22000 }] },
+  }})
+  await prisma.quote.create({ data: {
+    organizationId: org.id, ticketId: tk6.id, vendorId: v1.id,
+    subtotal: 15500, total: 15500, taxAmount: 0, taxPercent: 0,
+    notes: "Sellado de juntas + impermeabilizacion", status: "PENDING",
+    items: { create: [{ description: "Sellado de juntas + impermeabilización", quantity: 1, unit: "global", unitPrice: 15500, total: 15500 }] },
+  }})
 
   // ─── QUOTES ─────────────────────────────────────────────────────────────────
   const q1 = await prisma.quote.create({ data: {
@@ -1223,9 +1231,14 @@ async function main() {
     paymentMode: "PROVEEDOR", vendorId: v1.id,
     estimatedCost: 8000, totalAmount: 8000, amountPaid: 4000,
   }})
-  await prisma.ticketQuote.create({ data: {
-    ticketId: tkCisterna.id, vendorId: v1.id, amount: 8000,
+  await prisma.quote.create({ data: {
+    organizationId: org.id, ticketId: tkCisterna.id, vendorId: v1.id,
+    subtotal: 8000, total: 8000, taxAmount: 0, taxPercent: 0,
     status: "SELECTED", notes: "Reparación + prueba 24h",
+    items: { create: [
+      { description: "Drenaje + reparación lateral cisterna", quantity: 1, unit: "global", unitPrice: 6000, total: 6000 },
+      { description: "Prueba de hermeticidad 24h", quantity: 1, unit: "global", unitPrice: 2000, total: 2000 },
+    ]},
   }})
   await prisma.ticketPayment.create({ data: {
     ticketId: tkCisterna.id, vendorId: v1.id, amount: 4000, method: "TRANSFER",
@@ -1246,16 +1259,200 @@ async function main() {
     createdAt: subDays(now, 1),
   }})
 
-  console.log("Seed v6 (Service Acceptance) completado exitosamente.")
-  console.log(`Org: ${org.id}`)
-  console.log(`Owner/Admin (Juan Mendez, NO acepta):     admin@demo.gt / demo1234`)
-  console.log(`Manager (Sofia Giron, ACEPTA):            gerente@demo.gt / demo1234`)
-  console.log(`Supervisor (Luis Herrera):                super@demo.gt / demo1234`)
-  console.log(`Admin (Maria Gonzalez, ACEPTA):           asist1@demo.gt / demo1234`)
-  console.log(`Assistant (Pedro Vasquez, solicita):      asist2@demo.gt / demo1234`)
-  console.log(`Viewer (Ana Morales):                     demo@inmobiliaria.gt / demo1234`)
-  console.log(`Assistant (Roberto Castillo):             roberto@demo.gt / demo1234`)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SEED v7: QUOTE ITEMS + PAGO CONTADO + SION TENANT
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // 1) Add realistic items to every quote that doesn't have any yet
+  const quotesWithoutItems = await prisma.quote.findMany({
+    where: { organizationId: org.id, items: { none: {} } },
+    include: { vendor: true, items: true },
+  })
+
+  function makeItems(quote: { total: number; vendor: { category: string; name: string }; notes: string | null }) {
+    const t = quote.total
+    const cat = quote.vendor.category
+    if (cat === "PAINTING") {
+      return [
+        { description: "Pintura blanca látex premium 4gal", quantity: 4, unit: "unidad", unitPrice: +(t * 0.18 / 4).toFixed(2), total: +(t * 0.18).toFixed(2) },
+        { description: "Pintura color 2gal (interior)", quantity: 2, unit: "unidad", unitPrice: +(t * 0.10 / 2).toFixed(2), total: +(t * 0.10).toFixed(2) },
+        { description: "Mano de obra", quantity: 16, unit: "hora", unitPrice: +(t * 0.50 / 16).toFixed(2), total: +(t * 0.50).toFixed(2) },
+        { description: "Materiales y rodillos", quantity: 1, unit: "global", unitPrice: +(t * 0.22).toFixed(2), total: +(t * 0.22).toFixed(2) },
+      ]
+    }
+    if (cat === "HVAC") {
+      return [
+        { description: "A/C Mini Split 18000 BTU inverter", quantity: 2, unit: "unidad", unitPrice: +(t * 0.65 / 2).toFixed(2), total: +(t * 0.65).toFixed(2) },
+        { description: "Tubería de refrigerante y aislante", quantity: 5, unit: "m²", unitPrice: +(t * 0.10 / 5).toFixed(2), total: +(t * 0.10).toFixed(2) },
+        { description: "Instalación y prueba", quantity: 1, unit: "global", unitPrice: +(t * 0.25).toFixed(2), total: +(t * 0.25).toFixed(2) },
+      ]
+    }
+    if (cat === "PLUMBING") {
+      return [
+        { description: "Tubería PVC 2'' (cédula 40)", quantity: 6, unit: "m²", unitPrice: +(t * 0.30 / 6).toFixed(2), total: +(t * 0.30).toFixed(2) },
+        { description: "Codos, T's y conectores", quantity: 1, unit: "global", unitPrice: +(t * 0.15).toFixed(2), total: +(t * 0.15).toFixed(2) },
+        { description: "Mano de obra plomero", quantity: 8, unit: "hora", unitPrice: +(t * 0.55 / 8).toFixed(2), total: +(t * 0.55).toFixed(2) },
+      ]
+    }
+    if (cat === "ELECTRICAL") {
+      return [
+        { description: "Panel solar 400W", quantity: 30, unit: "unidad", unitPrice: +(t * 0.60 / 30).toFixed(2), total: +(t * 0.60).toFixed(2) },
+        { description: "Inversor 15kW", quantity: 1, unit: "unidad", unitPrice: +(t * 0.25).toFixed(2), total: +(t * 0.25).toFixed(2) },
+        { description: "Cableado y soportes", quantity: 1, unit: "global", unitPrice: +(t * 0.15).toFixed(2), total: +(t * 0.15).toFixed(2) },
+      ]
+    }
+    if (cat === "CONSTRUCTION") {
+      return [
+        { description: "Materiales (cemento, arena, varilla)", quantity: 1, unit: "global", unitPrice: +(t * 0.45).toFixed(2), total: +(t * 0.45).toFixed(2) },
+        { description: "Mano de obra construcción", quantity: 40, unit: "hora", unitPrice: +(t * 0.40 / 40).toFixed(2), total: +(t * 0.40).toFixed(2) },
+        { description: "Acabados", quantity: 1, unit: "global", unitPrice: +(t * 0.15).toFixed(2), total: +(t * 0.15).toFixed(2) },
+      ]
+    }
+    if (cat === "OTHER") {
+      // Mobitec (muebles)
+      if (quote.vendor.name.includes("Mobitec")) {
+        return [
+          { description: "Platos servir x 10", quantity: 10, unit: "unidad", unitPrice: +(t * 0.20 / 10).toFixed(2), total: +(t * 0.20).toFixed(2) },
+          { description: "Camisas uniforme cocina x 6", quantity: 6, unit: "unidad", unitPrice: +(t * 0.30 / 6).toFixed(2), total: +(t * 0.30).toFixed(2) },
+          { description: "Botas seguridad antideslizante x 4", quantity: 4, unit: "par", unitPrice: +(t * 0.40 / 4).toFixed(2), total: +(t * 0.40).toFixed(2) },
+          { description: "Mesa cocina madera caoba", quantity: 1, unit: "unidad", unitPrice: +(t * 0.10).toFixed(2), total: +(t * 0.10).toFixed(2) },
+        ]
+      }
+      return [
+        { description: quote.notes ?? "Servicio principal", quantity: 1, unit: "global", unitPrice: +(t * 0.80).toFixed(2), total: +(t * 0.80).toFixed(2) },
+        { description: "Instalación y soporte", quantity: 1, unit: "global", unitPrice: +(t * 0.20).toFixed(2), total: +(t * 0.20).toFixed(2) },
+      ]
+    }
+    if (cat === "SECURITY") {
+      return [
+        { description: "Cámara IP exterior", quantity: 4, unit: "unidad", unitPrice: +(t * 0.60 / 4).toFixed(2), total: +(t * 0.60).toFixed(2) },
+        { description: "DVR + disco 2TB", quantity: 1, unit: "unidad", unitPrice: +(t * 0.25).toFixed(2), total: +(t * 0.25).toFixed(2) },
+        { description: "Instalación y configuración", quantity: 1, unit: "global", unitPrice: +(t * 0.15).toFixed(2), total: +(t * 0.15).toFixed(2) },
+      ]
+    }
+    return [{ description: quote.notes ?? `Servicio de ${cat}`, quantity: 1, unit: "global", unitPrice: t, total: t }]
+  }
+
+  for (const q of quotesWithoutItems) {
+    const items = makeItems(q)
+    const newSubtotal = items.reduce((s, i) => s + i.total, 0)
+    // Adjust to match original total (idle precision difference)
+    const diff = q.total - newSubtotal
+    if (Math.abs(diff) > 0.5) items[items.length - 1].total += diff
+    await prisma.quote.update({
+      where: { id: q.id },
+      data: {
+        subtotal: q.total,
+        taxAmount: 0,
+        taxPercent: 0,
+        items: { create: items.map((it, idx) => ({ ...it, orderIndex: idx })) },
+      },
+    })
+  }
+
+  // 2) CASE 6: Ticket Pago CONTADO (servicio cerrajería emergencia)
+  const tkContado = await prisma.maintenanceRequest.create({ data: {
+    organizationId: org.id, ticketNumber: "M-2026-CONT", propertyId: propCayala.id,
+    category: "SECURITY", priority: "HIGH", status: "IN_PROGRESS",
+    title: "Cambio de cerradura puerta principal (urgente)",
+    description: "Inquilino perdió llaves. Necesita cambio inmediato de cerradura. Pago contado al técnico al terminar.",
+    reportedAt: subDays(now, 2),
+    assignedToId: supervisor.id, assignedAt: subDays(now, 2),
+    paymentMode: "CONTADO", estimatedCost: 1500, totalAmount: 1500,
+  }})
+  const arContado = await prisma.approvalRequest.create({ data: {
+    organizationId: org.id,
+    requestedById: supervisor.id,
+    entityType: "TICKET", entityId: tkContado.id,
+    title: `Pago Contado — ${tkContado.ticketNumber}: ${tkContado.title}`,
+    amount: 1500,
+    notes: "Pago Contado: 100% en un solo pago — requiere autorización",
+    status: "PENDING",
+  }})
+  await prisma.maintenanceRequest.update({ where: { id: tkContado.id }, data: { approvalRequestId: arContado.id } })
+  await prisma.maintenanceTimelineEvent.createMany({ data: [
+    { ticketId: tkContado.id, type: "STATUS_CHANGE", message: "Ticket creado — Cambio de cerradura puerta principal", createdAt: subDays(now, 2) },
+    { ticketId: tkContado.id, type: "ASSIGNMENT", message: "Asignado a Luis Herrera", createdAt: subDays(now, 2) },
+    { ticketId: tkContado.id, type: "NOTE", message: "Modo de pago: CONTADO (100% en un solo pago)", createdAt: subDays(now, 2) },
+    { ticketId: tkContado.id, type: "NOTE", message: "Pago Contado: enviado a autorización", createdAt: subDays(now, 2) },
+  ]})
+
+  // 3) CASE 7: Partida CONTADO en proyecto (compra de inventario)
+  const partidaContado = await prisma.projectPartida.create({ data: {
+    projectId: proj3.id,
+    name: "Compra inventario insumos limpieza (contado)",
+    budgetEstimate: 3500, amountApproved: 3500,
+    status: "AWAITING_APPROVAL", orderIndex: 4,
+    notes: "Pago Contado — compra única",
+  }})
+  const qPartidaContado = await prisma.quote.create({ data: {
+    organizationId: org.id, projectId: proj3.id, partidaId: partidaContado.id, vendorId: v5.id,
+    subtotal: 3500, total: 3500, taxAmount: 0, taxPercent: 0,
+    status: "PENDING", notes: "Pago Contado — compra única",
+    items: { create: [
+      { description: "Detergente industrial 5gal", quantity: 4, unit: "unidad", unitPrice: 350, total: 1400, orderIndex: 0 },
+      { description: "Trapeadores industriales", quantity: 10, unit: "unidad", unitPrice: 80, total: 800, orderIndex: 1 },
+      { description: "Escobas + recogedores", quantity: 6, unit: "par", unitPrice: 50, total: 300, orderIndex: 2 },
+      { description: "Bolsas de basura industriales (50kg)", quantity: 4, unit: "unidad", unitPrice: 250, total: 1000, orderIndex: 3 },
+    ]},
+  }})
+  const arPartidaContado = await prisma.approvalRequest.create({ data: {
+    organizationId: org.id,
+    requestedById: assistant2.id,
+    entityType: "PROJECT_PARTIDA", entityId: partidaContado.id, relatedId: qPartidaContado.id,
+    title: "Pago Contado — Compra inventario insumos limpieza",
+    amount: 3500,
+    notes: "Pago Contado: 100% en un solo pago",
+    status: "PENDING",
+    createdAt: subDays(now, 1),
+  }})
+  await log({ entityType: "PARTIDA", entityId: partidaContado.id, projectId: proj3.id, action: "CREATED", actorId: assistant2.id, actorName: "Pedro Vasquez", daysAgo: 1, metadata: { name: partidaContado.name, mode: "CONTADO" } })
+  await log({ entityType: "PARTIDA", entityId: partidaContado.id, projectId: proj3.id, action: "QUOTE_ADDED", actorId: assistant2.id, actorName: "Pedro Vasquez", daysAgo: 1, metadata: { vendor: "Pintura Profesional", amount: 3500, items: 4 } })
+  await log({ entityType: "APPROVAL", entityId: arPartidaContado.id, projectId: proj3.id, action: "APPROVAL_REQUESTED", actorId: assistant2.id, actorName: "Pedro Vasquez", daysAgo: 1, metadata: { reason: "Pago Contado", amount: 3500, partida: partidaContado.name } })
+
+  // 4) SION tenant — re-provisioned alongside demo data (idempotent)
+  const sionOrg = await prisma.organization.upsert({
+    where: { slug: "sion" },
+    update: { name: "SION" },
+    create: { name: "SION", slug: "sion", type: "FAMILY", currency: "GTQ", timezone: "America/Guatemala" },
+  })
+  await prisma.organizationSettings.upsert({
+    where: { organizationId: sionOrg.id },
+    update: { prepaymentCapPercentage: 80 },
+    create: { organizationId: sionOrg.id, prepaymentCapPercentage: 80 },
+  })
+  await prisma.user.upsert({
+    where: { email: "angelesquezadaoch@gmail.com" },
+    update: {
+      name: "Angeles Quezada", role: "ADMIN", authorityPolicy: "ALONE",
+      canAcceptServices: true, organizationId: sionOrg.id, passwordHash: hash, isActive: true,
+    },
+    create: {
+      email: "angelesquezadaoch@gmail.com", name: "Angeles Quezada",
+      passwordHash: hash, role: "ADMIN", authorityPolicy: "ALONE",
+      canAcceptServices: true, organizationId: sionOrg.id, isActive: true,
+    },
+  })
+
+  console.log("Seed v7 (Unified Quotes + Pago Contado) completado.")
+  console.log(`Demo Org: ${org.id}`)
+  console.log(`SION Org: ${sionOrg.id}`)
+  console.log(``)
+  console.log(`Demo users (password: demo1234):`)
+  console.log(`  admin@demo.gt              — Juan Mendez (Owner/ADMIN, NO acepta)`)
+  console.log(`  gerente@demo.gt            — Sofia Giron (Manager, ACEPTA)`)
+  console.log(`  super@demo.gt              — Luis Herrera (Supervisor)`)
+  console.log(`  asist1@demo.gt             — Maria Gonzalez (Admin, ACEPTA)`)
+  console.log(`  asist2@demo.gt             — Pedro Vasquez (Asistente, solicita)`)
+  console.log(`  demo@inmobiliaria.gt       — Ana Morales (Viewer)`)
+  console.log(`  roberto@demo.gt            — Roberto Castillo (Asistente)`)
+  console.log(``)
+  console.log(`SION user (password: angeles):`)
+  console.log(`  angelesquezadaoch@gmail.com — Angeles Quezada (Admin SION)`)
+  console.log(``)
   console.log(`Cap de prepago: 80%`)
+  console.log(`Cotizaciones con items: todas`)
+  console.log(`Pago Contado: 1 ticket (M-2026-CONT) + 1 partida (proj3)`)
 }
 
 main()

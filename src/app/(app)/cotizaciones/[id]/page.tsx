@@ -27,7 +27,7 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <PageHeader
-        title={quote.quoteNumber}
+        title={quote.quoteNumber ?? `Cotización ${quote.id.slice(-6)}`}
         description={`${quote.vendor.name} — ${formatDate(quote.date)}`}
       >
         <div className="flex gap-2 items-center">

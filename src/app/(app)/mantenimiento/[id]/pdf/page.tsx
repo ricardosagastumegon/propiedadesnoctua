@@ -34,7 +34,10 @@ export default async function TicketPDFPage({ params }: { params: Promise<{ id: 
       property: true,
       assignedTo: { select: { name: true } },
       vendor: { select: { name: true, phone: true } },
-      ticketQuotes: { include: { vendor: { select: { name: true } } }, orderBy: { createdAt: "asc" } },
+      ticketQuotes: {
+        include: { vendor: { select: { name: true } }, items: { orderBy: { orderIndex: "asc" } } },
+        orderBy: { createdAt: "asc" },
+      },
       ticketPayments: { orderBy: { date: "asc" } },
       timelineEvents: { orderBy: { createdAt: "asc" } },
       approvalRequest: {
@@ -51,7 +54,7 @@ export default async function TicketPDFPage({ params }: { params: Promise<{ id: 
 
   const totalPaid = ticket.ticketPayments.reduce((s, p) => s + p.amount, 0)
   const selectedQuote = ticket.ticketQuotes.find(q => q.status === "SELECTED")
-  const totalRef = selectedQuote?.amount ?? ticket.totalAmount
+  const totalRef = selectedQuote?.total ?? ticket.totalAmount
 
   return (
     <html lang="es">
@@ -184,34 +187,54 @@ export default async function TicketPDFPage({ params }: { params: Promise<{ id: 
           </div>
         )}
 
-        {/* Cotizaciones */}
+        {/* Cotizaciones con rubros */}
         {ticket.ticketQuotes.length > 0 && (
           <>
             <h2>Cotizaciones</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Proveedor</th>
-                  <th>Monto</th>
-                  <th>Estado</th>
-                  <th>Notas</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ticket.ticketQuotes.map(q => (
-                  <tr key={q.id}>
-                    <td>{q.vendor.name}</td>
-                    <td style={{ fontWeight: 600 }}>{fmt(q.amount)}</td>
-                    <td>
-                      <span className={`badge ${q.status === "SELECTED" ? "badge-green" : q.status === "REJECTED" ? "badge-red" : "badge-amber"}`}>
-                        {q.status === "SELECTED" ? "Seleccionada" : q.status === "REJECTED" ? "Rechazada" : "Pendiente"}
-                      </span>
-                    </td>
-                    <td style={{ color: "#64748b" }}>{q.notes ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {ticket.ticketQuotes.map(q => (
+              <div key={q.id} style={{ marginBottom: 16, pageBreakInside: "avoid" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                  <div>
+                    <strong>{q.vendor.name}</strong>
+                    {q.vendorReference && <span style={{ color: "#64748b", marginLeft: 8 }}>Ref: {q.vendorReference}</span>}
+                  </div>
+                  <span className={`badge ${q.status === "SELECTED" ? "badge-green" : q.status === "REJECTED" ? "badge-red" : "badge-amber"}`}>
+                    {q.status === "SELECTED" ? "Seleccionada" : q.status === "REJECTED" ? "Rechazada" : "Pendiente"}
+                  </span>
+                </div>
+                {q.validUntil && <p style={{ fontSize: "9pt", color: "#64748b", marginBottom: 4 }}>Válida hasta {new Intl.DateTimeFormat("es-GT", { dateStyle: "medium" }).format(q.validUntil)}</p>}
+                {q.items && q.items.length > 0 && (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Descripción</th>
+                        <th style={{ width: 60, textAlign: "right" }}>Cant.</th>
+                        <th style={{ width: 70 }}>Unidad</th>
+                        <th style={{ width: 90, textAlign: "right" }}>P. Unit.</th>
+                        <th style={{ width: 90, textAlign: "right" }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {q.items.map(it => (
+                        <tr key={it.id}>
+                          <td>{it.description}</td>
+                          <td style={{ textAlign: "right" }}>{it.quantity}</td>
+                          <td>{it.unit ?? "—"}</td>
+                          <td style={{ textAlign: "right" }}>{fmt(it.unitPrice)}</td>
+                          <td style={{ textAlign: "right", fontWeight: 600 }}>{fmt(it.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr><td colSpan={4} style={{ textAlign: "right", color: "#64748b" }}>Subtotal</td><td style={{ textAlign: "right" }}>{fmt(q.subtotal)}</td></tr>
+                      {q.taxAmount > 0 && <tr><td colSpan={4} style={{ textAlign: "right", color: "#64748b" }}>IVA {q.taxPercent ?? 12}%</td><td style={{ textAlign: "right" }}>{fmt(q.taxAmount)}</td></tr>}
+                      <tr><td colSpan={4} style={{ textAlign: "right", fontWeight: 700 }}>Total</td><td style={{ textAlign: "right", fontWeight: 700 }}>{fmt(q.total)}</td></tr>
+                    </tfoot>
+                  </table>
+                )}
+                {q.notes && <p style={{ fontSize: "9pt", color: "#64748b", marginTop: 4 }}>{q.notes}</p>}
+              </div>
+            ))}
           </>
         )}
 

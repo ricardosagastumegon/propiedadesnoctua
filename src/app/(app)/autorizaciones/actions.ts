@@ -48,11 +48,11 @@ export async function approveRequest(id: string) {
   if (req?.entityType === "TICKET") {
     const ar = await prisma.approvalRequest.findFirst({ where: { id }, select: { relatedId: true, entityId: true } })
     if (ar?.relatedId) {
-      const quote = await prisma.ticketQuote.findUnique({ where: { id: ar.relatedId }, select: { amount: true, vendorId: true } })
+      const quote = await prisma.quote.findUnique({ where: { id: ar.relatedId }, select: { total: true, vendorId: true } })
       if (quote) {
-        await prisma.ticketQuote.updateMany({ where: { ticketId: ar.entityId }, data: { status: "REJECTED" } })
-        await prisma.ticketQuote.update({ where: { id: ar.relatedId }, data: { status: "SELECTED" } })
-        await prisma.maintenanceRequest.update({ where: { id: ar.entityId }, data: { vendorId: quote.vendorId, totalAmount: quote.amount, status: "IN_PROGRESS" } })
+        await prisma.quote.updateMany({ where: { ticketId: ar.entityId }, data: { status: "REJECTED" } })
+        await prisma.quote.update({ where: { id: ar.relatedId }, data: { status: "SELECTED", approvedAt: new Date() } })
+        await prisma.maintenanceRequest.update({ where: { id: ar.entityId }, data: { vendorId: quote.vendorId, totalAmount: quote.total, status: "IN_PROGRESS" } })
       }
     }
   }
@@ -107,11 +107,11 @@ export async function cosignRequest(id: string) {
   if (req?.entityType === "TICKET") {
     const ar = await prisma.approvalRequest.findFirst({ where: { id }, select: { relatedId: true, entityId: true } })
     if (ar?.relatedId) {
-      const quote = await prisma.ticketQuote.findUnique({ where: { id: ar.relatedId }, select: { amount: true, vendorId: true } })
+      const quote = await prisma.quote.findUnique({ where: { id: ar.relatedId }, select: { total: true, vendorId: true } })
       if (quote) {
-        await prisma.ticketQuote.updateMany({ where: { ticketId: ar.entityId }, data: { status: "REJECTED" } })
-        await prisma.ticketQuote.update({ where: { id: ar.relatedId }, data: { status: "SELECTED" } })
-        await prisma.maintenanceRequest.update({ where: { id: ar.entityId }, data: { vendorId: quote.vendorId, totalAmount: quote.amount, status: "IN_PROGRESS" } })
+        await prisma.quote.updateMany({ where: { ticketId: ar.entityId }, data: { status: "REJECTED" } })
+        await prisma.quote.update({ where: { id: ar.relatedId }, data: { status: "SELECTED", approvedAt: new Date() } })
+        await prisma.maintenanceRequest.update({ where: { id: ar.entityId }, data: { vendorId: quote.vendorId, totalAmount: quote.total, status: "IN_PROGRESS" } })
       }
     }
   }

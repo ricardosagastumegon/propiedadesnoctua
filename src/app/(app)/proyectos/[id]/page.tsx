@@ -14,6 +14,7 @@ import { CostList } from "./_cost-list"
 import { PartidaList } from "./_partida-list"
 import { ProjectApprovals } from "./_project-approvals"
 import { PagosTab } from "./_pagos-tab"
+import { ActivityTrail } from "./_activity-trail"
 import { DeleteProjectButton } from "./_delete-button"
 import { getProjectActivityTrail } from "@/lib/project-activity-trail"
 import { getPrepaymentCap } from "@/lib/service-acceptance"
@@ -62,7 +63,7 @@ export default async function ProjectDetailPage({
 
   // Fetch approval requests for this project's partidas + activity trail
   const partidaIds = project.partidas.map(p => p.id)
-  const [approvalRequests, activityTrail, acceptances, cap] = await Promise.all([
+  const [approvalRequests, activityTrail, acceptances, cap, vendors] = await Promise.all([
     prisma.approvalRequest.findMany({
       where: { organizationId: orgId, entityType: "PROJECT_PARTIDA", entityId: { in: partidaIds } },
       include: {
@@ -81,6 +82,11 @@ export default async function ProjectDetailPage({
         })
       : Promise.resolve([]),
     getPrepaymentCap(orgId),
+    prisma.vendor.findMany({
+      where: { organizationId: orgId, isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, category: true, contactName: true, phone: true, email: true, rating: true },
+    }),
   ])
   const acceptanceByPartidaId: Record<string, {
     cap: number; hasAcceptance: boolean
@@ -169,6 +175,12 @@ export default async function ProjectDetailPage({
             )}
           </TabsTrigger>
           <TabsTrigger value="pagos">Pagos</TabsTrigger>
+          <TabsTrigger value="timeline">
+            Timeline
+            {activityTrail.length > 0 && (
+              <Badge className="ml-1.5 h-4 min-w-4 text-[10px] px-1" variant="secondary">{activityTrail.length}</Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="tareas">Tareas ({project.tasks.length})</TabsTrigger>
           <TabsTrigger value="costos">Costos ({project.costs.length})</TabsTrigger>
           <TabsTrigger value="info">Informacion</TabsTrigger>
@@ -181,6 +193,7 @@ export default async function ProjectDetailPage({
             authorityPolicy={authorityPolicy ?? "NONE"}
             expandPartidaId={expandPartida}
             acceptanceByPartidaId={acceptanceByPartidaId}
+            vendors={vendors}
           />
         </TabsContent>
 
@@ -198,6 +211,16 @@ export default async function ProjectDetailPage({
         <TabsContent value="pagos">
           <Card className="p-6">
             <PagosTab partidas={project.partidas as any} trail={activityTrail} />
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="timeline">
+          <Card className="p-6">
+            <h3 className="font-medium text-sm mb-4">Timeline cronológico del proyecto</h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              Todos los eventos: creación, partidas, cotizaciones, autorizaciones, pagos, aceptaciones — ordenados cronológicamente.
+            </p>
+            <ActivityTrail trail={activityTrail} />
           </Card>
         </TabsContent>
 

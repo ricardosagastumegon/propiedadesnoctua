@@ -4,6 +4,77 @@ import { prisma } from "@/lib/prisma"
 import { projectSchema, projectCostSchema, partidaSchema, partidaPaymentSchema } from "@/lib/schemas/project"
 import { logActivity } from "@/lib/activity-log"
 import { canMakePayment } from "@/lib/service-acceptance"
+
+export async function addPartidaQuote(partidaId: string, projectId: string, formData: FormData) {
+  const session = await auth()
+  if (!session) throw new Error("No autenticado")
+  const orgId = (session.user as any).organizationId as string
+  const userId = session.user!.id!
+  const actorName = session.user!.name ?? "Usuario"
+  const authorityPolicy = (session.user as any).authorityPolicy as string | undefined
+
+  const partida = await prisma.projectPartida.findFirst({ where: { id: partidaId, projectId }, include: { project: { select: { name: true } } } })
+  if (!partida) throw new Error("Partida no encontrada")
+
+  const vendorId = formData.get("vendorId") as string
+  const notes = formData.get("notes") as string || null
+  const vendorReference = formData.get("vendorReference") as string || null
+  const validUntilRaw = formData.get("validUntil") as string || null
+  const taxPercent = parseFloat((formData.get("taxPercent") as string) || "12")
+  const itemsJson = (formData.get("items") as string) || "[]"
+
+  if (!vendorId) return { error: "Proveedor requerido" }
+  let items: Array<{ description: string; quantity: number; unit: string | null; unitPrice: number; total: number }> = []
+  try { items = JSON.parse(itemsJson) } catch { return { error: "Items inválidos" } }
+  if (!items.length) return { error: "Agregá al menos un rubro" }
+
+  const subtotal = items.reduce((s, i) => s + (i.total || 0), 0)
+  const taxAmount = subtotal * (taxPercent / 100)
+  const total = subtotal + taxAmount
+
+  const quote = await prisma.quote.create({
+    data: {
+      organizationId: orgId,
+      partidaId, projectId, vendorId, vendorReference,
+      validUntil: validUntilRaw ? new Date(validUntilRaw) : null,
+      subtotal, taxAmount, taxPercent, total,
+      status: "PENDING", notes, createdById: userId,
+      items: { create: items.map((it, idx) => ({ ...it, orderIndex: idx })) },
+    },
+  })
+  const vendor = await prisma.vendor.findUnique({ where: { id: vendorId }, select: { name: true } })
+  await logActivity({
+    orgId, entityType: "PARTIDA", entityId: partidaId, projectId, action: "QUOTE_ADDED",
+    actorId: userId, actorName,
+    metadata: { vendor: vendor?.name, amount: total, partida: partida.name, items: items.length },
+  })
+
+  // For users that need cosign, auto-create approval request
+  if (authorityPolicy === "COSIGN_REQUIRED") {
+    const approvalReq = await prisma.approvalRequest.create({
+      data: {
+        organizationId: orgId,
+        requestedById: userId,
+        entityType: "PROJECT_PARTIDA",
+        entityId: partidaId,
+        relatedId: quote.id,
+        title: `Aprobar cotización: ${vendor?.name ?? "proveedor"} — ${partida.project?.name ?? "proyecto"}`,
+        amount: total,
+        notes: `Partida: ${partida.name}`,
+        status: "PENDING_COSIGN",
+      },
+    })
+    await logActivity({
+      orgId, entityType: "APPROVAL", entityId: approvalReq.id, projectId,
+      action: "APPROVAL_REQUESTED", actorId: userId, actorName,
+      metadata: { vendor: vendor?.name, amount: total, partida: partida.name },
+    })
+    revalidatePath("/autorizaciones")
+  }
+
+  revalidatePath(`/proyectos/${projectId}`)
+  return { ok: true, quoteId: quote.id }
+}
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 

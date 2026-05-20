@@ -1,17 +1,15 @@
 "use client"
 import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { addTicketQuote, finalizeTicketSelection } from "../actions"
 import { EscalateButton } from "./_escalate-button"
-import { formatGTQ } from "@/lib/format"
+import { formatGTQ, formatDate } from "@/lib/format"
+import { QuoteForm, type QuoteFormData, type QuoteVendor } from "@/components/shared/quote-form"
 import { Plus, CheckCircle2, XCircle, Clock, AlertTriangle, ShieldAlert, ArrowUpRight } from "lucide-react"
 
-interface Vendor { id: string; name: string }
-interface Quote { id: string; vendorId: string; vendor: { name: string }; amount: number; status: string; notes: string | null }
+type Vendor = QuoteVendor
+interface QuoteItem { id: string; description: string; quantity: number; unit: string | null; unitPrice: number; total: number }
+interface Quote { id: string; vendorId: string; vendor: { name: string; phone?: string | null; rating?: number | null }; total: number; subtotal?: number; taxAmount?: number; status: string; notes: string | null; validUntil?: Date | null; vendorReference?: string | null; items?: QuoteItem[] }
 
 function TotalBadge({ total, authThreshold, projectThreshold }: { total: number; authThreshold: number; projectThreshold: number }) {
   if (total >= projectThreshold) {
@@ -56,22 +54,19 @@ export function QuoteSection({
   projectThreshold?: number
   approvalPending?: boolean
 }) {
-  const ref = useRef<HTMLFormElement>(null)
-  const [vendorId, setVendorId] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
   const [showForm, setShowForm] = useState(false)
   const [localSelected, setLocalSelected] = useState<Set<string>>(new Set())
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [finalizing, setFinalizing] = useState(false)
   const [finalizeError, setFinalizeError] = useState("")
   const [sentToAuth, setSentToAuth] = useState<string | null>(null)
 
   const hasSelected = quotes.some(q => q.status === "SELECTED")
-  const anyAboveProjectThreshold = quotes.some(q => q.amount >= projectThreshold)
+  const anyAboveProjectThreshold = quotes.some(q => q.total >= projectThreshold)
 
   const runningTotal = Array.from(localSelected).reduce((sum, id) => {
     const q = quotes.find(q => q.id === id)
-    return sum + (q?.amount ?? 0)
+    return sum + (q?.total ?? 0)
   }, 0)
 
   const totalAboveProject = runningTotal >= projectThreshold
@@ -89,16 +84,17 @@ export function QuoteSection({
     setSentToAuth(null)
   }
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    setError("")
-    const fd = new FormData(ref.current!)
-    fd.set("vendorId", vendorId)
+  async function handleAdd(data: QuoteFormData) {
+    const fd = new FormData()
+    fd.set("vendorId", data.vendorId)
+    fd.set("taxPercent", data.taxPercent.toString())
+    if (data.vendorReference) fd.set("vendorReference", data.vendorReference)
+    if (data.validUntil) fd.set("validUntil", data.validUntil)
+    if (data.notes) fd.set("notes", data.notes)
+    fd.set("items", JSON.stringify(data.items))
     const res = await addTicketQuote(ticketId, fd)
-    setLoading(false)
-    if (res?.error) setError(typeof res.error === "string" ? res.error : "Error")
-    else { ref.current?.reset(); setVendorId(""); setShowForm(false) }
+    if (!res?.error) setShowForm(false)
+    return res
   }
 
   async function handleFinalize() {
@@ -158,35 +154,79 @@ export function QuoteSection({
           {quotes.map(q => {
             const isPending = q.status === "PENDING"
             const isLocallySelected = localSelected.has(q.id)
+            const [expanded, setExp] = [expandedId === q.id, (b: boolean) => setExpandedId(b ? q.id : null)]
             return (
-              <div key={q.id} className={`flex items-center justify-between p-3 border rounded-lg ${
+              <div key={q.id} className={`border rounded-lg ${
                 q.status === "SELECTED" ? "border-emerald-300 bg-emerald-50/50" :
                 q.status === "REJECTED" ? "opacity-50" :
                 isLocallySelected ? "border-blue-300 bg-blue-50/30" : ""
               }`}>
-                <div className="flex items-center gap-2 min-w-0">
-                  {isPending && !isLocallySelected && <Clock className="size-4 text-muted-foreground shrink-0" />}
-                  {isPending && isLocallySelected && <CheckCircle2 className="size-4 text-blue-500 shrink-0" />}
-                  {q.status === "SELECTED" && <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />}
-                  {q.status === "REJECTED" && <XCircle className="size-4 text-muted-foreground shrink-0" />}
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{q.vendor.name}</p>
-                    {q.notes && <p className="text-xs text-muted-foreground truncate">{q.notes}</p>}
-                    {q.status === "REJECTED" && <p className="text-xs text-muted-foreground italic">No seleccionada</p>}
+                <div className="flex items-center justify-between p-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {isPending && !isLocallySelected && <Clock className="size-4 text-muted-foreground shrink-0" />}
+                    {isPending && isLocallySelected && <CheckCircle2 className="size-4 text-blue-500 shrink-0" />}
+                    {q.status === "SELECTED" && <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />}
+                    {q.status === "REJECTED" && <XCircle className="size-4 text-muted-foreground shrink-0" />}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{q.vendor.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {q.items?.length ?? 0} rubro{q.items?.length !== 1 ? "s" : ""}
+                        {q.validUntil && <span> · válida hasta {formatDate(new Date(q.validUntil))}</span>}
+                        {q.vendorReference && <span> · ref {q.vendorReference}</span>}
+                      </p>
+                      {q.status === "REJECTED" && <p className="text-xs text-muted-foreground italic">No seleccionada</p>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0 ml-3">
+                    <span className="text-sm font-medium tabular-nums">{formatGTQ(q.total)}</span>
+                    {q.items && q.items.length > 0 && (
+                      <button type="button" onClick={() => setExp(!expanded)} className="text-xs text-blue-600 hover:underline">
+                        {expanded ? "Ocultar" : "Ver"} detalle
+                      </button>
+                    )}
+                    {canApprove && isPending && !hasSelected && !approvalPending && (
+                      <Button
+                        size="sm"
+                        variant={isLocallySelected ? "default" : "outline"}
+                        onClick={() => toggleQuote(q.id)}
+                      >
+                        {isLocallySelected ? "✓ Quitar" : "Seleccionar"}
+                      </Button>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0 ml-3">
-                  <span className="text-sm font-medium tabular-nums">{formatGTQ(q.amount)}</span>
-                  {canApprove && isPending && !hasSelected && !approvalPending && (
-                    <Button
-                      size="sm"
-                      variant={isLocallySelected ? "default" : "outline"}
-                      onClick={() => toggleQuote(q.id)}
-                    >
-                      {isLocallySelected ? "✓ Quitar" : "Seleccionar"}
-                    </Button>
-                  )}
-                </div>
+                {expanded && q.items && q.items.length > 0 && (
+                  <div className="border-t p-3 bg-muted/20">
+                    <table className="w-full text-xs">
+                      <thead className="text-muted-foreground">
+                        <tr>
+                          <th className="text-left font-medium pb-1">Descripción</th>
+                          <th className="text-right font-medium pb-1 w-12">Cant.</th>
+                          <th className="text-left font-medium pb-1 w-16">Unidad</th>
+                          <th className="text-right font-medium pb-1 w-20">P. Unit.</th>
+                          <th className="text-right font-medium pb-1 w-20">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {q.items.map(it => (
+                          <tr key={it.id} className="border-t border-muted-foreground/10">
+                            <td className="py-1">{it.description}</td>
+                            <td className="text-right py-1">{it.quantity}</td>
+                            <td className="py-1">{it.unit ?? "—"}</td>
+                            <td className="text-right py-1 tabular-nums">{formatGTQ(it.unitPrice)}</td>
+                            <td className="text-right py-1 tabular-nums font-medium">{formatGTQ(it.total)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="text-muted-foreground">
+                        <tr><td colSpan={4} className="text-right pt-1">Subtotal</td><td className="text-right tabular-nums">{formatGTQ(q.subtotal ?? 0)}</td></tr>
+                        {(q.taxAmount ?? 0) > 0 && <tr><td colSpan={4} className="text-right">IVA</td><td className="text-right tabular-nums">{formatGTQ(q.taxAmount!)}</td></tr>}
+                        <tr><td colSpan={4} className="text-right font-medium text-foreground pt-1">Total</td><td className="text-right tabular-nums font-medium text-foreground">{formatGTQ(q.total)}</td></tr>
+                      </tfoot>
+                    </table>
+                    {q.notes && <p className="text-xs text-muted-foreground mt-2 italic">{q.notes}</p>}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -262,35 +302,17 @@ export function QuoteSection({
       )}
 
       {showForm && (
-        <form ref={ref} onSubmit={handleAdd} className="border rounded-lg p-4 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Proveedor *</Label>
-              <Select value={vendorId} onValueChange={setVendorId} required>
-                <SelectTrigger><SelectValue placeholder="Selecciona proveedor" /></SelectTrigger>
-                <SelectContent>
-                  {vendors.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Monto (Q) *</Label>
-              <Input name="amount" type="number" min="0.01" step="0.01" placeholder="0.00" required />
-            </div>
-            <div className="space-y-1 col-span-2">
-              <Label className="text-xs">Notas</Label>
-              <Textarea name="notes" rows={2} placeholder="Descripcion del trabajo..." />
-            </div>
-          </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
-          <div className="flex gap-2 items-center">
-            <Button size="sm" type="submit" disabled={loading}>{loading ? "..." : "Agregar"}</Button>
-            <Button size="sm" type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancelar</Button>
-            <p className="text-xs text-muted-foreground ml-1">
-              &gt;Q{authThreshold.toLocaleString()} requiere autorización · &gt;Q{projectThreshold.toLocaleString()} debe ser proyecto
-            </p>
-          </div>
-        </form>
+        <div className="border rounded-lg p-4">
+          <QuoteForm
+            context={{ type: "TICKET", id: ticketId }}
+            vendors={vendors}
+            onSubmit={handleAdd}
+            onCancel={() => setShowForm(false)}
+          />
+          <p className="text-xs text-muted-foreground mt-2">
+            &gt;Q{authThreshold.toLocaleString()} requiere autorización · &gt;Q{projectThreshold.toLocaleString()} debe ser proyecto
+          </p>
+        </div>
       )}
     </div>
   )

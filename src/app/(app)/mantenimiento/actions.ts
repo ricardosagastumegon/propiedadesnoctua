@@ -80,13 +80,49 @@ export async function updateTicketCost(id: string, actualCost: number, resolutio
 }
 
 export async function setPaymentMode(id: string, paymentMode: string, vendorId?: string) {
-  const { orgId } = await getSession()
-  await prisma.maintenanceRequest.updateMany({
-    where: { id, organizationId: orgId },
+  const { orgId, userId, actorName, authorityPolicy } = await getSession()
+  const ticket = await prisma.maintenanceRequest.findFirst({ where: { id, organizationId: orgId } })
+  if (!ticket) return { error: "Ticket no encontrado" }
+
+  await prisma.maintenanceRequest.update({
+    where: { id },
     data: { paymentMode, vendorId: vendorId || null },
   })
   await addTimeline(id, "NOTE", `Modo de pago: ${paymentMode}${vendorId ? " (con proveedor)" : ""}`)
+
+  // CONTADO mode: always requires authorization, regardless of amount
+  if (paymentMode === "CONTADO" && !ticket.approvalRequestId) {
+    if (!authorityPolicy || authorityPolicy === "NONE") {
+      return { error: "Sin autoridad para solicitar autorización de pago contado" }
+    }
+    const status = authorityPolicy === "ALONE" ? "PENDING" : "PENDING_COSIGN"
+    const approvalReq = await prisma.approvalRequest.create({
+      data: {
+        organizationId: orgId,
+        requestedById: userId,
+        entityType: "TICKET",
+        entityId: id,
+        title: `Pago Contado — ${ticket.ticketNumber}: ${ticket.title}`,
+        amount: ticket.totalAmount ?? ticket.estimatedCost ?? null,
+        notes: "Pago Contado: 100% en un solo pago — requiere autorización",
+        status,
+      },
+    })
+    await prisma.maintenanceRequest.update({
+      where: { id },
+      data: { approvalRequestId: approvalReq.id },
+    })
+    await addTimeline(id, "NOTE", "Pago Contado: enviado a autorización (100% en un solo pago)")
+    await logActivity({
+      orgId, entityType: "TICKET", entityId: id, action: "APPROVAL_REQUESTED",
+      actorId: userId, actorName,
+      metadata: { reason: "Pago Contado", amount: ticket.totalAmount },
+    })
+    revalidatePath("/autorizaciones")
+  }
+
   revalidatePath(`/mantenimiento/${id}`)
+  return { ok: true }
 }
 
 export async function addTicketQuote(ticketId: string, formData: FormData) {
@@ -95,15 +131,53 @@ export async function addTicketQuote(ticketId: string, formData: FormData) {
   if (!ticket) throw new Error("Ticket no encontrado")
 
   const vendorId = formData.get("vendorId") as string
-  const amount = parseFloat(formData.get("amount") as string) || 0
   const notes = formData.get("notes") as string || null
+  const vendorReference = formData.get("vendorReference") as string || null
+  const validUntilRaw = formData.get("validUntil") as string || null
+  const taxPercent = parseFloat((formData.get("taxPercent") as string) || "12")
+  const itemsJson = (formData.get("items") as string) || "[]"
 
-  if (!vendorId || !amount) return { error: "Proveedor y monto requeridos" }
+  if (!vendorId) return { error: "Proveedor requerido" }
 
-  await prisma.ticketQuote.create({ data: { ticketId, vendorId, amount, notes } })
-  await addTimeline(ticketId, "QUOTE_ADDED", `Cotizacion agregada: Q${amount.toFixed(2)}`)
-  await logActivity({ orgId, entityType: "TICKET", entityId: ticketId, action: "QUOTE_ADDED", actorId: userId, actorName, metadata: { amount, vendorId } })
+  let items: Array<{ description: string; quantity: number; unit: string | null; unitPrice: number; total: number }> = []
+  try { items = JSON.parse(itemsJson) } catch { return { error: "Items inválidos" } }
+  if (!items.length) return { error: "Agregá al menos un rubro" }
+
+  const subtotal = items.reduce((s, i) => s + (i.total || 0), 0)
+  const taxAmount = subtotal * (taxPercent / 100)
+  const total = subtotal + taxAmount
+
+  const quote = await prisma.quote.create({
+    data: {
+      organizationId: orgId,
+      ticketId,
+      vendorId,
+      vendorReference,
+      validUntil: validUntilRaw ? new Date(validUntilRaw) : null,
+      subtotal,
+      taxAmount,
+      taxPercent,
+      total,
+      status: "PENDING",
+      notes,
+      createdById: userId,
+      items: {
+        create: items.map((it, idx) => ({
+          description: it.description,
+          quantity: it.quantity,
+          unit: it.unit,
+          unitPrice: it.unitPrice,
+          total: it.total,
+          orderIndex: idx,
+        })),
+      },
+    },
+  })
+
+  await addTimeline(ticketId, "QUOTE_ADDED", `Cotización agregada: Q${total.toFixed(2)} (${items.length} rubros)`)
+  await logActivity({ orgId, entityType: "TICKET", entityId: ticketId, action: "QUOTE_ADDED", actorId: userId, actorName, metadata: { amount: total, vendorId, items: items.length } })
   revalidatePath(`/mantenimiento/${ticketId}`)
+  return { ok: true, quoteId: quote.id }
 }
 
 import { TICKET_AUTH_THRESHOLD, TICKET_PROJECT_THRESHOLD } from "./constants"
@@ -114,13 +188,13 @@ export async function finalizeTicketSelection(ticketId: string, selectedIds: str
   if (!ticket) throw new Error("Ticket no encontrado")
   if (!selectedIds.length) return { error: "Selecciona al menos una cotización" }
 
-  const selected = await prisma.ticketQuote.findMany({
+  const selected = await prisma.quote.findMany({
     where: { id: { in: selectedIds }, ticketId },
     include: { vendor: { select: { name: true } } },
   })
   if (selected.length !== selectedIds.length) return { error: "Cotizaciones inválidas" }
 
-  const total = selected.reduce((s, q) => s + q.amount, 0)
+  const total = selected.reduce((s, q) => s + q.total, 0)
   const vendorNames = selected.map(q => q.vendor.name).join(", ")
   const primaryVendorId = selected.length === 1 ? selected[0].vendorId : null
 
@@ -147,8 +221,8 @@ export async function finalizeTicketSelection(ticketId: string, selectedIds: str
       },
     })
     await prisma.$transaction(async (tx) => {
-      await tx.ticketQuote.updateMany({ where: { ticketId }, data: { status: "REJECTED" } })
-      await tx.ticketQuote.updateMany({ where: { id: { in: selectedIds } }, data: { status: "SELECTED" } })
+      await tx.quote.updateMany({ where: { ticketId }, data: { status: "REJECTED" } })
+      await tx.quote.updateMany({ where: { id: { in: selectedIds } }, data: { status: "SELECTED" } })
       await tx.maintenanceRequest.update({
         where: { id: ticketId },
         data: { totalAmount: total, approvalRequestId: approvalReq.id, vendorId: primaryVendorId },
@@ -164,8 +238,8 @@ export async function finalizeTicketSelection(ticketId: string, selectedIds: str
   // <Q1,000 total → direct, no authorization needed
   if (authorityPolicy === "ALONE" || authorityPolicy === "COSIGN_REQUIRED") {
     await prisma.$transaction(async (tx) => {
-      await tx.ticketQuote.updateMany({ where: { ticketId }, data: { status: "REJECTED" } })
-      await tx.ticketQuote.updateMany({ where: { id: { in: selectedIds } }, data: { status: "SELECTED" } })
+      await tx.quote.updateMany({ where: { ticketId }, data: { status: "REJECTED" } })
+      await tx.quote.updateMany({ where: { id: { in: selectedIds } }, data: { status: "SELECTED" } })
       await tx.maintenanceRequest.update({
         where: { id: ticketId },
         data: { totalAmount: total, status: "IN_PROGRESS", vendorId: primaryVendorId },
