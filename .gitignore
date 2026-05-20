@@ -43,3 +43,6 @@ next-env.d.ts
 # local sqlite dev db
 prisma/dev.db
 prisma/*.db-journal
+
+# old SQLite migrations (pre-Postgres migration)
+prisma/migrations_sqlite_backup/
