@@ -41,8 +41,11 @@ export function PropertyForm({ property, action, submitLabel = "Guardar" }: Prop
     setUploading(false)
   }
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({})
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setFieldErrors({})
     const fd = new FormData(formRef.current!)
     fd.set("type", type)
     fd.set("status", status)
@@ -51,7 +54,10 @@ export function PropertyForm({ property, action, submitLabel = "Guardar" }: Prop
     startTransition(async () => {
       const res = await action(fd)
       if (res?.error) {
-        toast.error("Verifica los campos e intenta de nuevo.")
+        const errs = (typeof res.error === "object" && res.error !== null) ? res.error as Record<string, string[]> : {}
+        setFieldErrors(errs)
+        const fieldList = Object.entries(errs).map(([k, v]) => `${k}: ${v?.join(", ") ?? "inválido"}`).join(" · ")
+        toast.error(fieldList || "Verifica los campos e intenta de nuevo.")
       } else if (res?.redirectTo) {
         router.push(res.redirectTo)
       }
@@ -87,6 +93,7 @@ export function PropertyForm({ property, action, submitLabel = "Guardar" }: Prop
           <div className="space-y-2">
             <Label htmlFor="name">Nombre *</Label>
             <Input id="name" name="name" defaultValue={property?.name} required />
+            {fieldErrors.name && <p className="text-xs text-destructive">{fieldErrors.name.join(", ")}</p>}
           </div>
           <div className="space-y-2">
             <Label htmlFor="alias">Alias</Label>
@@ -120,6 +127,7 @@ export function PropertyForm({ property, action, submitLabel = "Guardar" }: Prop
           <div className="sm:col-span-2 space-y-2">
             <Label htmlFor="addressLine">Direccion *</Label>
             <Input id="addressLine" name="addressLine" defaultValue={property?.addressLine} required />
+            {fieldErrors.addressLine && <p className="text-xs text-destructive">{fieldErrors.addressLine.join(", ")}</p>}
           </div>
           <div className="space-y-2">
             <Label htmlFor="zone">Zona / Colonia</Label>
@@ -128,6 +136,7 @@ export function PropertyForm({ property, action, submitLabel = "Guardar" }: Prop
           <div className="space-y-2">
             <Label htmlFor="city">Ciudad *</Label>
             <Input id="city" name="city" defaultValue={property?.city ?? "Guatemala"} required />
+            {fieldErrors.city && <p className="text-xs text-destructive">{fieldErrors.city.join(", ")}</p>}
           </div>
           <div className="space-y-2">
             <Label>Departamento *</Label>
