@@ -272,10 +272,26 @@ export async function addTicketPayment(ticketId: string, formData: FormData) {
 
   if (!amount || !method || !dateRaw) return { error: "Monto, método y fecha requeridos" }
 
+  // Validación: el ticket debe tener modo de pago definido
+  if (!ticket.paymentMode) {
+    return { error: "Debés definir el modo de pago del ticket antes de registrar pagos." }
+  }
+
+  // Validación: monto no puede exceder lo aprobado/cotizado
+  const approved = ticket.totalAmount ?? 0
+  if (approved > 0) {
+    const effectiveNewPaid = ticket.amountPaid + amount + (closesWithDiscount ? (discountAmount ?? 0) : 0)
+    if (effectiveNewPaid > approved + 0.01) {
+      const saldo = Math.max(0, approved - ticket.amountPaid - (closesWithDiscount ? (discountAmount ?? 0) : 0))
+      return { error: `El pago excede el monto aprobado. Saldo disponible: Q ${saldo.toFixed(2)}` }
+    }
+  }
+
   // Service Acceptance cap enforcement
   const check = await canMakePayment({
     entityType: "TICKET", entityId: ticketId,
     proposedAmount: amount, paymentMethod: method, orgId,
+    discountAmount: closesWithDiscount ? discountAmount : null,
   })
   if (!check.allowed) {
     return { error: check.reason ?? "Pago bloqueado por la regla de aceptación de servicios" }

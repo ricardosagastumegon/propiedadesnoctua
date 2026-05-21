@@ -7,6 +7,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 
+// Only inlined into the page when NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS === "true"
+// (no se setea en Vercel production → falsy → campos vacíos)
+const SHOW_DEMO = process.env.NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS === "true"
+
 export default function LoginPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -48,19 +52,29 @@ export default function LoginPage() {
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Correo</Label>
-              <Input id="email" name="email" type="email" defaultValue="demo@inmobiliaria.gt" required />
+              <Input
+                id="email" name="email" type="email" required
+                defaultValue={SHOW_DEMO ? "demo@inmobiliaria.gt" : ""}
+                autoComplete="email"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Contrasena</Label>
-              <Input id="password" name="password" type="password" defaultValue="demo1234" required />
+              <Input
+                id="password" name="password" type="password" required
+                defaultValue={SHOW_DEMO ? "demo1234" : ""}
+                autoComplete="current-password"
+              />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Ingresando..." : "Ingresar"}
             </Button>
           </form>
-          <p className="text-xs text-muted-foreground mt-6">
-            Demo: demo@inmobiliaria.gt / demo1234
-          </p>
+          {SHOW_DEMO && (
+            <p className="text-xs text-muted-foreground mt-6">
+              Demo: demo@inmobiliaria.gt / demo1234
+            </p>
+          )}
         </div>
       </div>
     </div>

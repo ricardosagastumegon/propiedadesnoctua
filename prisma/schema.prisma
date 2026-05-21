@@ -97,6 +97,7 @@ model ServiceAcceptance {
   entityId            String
   projectId           String?
   status              String    @default("PENDING")
+  version             Int       @default(0) // optimistic lock para evitar race conditions
   requestedById       String
   acceptedById        String?
   rejectedById        String?

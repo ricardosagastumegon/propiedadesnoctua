@@ -26,8 +26,10 @@ interface ProgressResult {
   total: number
   totalPaid: number
   totalPaidExcludingPettyCash: number
+  totalDiscountClosed: number  // suma de discountAmount en pagos con closesWithDiscount=true
   percentage: number
   percentageExcludingPettyCash: number
+  effectivePercentage: number  // (totalPaid + totalDiscountClosed) / total — cierra al 100% con descuento
   pending: number
 }
 
@@ -35,31 +37,41 @@ export async function getPaymentProgress(
   entityType: AcceptanceEntityType,
   entityId: string,
 ): Promise<ProgressResult> {
+  const empty: ProgressResult = {
+    total: 0, totalPaid: 0, totalPaidExcludingPettyCash: 0, totalDiscountClosed: 0,
+    percentage: 0, percentageExcludingPettyCash: 0, effectivePercentage: 0, pending: 0,
+  }
+
   if (entityType === "PARTIDA") {
     const p = await prisma.projectPartida.findUnique({
       where: { id: entityId },
       include: { payments: true },
     })
-    if (!p) return { total: 0, totalPaid: 0, totalPaidExcludingPettyCash: 0, percentage: 0, percentageExcludingPettyCash: 0, pending: 0 }
+    if (!p) return empty
     const total = p.amountApproved ?? 0
     const totalPaid = p.payments.reduce((s, x) => s + x.amount, 0)
     const totalPaidExcludingPettyCash = p.payments
       .filter(x => !PETTY_CASH_METHODS.includes(x.method))
       .reduce((s, x) => s + x.amount, 0)
+    const totalDiscountClosed = p.payments
+      .filter(x => x.closesWithDiscount && x.discountAmount != null)
+      .reduce((s, x) => s + (x.discountAmount ?? 0), 0)
     return {
       total,
       totalPaid,
       totalPaidExcludingPettyCash,
+      totalDiscountClosed,
       percentage: total > 0 ? (totalPaid / total) * 100 : 0,
       percentageExcludingPettyCash: total > 0 ? (totalPaidExcludingPettyCash / total) * 100 : 0,
-      pending: Math.max(0, total - totalPaid),
+      effectivePercentage: total > 0 ? ((totalPaid + totalDiscountClosed) / total) * 100 : 0,
+      pending: Math.max(0, total - totalPaid - totalDiscountClosed),
     }
   }
   const t = await prisma.maintenanceRequest.findUnique({
     where: { id: entityId },
     include: { ticketPayments: true, ticketQuotes: true },
   })
-  if (!t) return { total: 0, totalPaid: 0, totalPaidExcludingPettyCash: 0, percentage: 0, percentageExcludingPettyCash: 0, pending: 0 }
+  if (!t) return empty
   const selected = t.ticketQuotes.filter(q => q.status === "SELECTED")
   const total = selected.length > 0
     ? selected.reduce((s, q) => s + q.total, 0)
@@ -68,13 +80,18 @@ export async function getPaymentProgress(
   const totalPaidExcludingPettyCash = t.ticketPayments
     .filter(x => !PETTY_CASH_METHODS.includes(x.method))
     .reduce((s, x) => s + x.amount, 0)
+  const totalDiscountClosed = t.ticketPayments
+    .filter(x => x.closesWithDiscount && x.discountAmount != null)
+    .reduce((s, x) => s + (x.discountAmount ?? 0), 0)
   return {
     total,
     totalPaid,
     totalPaidExcludingPettyCash,
+    totalDiscountClosed,
     percentage: total > 0 ? (totalPaid / total) * 100 : 0,
     percentageExcludingPettyCash: total > 0 ? (totalPaidExcludingPettyCash / total) * 100 : 0,
-    pending: Math.max(0, total - totalPaid),
+    effectivePercentage: total > 0 ? ((totalPaid + totalDiscountClosed) / total) * 100 : 0,
+    pending: Math.max(0, total - totalPaid - totalDiscountClosed),
   }
 }
 
@@ -100,6 +117,8 @@ export interface CanMakePaymentInput {
   proposedAmount: number
   paymentMethod: string
   orgId: string
+  /** Si el pago propuesto es un cierre con descuento, monto del descuento. */
+  discountAmount?: number | null
 }
 
 export interface CanMakePaymentResult {
@@ -121,11 +140,13 @@ export async function canMakePayment(input: CanMakePaymentInput): Promise<CanMak
   const acceptance = await getActiveAcceptance(input.entityType, input.entityId)
   const hasAcceptance = acceptance?.status === "ACCEPTED"
 
-  const newPaid = progress.totalPaid + input.proposedAmount
-  const newPercentage = progress.total > 0 ? (newPaid / progress.total) * 100 : 0
+  // Cierre con descuento: el descuento cuenta como "pagado efectivo" para el cap.
+  const proposedDiscount = input.discountAmount ?? 0
+  const newEffectivePaid = progress.totalPaid + input.proposedAmount + progress.totalDiscountClosed + proposedDiscount
+  const newPercentage = progress.total > 0 ? (newEffectivePaid / progress.total) * 100 : 0
   const baseResult = {
     cap,
-    currentPercentage: progress.percentage,
+    currentPercentage: progress.effectivePercentage,
     newPercentage,
     hasAcceptance,
     isPettyCash,
@@ -148,7 +169,7 @@ export async function canMakePayment(input: CanMakePaymentInput): Promise<CanMak
     return { ...baseResult, allowed: true, needsAcceptanceRequest: false }
   }
 
-  const maxAllowedAmount = Math.max(0, (progress.total * cap) / 100 - progress.totalPaid)
+  const maxAllowedAmount = Math.max(0, (progress.total * cap) / 100 - progress.totalPaid - progress.totalDiscountClosed)
   return {
     ...baseResult,
     allowed: false,
@@ -336,8 +357,10 @@ export async function acceptService(params: AcceptParams) {
     .update(JSON.stringify(verificationPayload))
     .digest("hex")
 
-  const updated = await prisma.serviceAcceptance.update({
-    where: { id: acceptanceId },
+  // Optimistic lock: solo actualiza si version coincide con la leída.
+  // Si otro acceptor ya procesó esta aceptación, updateMany retorna count=0.
+  const lockResult = await prisma.serviceAcceptance.updateMany({
+    where: { id: acceptanceId, version: acceptance.version, status: "PENDING" },
     data: {
       status: "ACCEPTED",
       acceptedById: actorId,
@@ -346,11 +369,20 @@ export async function acceptService(params: AcceptParams) {
       rating,
       notes: notes ?? null,
       verificationHash,
-      photos: {
-        create: photos.map(p => ({ url: p.url, caption: p.caption ?? null })),
-      },
+      version: { increment: 1 },
     },
   })
+  if (lockResult.count === 0) {
+    throw new Error("Esta aceptación ya fue procesada por otra persona. Recargá la página para ver el estado actual.")
+  }
+  // Crear las fotos (no se podía en updateMany — se hace en operación aparte)
+  if (photos.length > 0) {
+    await prisma.serviceAcceptancePhoto.createMany({
+      data: photos.map(p => ({ acceptanceId, url: p.url, caption: p.caption ?? null })),
+    })
+  }
+  const updated = await prisma.serviceAcceptance.findUnique({ where: { id: acceptanceId } })
+  if (!updated) throw new Error("Aceptación no encontrada tras actualizar")
 
   // Notify the requester
   await prisma.notification.create({
@@ -402,16 +434,23 @@ export async function rejectServiceAcceptance(params: RejectParams) {
   if (acceptance.requestedById === actorId) throw new Error("No puedes rechazar tu propia solicitud")
   if (!rejectionReason?.trim()) throw new Error("Razón de rechazo requerida")
 
-  const updated = await prisma.serviceAcceptance.update({
-    where: { id: acceptanceId },
+  // Optimistic lock
+  const lockResult = await prisma.serviceAcceptance.updateMany({
+    where: { id: acceptanceId, version: acceptance.version, status: "PENDING" },
     data: {
       status: "REJECTED",
       rejectedById: actorId,
       rejectedAt: new Date(),
       rejectionReason,
       requiredCorrections: requiredCorrections ?? null,
+      version: { increment: 1 },
     },
   })
+  if (lockResult.count === 0) {
+    throw new Error("Esta aceptación ya fue procesada por otra persona. Recargá la página para ver el estado actual.")
+  }
+  const updated = await prisma.serviceAcceptance.findUnique({ where: { id: acceptanceId } })
+  if (!updated) throw new Error("Aceptación no encontrada tras actualizar")
 
   // Return entity to correction state
   if (acceptance.entityType === "PARTIDA") {

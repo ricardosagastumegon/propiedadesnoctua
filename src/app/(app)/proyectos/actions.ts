@@ -308,12 +308,28 @@ export async function addPartidaPayment(partidaId: string, projectId: string, fo
   const discountAmount = formData.get("discountAmount") ? parseFloat(formData.get("discountAmount") as string) : null
   const discountReason = formData.get("discountReason") as string || null
 
+  // Validación pre-pago: monto no puede exceder lo aprobado
+  const existingPartida = await prisma.projectPartida.findFirst({
+    where: { id: partidaId, project: { organizationId: orgId } },
+    select: { amountApproved: true, amountPaid: true, name: true },
+  })
+  if (!existingPartida) return { error: "Partida no encontrada" }
+  const approved = existingPartida.amountApproved ?? 0
+  if (approved > 0) {
+    const effectiveNewPaid = existingPartida.amountPaid + parsed.data.amount + (closesWithDiscount ? (discountAmount ?? 0) : 0)
+    if (effectiveNewPaid > approved + 0.01) {
+      const saldo = Math.max(0, approved - existingPartida.amountPaid - (closesWithDiscount ? (discountAmount ?? 0) : 0))
+      return { error: `El pago excede el monto aprobado. Saldo disponible: Q ${saldo.toFixed(2)}` }
+    }
+  }
+
   // Service Acceptance cap enforcement
   const check = await canMakePayment({
     entityType: "PARTIDA", entityId: partidaId,
     proposedAmount: parsed.data.amount,
     paymentMethod: parsed.data.method,
     orgId,
+    discountAmount: closesWithDiscount ? discountAmount : null,
   })
   if (!check.allowed) {
     return { error: check.reason ?? "Pago bloqueado por la regla de aceptación de servicios" }
