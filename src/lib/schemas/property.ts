@@ -1,12 +1,14 @@
 import { z } from "zod"
 
+// Zod 4: nullish() handles both undefined and null atomically.
+// preprocess returns null for empty/missing values so the chain reaches nullish().
 const numOpt = () => z.preprocess(
-  v => (v === "" || v === null || v === undefined) ? undefined : v,
-  z.coerce.number().optional().nullable()
+  v => (v === "" || v === null || v === undefined) ? null : v,
+  z.coerce.number().nullish()
 )
 const intOpt = () => z.preprocess(
-  v => (v === "" || v === null || v === undefined) ? undefined : v,
-  z.coerce.number().int().optional().nullable()
+  v => (v === "" || v === null || v === undefined) ? null : v,
+  z.coerce.number().int().nullish()
 )
 
 export const propertySchema = z.object({
