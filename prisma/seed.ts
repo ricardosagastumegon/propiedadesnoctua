@@ -1411,6 +1411,10 @@ async function main() {
   await log({ entityType: "APPROVAL", entityId: arPartidaContado.id, projectId: proj3.id, action: "APPROVAL_REQUESTED", actorId: assistant2.id, actorName: "Pedro Vasquez", daysAgo: 1, metadata: { reason: "Pago Contado", amount: 3500, partida: partidaContado.name } })
 
   // 4) SION tenant — re-provisioned alongside demo data (idempotent)
+  // IMPORTANT: SION uses a DIFFERENT password than the demo users.
+  // Demo users: "demo1234" (variable `hash` above)
+  // Angeles SION: "angeles" (separate hash below)
+  const sionPasswordHash = await bcrypt.hash("angeles", 10)
   const sionOrg = await prisma.organization.upsert({
     where: { slug: "sion" },
     update: { name: "SION" },
@@ -1425,11 +1429,11 @@ async function main() {
     where: { email: "angelesquezadaoch@gmail.com" },
     update: {
       name: "Angeles Quezada", role: "ADMIN", authorityPolicy: "ALONE",
-      canAcceptServices: true, organizationId: sionOrg.id, passwordHash: hash, isActive: true,
+      canAcceptServices: true, organizationId: sionOrg.id, passwordHash: sionPasswordHash, isActive: true,
     },
     create: {
       email: "angelesquezadaoch@gmail.com", name: "Angeles Quezada",
-      passwordHash: hash, role: "ADMIN", authorityPolicy: "ALONE",
+      passwordHash: sionPasswordHash, role: "ADMIN", authorityPolicy: "ALONE",
       canAcceptServices: true, organizationId: sionOrg.id, isActive: true,
     },
   })
