@@ -10,6 +10,7 @@ import {
   type AcceptanceEntityType,
 } from "@/lib/service-acceptance"
 import { logError } from "@/lib/observability"
+import { tryGuard } from "@/lib/action-guard"
 
 async function getSession() {
   const session = await auth()
@@ -21,6 +22,8 @@ async function getSession() {
 }
 
 export async function requestAcceptance(entityType: AcceptanceEntityType, entityId: string) {
+  const g = await tryGuard({ module: "aceptaciones", action: "create" })
+  if ("error" in g) throw new Error(g.error)
   const { orgId, userId, actorName } = await getSession()
   const acceptance = await libRequest({
     orgId,
@@ -40,6 +43,8 @@ export async function requestAcceptance(entityType: AcceptanceEntityType, entity
 }
 
 export async function acceptServiceAction(formData: FormData) {
+  const g = await tryGuard({ module: "aceptaciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
   const { orgId, userId, actorName } = await getSession()
   const acceptanceId = formData.get("acceptanceId") as string
   const rating = parseInt(formData.get("rating") as string, 10) || 0
@@ -70,6 +75,8 @@ export async function acceptServiceAction(formData: FormData) {
 }
 
 export async function rejectServiceAction(formData: FormData) {
+  const g = await tryGuard({ module: "aceptaciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
   const { orgId, userId, actorName } = await getSession()
   const acceptanceId = formData.get("acceptanceId") as string
   const rejectionReason = (formData.get("rejectionReason") as string) || ""

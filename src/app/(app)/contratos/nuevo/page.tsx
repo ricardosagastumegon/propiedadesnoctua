@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { PageHeader } from "@/components/ui/page-header"
 import { ContractForm } from "../_components/contract-form"
 import { createContract } from "../actions"
+import { can } from "@/lib/permissions"
 
 export default async function NuevoContratoPage({
   searchParams,
@@ -13,6 +14,8 @@ export default async function NuevoContratoPage({
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  const user = { id: session.user.id, role: session.user.role, organizationId: orgId }
+  if (!can(user, "contratos", "create")) redirect("/contratos")
   const sp = await searchParams
 
   const [properties, tenants] = await Promise.all([

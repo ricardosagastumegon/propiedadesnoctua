@@ -32,7 +32,10 @@ export function ServiceLogSection({ assetId, logs }: { assetId: string; logs: Lo
     setError({})
     const fd = new FormData(ref.current!)
     const res = await createServiceLog(assetId, fd)
-    if (res?.error) { setError(res.error); setLoading(false) }
+    if (res?.error) {
+      setError(typeof res.error === "string" ? { _form: [res.error] } : res.error)
+      setLoading(false)
+    }
     else { setOpen(false); setLoading(false) }
   }
 

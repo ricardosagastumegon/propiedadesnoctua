@@ -4,11 +4,14 @@ import { prisma } from "@/lib/prisma"
 import { PageHeader } from "@/components/ui/page-header"
 import { QuoteForm } from "../_components/quote-form"
 import { createQuote } from "../actions"
+import { can } from "@/lib/permissions"
 
 export default async function NuevaCotizacionPage({ searchParams }: { searchParams: Promise<{ vendorId?: string; projectId?: string; partidaId?: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  const user = { id: session.user.id, role: session.user.role, organizationId: orgId }
+  if (!can(user, "cotizaciones", "create")) redirect("/cotizaciones")
   const sp = await searchParams
 
   const [vendors, projects, partidas] = await Promise.all([

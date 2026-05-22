@@ -4,11 +4,14 @@ import { prisma } from "@/lib/prisma"
 import { PageHeader } from "@/components/ui/page-header"
 import { AssetForm } from "../_components/asset-form"
 import { createAsset } from "../actions"
+import { can } from "@/lib/permissions"
 
 export default async function NuevoActivoPage({ searchParams }: { searchParams: Promise<{ propertyId?: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  const user = { id: session.user.id, role: session.user.role, organizationId: orgId }
+  if (!can(user, "activos", "create")) redirect("/activos")
   const sp = await searchParams
 
   const properties = await prisma.property.findMany({ where: { organizationId: orgId }, orderBy: { name: "asc" } })

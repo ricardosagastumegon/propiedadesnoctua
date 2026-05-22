@@ -18,7 +18,7 @@ export function OrgForm({ org, prepaymentCap }: { org: { id: string; name: strin
     const fd = new FormData(ref.current!)
     const res = await updateOrganization(fd)
     setLoading(false)
-    if (res?.error) setError(res.error)
+    if (res?.error) setError(typeof res.error === "string" ? { _form: [res.error] } : res.error)
     else { setSaved(true); setTimeout(() => setSaved(false), 2000) }
   }
 

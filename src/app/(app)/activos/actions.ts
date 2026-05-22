@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { assetSchema, serviceLogSchema } from "@/lib/schemas/asset"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { tryGuard, guardAction } from "@/lib/action-guard"
 
 async function getOrgId() {
   const session = await auth()
@@ -11,8 +12,17 @@ async function getOrgId() {
   return session.user.organizationId
 }
 
+async function assetPropertyId(assetId: string): Promise<string | null> {
+  const a = await prisma.asset.findUnique({ where: { id: assetId }, select: { propertyId: true } })
+  return a?.propertyId ?? null
+}
+
 export async function createAsset(formData: FormData) {
-  const orgId = await getOrgId()
+  const propertyId = (formData.get("propertyId") as string) || null
+  const g = await tryGuard({ module: "activos", action: "create", propertyId })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
+
   const raw = Object.fromEntries(formData)
   const parsed = assetSchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
@@ -31,7 +41,11 @@ export async function createAsset(formData: FormData) {
 }
 
 export async function updateAsset(id: string, formData: FormData) {
-  const orgId = await getOrgId()
+  const propertyId = await assetPropertyId(id)
+  const g = await tryGuard({ module: "activos", action: "edit", propertyId })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
+
   const raw = Object.fromEntries(formData)
   const parsed = assetSchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
@@ -51,6 +65,8 @@ export async function updateAsset(id: string, formData: FormData) {
 }
 
 export async function deleteAsset(id: string) {
+  const propertyId = await assetPropertyId(id)
+  await guardAction({ module: "activos", action: "delete", propertyId })
   const orgId = await getOrgId()
   await prisma.asset.deleteMany({ where: { id, organizationId: orgId } })
   revalidatePath("/activos")
@@ -58,7 +74,11 @@ export async function deleteAsset(id: string) {
 }
 
 export async function createServiceLog(assetId: string, formData: FormData) {
-  const orgId = await getOrgId()
+  const propertyId = await assetPropertyId(assetId)
+  const g = await tryGuard({ module: "activos", action: "edit", propertyId })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
+
   const asset = await prisma.asset.findFirst({ where: { id: assetId, organizationId: orgId } })
   if (!asset) throw new Error("Activo no encontrado")
 
@@ -78,12 +98,19 @@ export async function createServiceLog(assetId: string, formData: FormData) {
 }
 
 export async function deleteServiceLog(id: string, assetId: string) {
+  const propertyId = await assetPropertyId(assetId)
+  const g = await tryGuard({ module: "activos", action: "edit", propertyId })
+  if ("error" in g) return
   await prisma.assetServiceLog.delete({ where: { id } })
   revalidatePath(`/activos/${assetId}`)
 }
 
 export async function createAssetRecord(assetId: string, formData: FormData) {
-  const orgId = await getOrgId()
+  const propertyId = await assetPropertyId(assetId)
+  const g = await tryGuard({ module: "activos", action: "edit", propertyId })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
+
   const asset = await prisma.asset.findFirst({ where: { id: assetId, organizationId: orgId } })
   if (!asset) return { error: "Activo no encontrado" }
 
@@ -112,6 +139,9 @@ export async function createAssetRecord(assetId: string, formData: FormData) {
 }
 
 export async function deleteAssetRecord(recordId: string, assetId: string) {
+  const propertyId = await assetPropertyId(assetId)
+  const g = await tryGuard({ module: "activos", action: "edit", propertyId })
+  if ("error" in g) return
   await prisma.assetRecord.delete({ where: { id: recordId } })
   revalidatePath(`/activos/${assetId}`)
 }

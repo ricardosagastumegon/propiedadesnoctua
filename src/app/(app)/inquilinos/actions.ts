@@ -1,18 +1,15 @@
 "use server"
-import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { tenantSchema } from "@/lib/schemas/tenant"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-
-async function getOrgId() {
-  const session = await auth()
-  if (!session) throw new Error("No autenticado")
-  return session.user.organizationId
-}
+import { tryGuard, guardAction } from "@/lib/action-guard"
 
 export async function createTenant(formData: FormData) {
-  const orgId = await getOrgId()
+  const g = await tryGuard({ module: "inquilinos", action: "create" })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
+
   const raw = Object.fromEntries(formData)
   const parsed = tenantSchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
@@ -25,7 +22,10 @@ export async function createTenant(formData: FormData) {
 }
 
 export async function updateTenant(id: string, formData: FormData) {
-  const orgId = await getOrgId()
+  const g = await tryGuard({ module: "inquilinos", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
+
   const raw = Object.fromEntries(formData)
   const parsed = tenantSchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
@@ -40,8 +40,8 @@ export async function updateTenant(id: string, formData: FormData) {
 }
 
 export async function deleteTenant(id: string) {
-  const orgId = await getOrgId()
-  await prisma.tenant.deleteMany({ where: { id, organizationId: orgId } })
+  const user = await guardAction({ module: "inquilinos", action: "delete" })
+  await prisma.tenant.deleteMany({ where: { id, organizationId: user.organizationId } })
   revalidatePath("/inquilinos")
   redirect("/inquilinos")
 }

@@ -35,7 +35,10 @@ export function CostList({ projectId, costs }: { projectId: string; costs: Cost[
     const fd = new FormData(ref.current!)
     fd.set("type", type)
     const res = await addProjectCost(projectId, fd)
-    if (res?.error) { setError(res.error); setLoading(false) }
+    if (res?.error) {
+      setError(typeof res.error === "string" ? { _form: [res.error] } : res.error)
+      setLoading(false)
+    }
     else { setOpen(false); setLoading(false); setError({}) }
   }
 

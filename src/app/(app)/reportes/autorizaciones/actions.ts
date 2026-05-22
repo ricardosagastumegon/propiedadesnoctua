@@ -2,6 +2,7 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
+import { tryGuard } from "@/lib/action-guard"
 
 async function getIds() {
   const session = await auth()
@@ -13,6 +14,8 @@ async function getIds() {
 }
 
 export async function markOrphanRejected(id: string) {
+  const g = await tryGuard({ module: "autorizaciones", action: "edit" })
+  if ("error" in g) return
   const { orgId, userId } = await getIds()
   await prisma.approvalRequest.updateMany({
     where: { id, organizationId: orgId },
@@ -28,6 +31,8 @@ export async function markOrphanRejected(id: string) {
 }
 
 export async function forceApprove(id: string) {
+  const g = await tryGuard({ module: "autorizaciones", action: "edit" })
+  if ("error" in g) return
   const { orgId, userId } = await getIds()
   await prisma.approvalRequest.updateMany({
     where: { id, organizationId: orgId },

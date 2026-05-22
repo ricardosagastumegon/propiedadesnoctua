@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import bcrypt from "bcryptjs"
+import { tryGuard } from "@/lib/action-guard"
 
 async function getOrgId() {
   const session = await auth()
@@ -18,7 +19,9 @@ async function getUserId() {
 }
 
 export async function updateOrganization(formData: FormData) {
-  const orgId = await getOrgId()
+  const g = await tryGuard({ module: "configuracion", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
   const name = formData.get("name") as string
   const taxId = formData.get("taxId") as string || null
 
@@ -66,7 +69,9 @@ export async function changePassword(formData: FormData) {
 }
 
 export async function createUser(formData: FormData) {
-  const orgId = await getOrgId()
+  const g = await tryGuard({ module: "configuracion", action: "create" })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
   const name = formData.get("name") as string
   const email = formData.get("email") as string
   const role = formData.get("role") as string || "VIEWER"
@@ -85,7 +90,9 @@ export async function createUser(formData: FormData) {
 }
 
 export async function toggleUserActive(userId: string, isActive: boolean) {
-  const orgId = await getOrgId()
+  const g = await tryGuard({ module: "configuracion", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
   const me = await getUserId()
   if (userId === me) return { error: "No puedes desactivar tu propia cuenta" }
   await prisma.user.updateMany({ where: { id: userId, organizationId: orgId }, data: { isActive } })
@@ -93,14 +100,16 @@ export async function toggleUserActive(userId: string, isActive: boolean) {
 }
 
 export async function updateUserRole(userId: string, role: string) {
-  const orgId = await getOrgId()
-  await prisma.user.updateMany({ where: { id: userId, organizationId: orgId }, data: { role } })
+  const g = await tryGuard({ module: "configuracion", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  await prisma.user.updateMany({ where: { id: userId, organizationId: g.user.organizationId }, data: { role } })
   revalidatePath("/configuracion")
 }
 
 export async function updateUserAuthorityPolicy(userId: string, authorityPolicy: string) {
-  const orgId = await getOrgId()
-  await prisma.user.updateMany({ where: { id: userId, organizationId: orgId }, data: { authorityPolicy } })
+  const g = await tryGuard({ module: "configuracion", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  await prisma.user.updateMany({ where: { id: userId, organizationId: g.user.organizationId }, data: { authorityPolicy } })
   revalidatePath("/configuracion")
 }
 
@@ -134,7 +143,9 @@ export async function updatePrepaymentCap(formData: FormData) {
 }
 
 export async function setCosignPolicy(userId: string, cosignerIds: string[]) {
-  const orgId = await getOrgId()
+  const g = await tryGuard({ module: "configuracion", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
   const user = await prisma.user.findFirst({ where: { id: userId, organizationId: orgId } })
   if (!user) return { error: "Usuario no encontrado" }
 

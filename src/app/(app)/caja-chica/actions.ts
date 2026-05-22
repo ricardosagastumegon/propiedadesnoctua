@@ -2,6 +2,7 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
+import { tryGuard } from "@/lib/action-guard"
 
 async function getSession() {
   const session = await auth()
@@ -14,6 +15,8 @@ async function getSession() {
 }
 
 export async function initPettyCash(propertyId: string) {
+  const g = await tryGuard({ module: "cajaChica", action: "create", propertyId })
+  if ("error" in g) throw new Error(g.error)
   const { orgId } = await getSession()
   const existing = await prisma.pettyCash.findUnique({ where: { propertyId } })
   if (existing) return existing
@@ -25,6 +28,8 @@ export async function initPettyCash(propertyId: string) {
 }
 
 export async function registerExpense(propertyId: string, formData: FormData) {
+  const g = await tryGuard({ module: "cajaChica", action: "create", propertyId })
+  if ("error" in g) return { error: g.error }
   const { orgId } = await getSession()
   const pc = await prisma.pettyCash.findUnique({ where: { propertyId } })
   if (!pc || pc.organizationId !== orgId) throw new Error("Caja no encontrada")
@@ -61,6 +66,8 @@ export async function registerExpense(propertyId: string, formData: FormData) {
 }
 
 export async function replenishPettyCash(propertyId: string, formData: FormData) {
+  const g = await tryGuard({ module: "cajaChica", action: "create", propertyId })
+  if ("error" in g) return { error: g.error }
   const { orgId, userId, authorityPolicy } = await getSession()
   const pc = await prisma.pettyCash.findUnique({ where: { propertyId }, include: { property: true } })
   if (!pc || pc.organizationId !== orgId) throw new Error("Caja no encontrada")
@@ -106,6 +113,8 @@ export async function replenishPettyCash(propertyId: string, formData: FormData)
 }
 
 export async function approveReplenishment(approvalId: string, propertyId: string) {
+  const g = await tryGuard({ module: "autorizaciones", action: "edit", propertyId })
+  if ("error" in g) throw new Error(g.error)
   const { orgId, userId } = await getSession()
   const req = await prisma.approvalRequest.findFirst({
     where: { id: approvalId, organizationId: orgId },
@@ -139,6 +148,8 @@ export async function approveReplenishment(approvalId: string, propertyId: strin
 }
 
 export async function adjustBalance(propertyId: string, formData: FormData) {
+  const g = await tryGuard({ module: "cajaChica", action: "edit", propertyId })
+  if ("error" in g) return { error: g.error }
   const { orgId } = await getSession()
   const pc = await prisma.pettyCash.findUnique({ where: { propertyId } })
   if (!pc || pc.organizationId !== orgId) throw new Error("Caja no encontrada")

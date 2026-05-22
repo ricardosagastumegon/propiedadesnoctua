@@ -1,18 +1,15 @@
 "use server"
-import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { employeeSchema } from "@/lib/schemas/employee"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-
-async function getOrgId() {
-  const session = await auth()
-  if (!session) throw new Error("No autenticado")
-  return session.user.organizationId
-}
+import { tryGuard, guardAction } from "@/lib/action-guard"
 
 export async function createEmployee(formData: FormData) {
-  const orgId = await getOrgId()
+  const g = await tryGuard({ module: "empleados", action: "create" })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
+
   const raw = Object.fromEntries(formData)
   const parsed = employeeSchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
@@ -31,7 +28,10 @@ export async function createEmployee(formData: FormData) {
 }
 
 export async function updateEmployee(id: string, formData: FormData) {
-  const orgId = await getOrgId()
+  const g = await tryGuard({ module: "empleados", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
+
   const raw = Object.fromEntries(formData)
   const parsed = employeeSchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
@@ -51,8 +51,8 @@ export async function updateEmployee(id: string, formData: FormData) {
 }
 
 export async function deleteEmployee(id: string) {
-  const orgId = await getOrgId()
-  await prisma.employee.deleteMany({ where: { id, organizationId: orgId } })
+  const user = await guardAction({ module: "empleados", action: "delete" })
+  await prisma.employee.deleteMany({ where: { id, organizationId: user.organizationId } })
   revalidatePath("/empleados")
   redirect("/empleados")
 }

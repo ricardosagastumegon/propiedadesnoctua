@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { logActivity } from "@/lib/activity-log"
 import { revalidatePath } from "next/cache"
+import { tryGuard } from "@/lib/action-guard"
 
 async function getIds() {
   const session = await auth()
@@ -22,6 +23,8 @@ async function getApprovalContext(id: string, orgId: string) {
 }
 
 export async function approveRequest(id: string) {
+  const g = await tryGuard({ module: "autorizaciones", action: "edit" })
+  if ("error" in g) throw new Error(g.error)
   const { userId, orgId, actorName } = await getIds()
   const req = await getApprovalContext(id, orgId)
   await prisma.approvalRequest.updateMany({
@@ -67,6 +70,8 @@ export async function approveRequest(id: string) {
 }
 
 export async function rejectRequest(id: string, reason: string) {
+  const g = await tryGuard({ module: "autorizaciones", action: "edit" })
+  if ("error" in g) throw new Error(g.error)
   const { userId, orgId, actorName } = await getIds()
   const req = await getApprovalContext(id, orgId)
   await prisma.approvalRequest.updateMany({
@@ -82,6 +87,8 @@ export async function rejectRequest(id: string, reason: string) {
 }
 
 export async function cosignRequest(id: string) {
+  const g = await tryGuard({ module: "autorizaciones", action: "edit" })
+  if ("error" in g) throw new Error(g.error)
   const { userId, orgId, actorName } = await getIds()
   const req = await getApprovalContext(id, orgId)
   await prisma.approvalRequest.updateMany({

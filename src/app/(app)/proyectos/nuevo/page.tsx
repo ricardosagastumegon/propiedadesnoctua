@@ -4,11 +4,14 @@ import { prisma } from "@/lib/prisma"
 import { PageHeader } from "@/components/ui/page-header"
 import { ProjectForm } from "../_components/project-form"
 import { createProject } from "../actions"
+import { can } from "@/lib/permissions"
 
 export default async function NuevoProyectoPage({ searchParams }: { searchParams: Promise<{ propertyId?: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  const user = { id: session.user.id, role: session.user.role, organizationId: orgId }
+  if (!can(user, "proyectos", "create")) redirect("/proyectos")
   const sp = await searchParams
 
   const properties = await prisma.property.findMany({ where: { organizationId: orgId }, orderBy: { name: "asc" } })

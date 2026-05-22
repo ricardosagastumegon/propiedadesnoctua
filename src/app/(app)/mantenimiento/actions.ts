@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activity-log"
 import { canMakePayment } from "@/lib/service-acceptance"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { tryGuard, guardAction, ActionForbiddenError } from "@/lib/action-guard"
 
 async function getSession() {
   const session = await auth()
@@ -18,6 +19,12 @@ async function getSession() {
   }
 }
 
+/** Resuelve el propertyId de un ticket — para guard. */
+async function ticketPropertyId(ticketId: string): Promise<string | null> {
+  const t = await prisma.maintenanceRequest.findUnique({ where: { id: ticketId }, select: { propertyId: true } })
+  return t?.propertyId ?? null
+}
+
 async function nextTicketNumber(orgId: string) {
   const count = await prisma.maintenanceRequest.count({ where: { organizationId: orgId } })
   return `M-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`
@@ -28,6 +35,9 @@ async function addTimeline(ticketId: string, type: string, message: string, meta
 }
 
 export async function createTicket(formData: FormData) {
+  const propertyId = (formData.get("propertyId") as string) || null
+  const g = await tryGuard({ module: "mantenimiento", action: "create", propertyId })
+  if ("error" in g) return { error: g.error }
   const { orgId, userId, actorName } = await getSession()
   const raw = Object.fromEntries(formData)
   const parsed = maintenanceSchema.safeParse(raw)
@@ -52,6 +62,9 @@ export async function createTicket(formData: FormData) {
 }
 
 export async function updateTicketStatus(id: string, status: string, assigneeId?: string) {
+  const propertyId = await ticketPropertyId(id)
+  const g = await tryGuard({ module: "mantenimiento", action: "edit", propertyId })
+  if ("error" in g) return
   const { orgId, userId, actorName } = await getSession()
   const now = new Date()
   await prisma.maintenanceRequest.updateMany({
@@ -70,6 +83,9 @@ export async function updateTicketStatus(id: string, status: string, assigneeId?
 }
 
 export async function updateTicketCost(id: string, actualCost: number, resolutionNotes: string) {
+  const propertyId = await ticketPropertyId(id)
+  const g = await tryGuard({ module: "mantenimiento", action: "edit", propertyId })
+  if ("error" in g) return
   const { orgId } = await getSession()
   await prisma.maintenanceRequest.updateMany({
     where: { id, organizationId: orgId },
@@ -80,6 +96,9 @@ export async function updateTicketCost(id: string, actualCost: number, resolutio
 }
 
 export async function setPaymentMode(id: string, paymentMode: string, vendorId?: string) {
+  const propertyId = await ticketPropertyId(id)
+  const g = await tryGuard({ module: "mantenimiento", action: "edit", propertyId })
+  if ("error" in g) return { error: g.error }
   const { orgId, userId, actorName, authorityPolicy } = await getSession()
   const ticket = await prisma.maintenanceRequest.findFirst({ where: { id, organizationId: orgId } })
   if (!ticket) return { error: "Ticket no encontrado" }
@@ -126,6 +145,9 @@ export async function setPaymentMode(id: string, paymentMode: string, vendorId?:
 }
 
 export async function addTicketQuote(ticketId: string, formData: FormData) {
+  const propertyId = await ticketPropertyId(ticketId)
+  const g = await tryGuard({ module: "mantenimiento", action: "edit", propertyId })
+  if ("error" in g) return { error: g.error }
   const { orgId, userId, actorName } = await getSession()
   const ticket = await prisma.maintenanceRequest.findFirst({ where: { id: ticketId, organizationId: orgId } })
   if (!ticket) throw new Error("Ticket no encontrado")
@@ -183,6 +205,9 @@ export async function addTicketQuote(ticketId: string, formData: FormData) {
 import { TICKET_AUTH_THRESHOLD, TICKET_PROJECT_THRESHOLD } from "./constants"
 
 export async function finalizeTicketSelection(ticketId: string, selectedIds: string[]) {
+  const propertyId = await ticketPropertyId(ticketId)
+  const g = await tryGuard({ module: "mantenimiento", action: "edit", propertyId })
+  if ("error" in g) return { error: g.error }
   const { orgId, authorityPolicy, userId, actorName } = await getSession()
   const ticket = await prisma.maintenanceRequest.findFirst({ where: { id: ticketId, organizationId: orgId } })
   if (!ticket) throw new Error("Ticket no encontrado")
@@ -255,6 +280,9 @@ export async function finalizeTicketSelection(ticketId: string, selectedIds: str
 }
 
 export async function addTicketPayment(ticketId: string, formData: FormData) {
+  const propertyId = await ticketPropertyId(ticketId)
+  const g = await tryGuard({ module: "pagos", action: "create", propertyId })
+  if ("error" in g) return { error: g.error }
   const { orgId, userId, actorName } = await getSession()
   const ticket = await prisma.maintenanceRequest.findFirst({ where: { id: ticketId, organizationId: orgId } })
   if (!ticket) throw new Error("Ticket no encontrado")
@@ -309,6 +337,9 @@ export async function addTicketPayment(ticketId: string, formData: FormData) {
 }
 
 export async function escalateToProject(ticketId: string, projectName: string) {
+  const propertyId = await ticketPropertyId(ticketId)
+  const g = await tryGuard({ module: "mantenimiento", action: "edit", propertyId })
+  if ("error" in g) return { error: g.error } as { error: string }
   const { orgId, userId, actorName } = await getSession()
   const ticket = await prisma.maintenanceRequest.findFirst({
     where: { id: ticketId, organizationId: orgId },
@@ -339,6 +370,9 @@ export async function escalateToProject(ticketId: string, projectName: string) {
 }
 
 export async function addTimelineNote(ticketId: string, message: string) {
+  const propertyId = await ticketPropertyId(ticketId)
+  const g = await tryGuard({ module: "mantenimiento", action: "edit", propertyId })
+  if ("error" in g) return
   const { orgId } = await getSession()
   const ticket = await prisma.maintenanceRequest.findFirst({ where: { id: ticketId, organizationId: orgId } })
   if (!ticket) throw new Error("Ticket no encontrado")
@@ -347,6 +381,8 @@ export async function addTimelineNote(ticketId: string, message: string) {
 }
 
 export async function deleteTicket(id: string) {
+  const propertyId = await ticketPropertyId(id)
+  await guardAction({ module: "mantenimiento", action: "delete", propertyId })
   const { orgId, userId, actorName } = await getSession()
   const ticket = await prisma.maintenanceRequest.findFirst({ where: { id, organizationId: orgId }, select: { ticketNumber: true, title: true } })
   await logActivity({ orgId, entityType: "TICKET", entityId: id, action: "DELETED", actorId: userId, actorName, metadata: { ticketNumber: ticket?.ticketNumber, title: ticket?.title } })

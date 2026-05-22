@@ -4,12 +4,17 @@ import { prisma } from "@/lib/prisma"
 import { PageHeader } from "@/components/ui/page-header"
 import { PropertyForm } from "../../_components/property-form"
 import { updateProperty } from "../../actions"
+import { can, assertPropertyAccess } from "@/lib/permissions"
 
 export default async function EditarPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  const user = { id: session.user.id, role: session.user.role, organizationId: orgId }
+
+  if (!can(user, "propiedades", "edit")) redirect("/propiedades")
+  await assertPropertyAccess(user, id)
 
   const property = await prisma.property.findFirst({ where: { id, organizationId: orgId } })
   if (!property) notFound()

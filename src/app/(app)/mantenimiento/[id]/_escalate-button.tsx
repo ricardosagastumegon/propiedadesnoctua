@@ -19,7 +19,7 @@ export function EscalateButton({ ticketId, defaultName }: { ticketId: string; de
     const res = await escalateToProject(ticketId, name)
     setLoading(false)
     setOpen(false)
-    if (res?.redirectTo) router.push(res.redirectTo)
+    if (res && "redirectTo" in res && res.redirectTo) router.push(res.redirectTo)
   }
 
   return (

@@ -4,15 +4,19 @@ import { prisma } from "@/lib/prisma"
 import { PageHeader } from "@/components/ui/page-header"
 import { AssetForm } from "../../_components/asset-form"
 import { updateAsset } from "../../actions"
+import { can, assertPropertyAccessOrNull } from "@/lib/permissions"
 
 export default async function EditarActivoPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  const user = { id: session.user.id, role: session.user.role, organizationId: orgId }
+  if (!can(user, "activos", "edit")) redirect("/activos")
   const { id } = await params
 
   const asset = await prisma.asset.findFirst({ where: { id, organizationId: orgId } })
   if (!asset) notFound()
+  await assertPropertyAccessOrNull(user, asset.propertyId)
 
   const properties = await prisma.property.findMany({ where: { organizationId: orgId }, orderBy: { name: "asc" } })
 

@@ -5,6 +5,7 @@ import { propertySchema } from "@/lib/schemas/property"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { logError } from "@/lib/observability"
+import { tryGuard, guardAction, ActionForbiddenError } from "@/lib/action-guard"
 
 async function getOrgId() {
   const session = await auth()
@@ -13,12 +14,9 @@ async function getOrgId() {
 }
 
 export async function createProperty(formData: FormData) {
-  let orgId: string
-  try {
-    orgId = await getOrgId()
-  } catch (e) {
-    return { error: "Sesión inválida. Volvé a iniciar sesión." }
-  }
+  const g = await tryGuard({ module: "propiedades", action: "create" })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
 
   const raw = Object.fromEntries(formData)
   const parsed = propertySchema.safeParse(raw)
@@ -44,7 +42,6 @@ export async function createProperty(formData: FormData) {
   } catch (e) {
     logError(e, { area: "property", orgId, extra: { action: "create", name: d.name } })
     const msg = (e as Error).message
-    // Prisma errors: foreign key, unique constraint, etc.
     if (msg.includes("Foreign key constraint")) {
       return { error: "Tu sesión apunta a datos que no existen en la DB. Cerrá sesión y volvé a entrar." }
     }
@@ -56,7 +53,10 @@ export async function createProperty(formData: FormData) {
 }
 
 export async function updateProperty(id: string, formData: FormData) {
-  const orgId = await getOrgId()
+  const g = await tryGuard({ module: "propiedades", action: "edit", propertyId: id })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
+
   const raw = Object.fromEntries(formData)
   const parsed = propertySchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
@@ -75,6 +75,8 @@ export async function updateProperty(id: string, formData: FormData) {
 }
 
 export async function deleteProperty(id: string) {
+  // Lanza si no tiene permiso (esta action redirige, no devuelve estructura de error)
+  await guardAction({ module: "propiedades", action: "delete", propertyId: id })
   const orgId = await getOrgId()
   await prisma.property.deleteMany({ where: { id, organizationId: orgId } })
   revalidatePath("/propiedades")
@@ -82,6 +84,12 @@ export async function deleteProperty(id: string) {
 }
 
 export async function updatePropertyImage(id: string, url: string) {
+  try {
+    await guardAction({ module: "propiedades", action: "edit", propertyId: id })
+  } catch (e) {
+    if (e instanceof ActionForbiddenError) return { error: e.message }
+    throw e
+  }
   const orgId = await getOrgId()
   await prisma.property.updateMany({
     where: { id, organizationId: orgId },

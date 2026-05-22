@@ -4,8 +4,18 @@ import { prisma } from "@/lib/prisma"
 import { projectSchema, projectCostSchema, partidaSchema, partidaPaymentSchema } from "@/lib/schemas/project"
 import { logActivity } from "@/lib/activity-log"
 import { canMakePayment } from "@/lib/service-acceptance"
+import { tryGuard, guardAction } from "@/lib/action-guard"
+
+/** Resuelve el propertyId de un proyecto para el guard. */
+async function projectPropertyId(projectId: string): Promise<string | null> {
+  const p = await prisma.project.findUnique({ where: { id: projectId }, select: { propertyId: true } })
+  return p?.propertyId ?? null
+}
 
 export async function addPartidaQuote(partidaId: string, projectId: string, formData: FormData) {
+  const propertyId = await projectPropertyId(projectId)
+  const g = await tryGuard({ module: "proyectos", action: "edit", propertyId })
+  if ("error" in g) return { error: g.error }
   const session = await auth()
   if (!session) throw new Error("No autenticado")
   const orgId = session.user.organizationId
@@ -90,6 +100,9 @@ async function getSession() {
 }
 
 export async function createProject(formData: FormData) {
+  const propertyId = (formData.get("propertyId") as string) || null
+  const g = await tryGuard({ module: "proyectos", action: "create", propertyId })
+  if ("error" in g) return { error: g.error }
   const { orgId, userId, actorName } = await getSession()
   const raw = Object.fromEntries(formData)
   const parsed = projectSchema.safeParse(raw)
@@ -111,6 +124,9 @@ export async function createProject(formData: FormData) {
 }
 
 export async function updateProject(id: string, formData: FormData) {
+  const propertyId = await projectPropertyId(id)
+  const g = await tryGuard({ module: "proyectos", action: "edit", propertyId })
+  if ("error" in g) return { error: g.error }
   const { orgId, userId, actorName } = await getSession()
   const raw = Object.fromEntries(formData)
   const parsed = projectSchema.safeParse(raw)
@@ -133,6 +149,8 @@ export async function updateProject(id: string, formData: FormData) {
 }
 
 export async function deleteProject(id: string) {
+  const propertyId = await projectPropertyId(id)
+  await guardAction({ module: "proyectos", action: "delete", propertyId })
   const { orgId, userId, actorName } = await getSession()
   const project = await prisma.project.findFirst({ where: { id, organizationId: orgId }, select: { name: true } })
   await logActivity({ orgId, entityType: "PROJECT", entityId: id, projectId: id, action: "DELETED", actorId: userId, actorName, metadata: { name: project?.name } })
@@ -142,6 +160,9 @@ export async function deleteProject(id: string) {
 }
 
 export async function updateTaskStatus(taskId: string, projectId: string, done: boolean) {
+  const propertyId = await projectPropertyId(projectId)
+  const g = await tryGuard({ module: "proyectos", action: "edit", propertyId })
+  if ("error" in g) return
   await prisma.projectTask.update({
     where: { id: taskId },
     data: { status: done ? "DONE" : "TODO", completedAt: done ? new Date() : null },
@@ -154,6 +175,9 @@ export async function updateTaskStatus(taskId: string, projectId: string, done: 
 }
 
 export async function createTask(projectId: string, formData: FormData) {
+  const propertyId = await projectPropertyId(projectId)
+  const g = await tryGuard({ module: "proyectos", action: "edit", propertyId })
+  if ("error" in g) return { error: g.error }
   const { orgId } = await getSession()
   const project = await prisma.project.findFirst({ where: { id: projectId, organizationId: orgId } })
   if (!project) throw new Error("Proyecto no encontrado")
@@ -169,11 +193,17 @@ export async function createTask(projectId: string, formData: FormData) {
 }
 
 export async function deleteTask(taskId: string, projectId: string) {
+  const propertyId = await projectPropertyId(projectId)
+  const g = await tryGuard({ module: "proyectos", action: "edit", propertyId })
+  if ("error" in g) return
   await prisma.projectTask.delete({ where: { id: taskId } })
   revalidatePath(`/proyectos/${projectId}`)
 }
 
 export async function addProjectCost(projectId: string, formData: FormData) {
+  const propertyId = await projectPropertyId(projectId)
+  const g = await tryGuard({ module: "proyectos", action: "edit", propertyId })
+  if ("error" in g) return { error: g.error }
   const { orgId } = await getSession()
   const project = await prisma.project.findFirst({ where: { id: projectId, organizationId: orgId } })
   if (!project) throw new Error("Proyecto no encontrado")
@@ -189,12 +219,18 @@ export async function addProjectCost(projectId: string, formData: FormData) {
 }
 
 export async function deleteProjectCost(costId: string, projectId: string) {
+  const propertyId = await projectPropertyId(projectId)
+  const g = await tryGuard({ module: "proyectos", action: "edit", propertyId })
+  if ("error" in g) return
   await prisma.projectCost.delete({ where: { id: costId } })
   revalidatePath(`/proyectos/${projectId}`)
 }
 
 // Partidas CRUD
 export async function createPartida(projectId: string, formData: FormData) {
+  const propertyId = await projectPropertyId(projectId)
+  const g = await tryGuard({ module: "proyectos", action: "edit", propertyId })
+  if ("error" in g) return { error: g.error }
   const { orgId, userId, actorName } = await getSession()
   const project = await prisma.project.findFirst({ where: { id: projectId, organizationId: orgId } })
   if (!project) return { error: "Proyecto no encontrado" }
@@ -219,6 +255,8 @@ export async function createPartida(projectId: string, formData: FormData) {
 }
 
 export async function deletePartida(partidaId: string, projectId: string) {
+  const propertyId = await projectPropertyId(projectId)
+  await guardAction({ module: "proyectos", action: "delete", propertyId })
   const { orgId, userId, actorName } = await getSession()
   const partida = await prisma.projectPartida.findUnique({ where: { id: partidaId }, select: { name: true } })
   await logActivity({ orgId, entityType: "PARTIDA", entityId: partidaId, projectId, action: "DELETED", actorId: userId, actorName, metadata: { name: partida?.name } })
@@ -227,6 +265,9 @@ export async function deletePartida(partidaId: string, projectId: string) {
 }
 
 export async function cancelPartida(partidaId: string, projectId: string) {
+  const propertyId = await projectPropertyId(projectId)
+  const g = await tryGuard({ module: "proyectos", action: "edit", propertyId })
+  if ("error" in g) return
   const { orgId, userId, actorName } = await getSession()
   const partida = await prisma.projectPartida.findUnique({ where: { id: partidaId }, select: { name: true } })
   await prisma.projectPartida.update({ where: { id: partidaId }, data: { status: "CANCELLED" } })
@@ -235,6 +276,9 @@ export async function cancelPartida(partidaId: string, projectId: string) {
 }
 
 export async function markPartidaDelivered(partidaId: string, projectId: string) {
+  const propertyId = await projectPropertyId(projectId)
+  const g = await tryGuard({ module: "proyectos", action: "edit", propertyId })
+  if ("error" in g) return
   const { orgId, userId, actorName } = await getSession()
   const partida = await prisma.projectPartida.findUnique({ where: { id: partidaId }, select: { name: true } })
   await prisma.projectPartida.update({ where: { id: partidaId }, data: { deliveredAt: new Date() } })
@@ -248,6 +292,9 @@ export async function requestQuoteApprovalForPartida(
   quoteId: string,
   projectId: string,
 ) {
+  const propertyId = await projectPropertyId(projectId)
+  const g = await tryGuard({ module: "proyectos", action: "edit", propertyId })
+  if ("error" in g) throw new Error(g.error)
   const { userId, orgId, authorityPolicy, actorName } = await getSession()
 
   const quote = await prisma.quote.findUnique({
@@ -297,6 +344,9 @@ export async function requestQuoteApprovalForPartida(
 }
 
 export async function addPartidaPayment(partidaId: string, projectId: string, formData: FormData) {
+  const propertyId = await projectPropertyId(projectId)
+  const g = await tryGuard({ module: "pagos", action: "create", propertyId })
+  if ("error" in g) return { error: g.error }
   const { orgId, userId, actorName } = await getSession()
   const raw = Object.fromEntries(formData)
   const parsed = partidaPaymentSchema.safeParse(raw)

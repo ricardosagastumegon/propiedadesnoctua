@@ -4,6 +4,14 @@ import { prisma } from "@/lib/prisma"
 import { logActivity } from "@/lib/activity-log"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { tryGuard, guardAction } from "@/lib/action-guard"
+
+/** Resuelve el propertyId desde un projectId. */
+async function projectPropertyId(projectId: string | null | undefined): Promise<string | null> {
+  if (!projectId) return null
+  const p = await prisma.project.findUnique({ where: { id: projectId }, select: { propertyId: true } })
+  return p?.propertyId ?? null
+}
 
 async function getSession() {
   const session = await auth()
@@ -27,6 +35,10 @@ async function nextQuoteNumber(orgId: string) {
 }
 
 export async function createQuote(formData: FormData) {
+  const projectIdForGuard = (formData.get("projectId") as string) || null
+  const propertyIdForGuard = await projectPropertyId(projectIdForGuard)
+  const g = await tryGuard({ module: "cotizaciones", action: "create", propertyId: propertyIdForGuard })
+  if ("error" in g) return { error: g.error }
   const { orgId, userId, actorName, authorityPolicy } = await getSession()
   const vendorId = formData.get("vendorId") as string
   const projectId = formData.get("projectId") as string || null
@@ -104,9 +116,12 @@ export async function createQuote(formData: FormData) {
 }
 
 export async function updateQuoteStatus(id: string, status: string) {
-  const orgId = await getOrgId()
+  const q = await prisma.quote.findUnique({ where: { id }, select: { projectId: true } })
+  const propertyId = await projectPropertyId(q?.projectId)
+  const g = await tryGuard({ module: "cotizaciones", action: "edit", propertyId })
+  if ("error" in g) return
   await prisma.quote.updateMany({
-    where: { id, organizationId: orgId },
+    where: { id, organizationId: g.user.organizationId },
     data: { status, ...(status === "APPROVED" ? { approvedAt: new Date() } : {}) },
   })
   revalidatePath(`/cotizaciones/${id}`)
@@ -114,13 +129,19 @@ export async function updateQuoteStatus(id: string, status: string) {
 }
 
 export async function deleteQuote(id: string) {
-  const orgId = await getOrgId()
-  await prisma.quote.deleteMany({ where: { id, organizationId: orgId } })
+  const q = await prisma.quote.findUnique({ where: { id }, select: { projectId: true } })
+  const propertyId = await projectPropertyId(q?.projectId)
+  const user = await guardAction({ module: "cotizaciones", action: "delete", propertyId })
+  await prisma.quote.deleteMany({ where: { id, organizationId: user.organizationId } })
   revalidatePath("/cotizaciones")
   redirect("/cotizaciones")
 }
 
 export async function addQuoteItem(quoteId: string, formData: FormData) {
+  const q = await prisma.quote.findUnique({ where: { id: quoteId }, select: { projectId: true } })
+  const propertyId = await projectPropertyId(q?.projectId)
+  const g = await tryGuard({ module: "cotizaciones", action: "edit", propertyId })
+  if ("error" in g) return
   const orgId = await getOrgId()
   const quote = await prisma.quote.findFirst({ where: { id: quoteId, organizationId: orgId } })
   if (!quote) throw new Error("Cotizacion no encontrada")
@@ -142,6 +163,10 @@ export async function addQuoteItem(quoteId: string, formData: FormData) {
 }
 
 export async function deleteQuoteItem(itemId: string, quoteId: string) {
+  const q = await prisma.quote.findUnique({ where: { id: quoteId }, select: { projectId: true } })
+  const propertyId = await projectPropertyId(q?.projectId)
+  const g = await tryGuard({ module: "cotizaciones", action: "edit", propertyId })
+  if ("error" in g) return
   const orgId = await getOrgId()
   await prisma.quoteItem.delete({ where: { id: itemId } })
 

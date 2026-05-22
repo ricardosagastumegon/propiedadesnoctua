@@ -1,18 +1,15 @@
 "use server"
-import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { vendorSchema } from "@/lib/schemas/vendor"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-
-async function getOrgId() {
-  const session = await auth()
-  if (!session) throw new Error("No autenticado")
-  return session.user.organizationId
-}
+import { tryGuard, guardAction } from "@/lib/action-guard"
 
 export async function createVendor(formData: FormData) {
-  const orgId = await getOrgId()
+  const g = await tryGuard({ module: "proveedores", action: "create" })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
+
   const raw = Object.fromEntries(formData)
   const parsed = vendorSchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
@@ -25,7 +22,10 @@ export async function createVendor(formData: FormData) {
 }
 
 export async function updateVendor(id: string, formData: FormData) {
-  const orgId = await getOrgId()
+  const g = await tryGuard({ module: "proveedores", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
+
   const raw = Object.fromEntries(formData)
   const parsed = vendorSchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
@@ -40,21 +40,25 @@ export async function updateVendor(id: string, formData: FormData) {
 }
 
 export async function deleteVendor(id: string) {
-  const orgId = await getOrgId()
-  await prisma.vendor.deleteMany({ where: { id, organizationId: orgId } })
+  const user = await guardAction({ module: "proveedores", action: "delete" })
+  await prisma.vendor.deleteMany({ where: { id, organizationId: user.organizationId } })
   revalidatePath("/proveedores")
   redirect("/proveedores")
 }
 
 export async function toggleVendorActive(id: string, isActive: boolean) {
-  const orgId = await getOrgId()
-  await prisma.vendor.updateMany({ where: { id, organizationId: orgId }, data: { isActive } })
+  const g = await tryGuard({ module: "proveedores", action: "edit" })
+  if ("error" in g) return
+  await prisma.vendor.updateMany({ where: { id, organizationId: g.user.organizationId }, data: { isActive } })
   revalidatePath("/proveedores")
   revalidatePath(`/proveedores/${id}`)
 }
 
 export async function createVendorInvoice(vendorId: string, formData: FormData) {
-  const orgId = await getOrgId()
+  const g = await tryGuard({ module: "pagos", action: "create" })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
+
   const vendor = await prisma.vendor.findFirst({ where: { id: vendorId, organizationId: orgId } })
   if (!vendor) return { error: "Proveedor no encontrado" }
 
@@ -87,7 +91,9 @@ export async function createVendorInvoice(vendorId: string, formData: FormData) 
 }
 
 export async function updateVendorInvoiceStatus(invoiceId: string, status: string, vendorId: string) {
-  const orgId = await getOrgId()
+  const g = await tryGuard({ module: "pagos", action: "edit" })
+  if ("error" in g) return
+  const orgId = g.user.organizationId
   const data: Record<string, unknown> = { status }
   if (status === "PAID") {
     const inv = await prisma.vendorInvoice.findFirst({ where: { id: invoiceId, organizationId: orgId } })
@@ -102,7 +108,7 @@ export async function updateVendorInvoiceStatus(invoiceId: string, status: strin
 }
 
 export async function deleteVendorInvoice(invoiceId: string, vendorId: string) {
-  const orgId = await getOrgId()
-  await prisma.vendorInvoice.deleteMany({ where: { id: invoiceId, organizationId: orgId } })
+  const user = await guardAction({ module: "pagos", action: "delete" })
+  await prisma.vendorInvoice.deleteMany({ where: { id: invoiceId, organizationId: user.organizationId } })
   revalidatePath(`/proveedores/${vendorId}`)
 }
