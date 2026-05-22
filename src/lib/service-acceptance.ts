@@ -142,6 +142,7 @@ export async function canMakePayment(input: CanMakePaymentInput): Promise<CanMak
 
   // Cierre con descuento: el descuento cuenta como "pagado efectivo" para el cap.
   const proposedDiscount = input.discountAmount ?? 0
+  const isClosingWithDiscount = proposedDiscount > 0
   const newEffectivePaid = progress.totalPaid + input.proposedAmount + progress.totalDiscountClosed + proposedDiscount
   const newPercentage = progress.total > 0 ? (newEffectivePaid / progress.total) * 100 : 0
   const baseResult = {
@@ -162,6 +163,13 @@ export async function canMakePayment(input: CanMakePaymentInput): Promise<CanMak
 
   // No total set — let it through (no reference to measure against)
   if (progress.total <= 0) {
+    return { ...baseResult, allowed: true, needsAcceptanceRequest: false }
+  }
+
+  // Cierre con descuento que llega exactamente al 100% efectivo: el descuento es
+  // el acuerdo de liquidación negociado entre proveedor y cliente, equivale a
+  // aceptación implícita. El cap no aplica.
+  if (isClosingWithDiscount && newPercentage >= 99.99) {
     return { ...baseResult, allowed: true, needsAcceptanceRequest: false }
   }
 

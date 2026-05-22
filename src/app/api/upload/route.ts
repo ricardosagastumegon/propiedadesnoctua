@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { uploadFile, isStorageConfigured } from "@/lib/storage"
+import { logError } from "@/lib/observability"
 
 export const dynamic = "force-dynamic"
 
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ url: result.url, path: result.path })
   } catch (e) {
     const msg = (e as Error).message
+    logError(e, { area: "upload", orgId, extra: { type, fileName: file.name, fileSize: file.size } })
     return NextResponse.json({ error: msg }, { status: 400 })
   }
 }

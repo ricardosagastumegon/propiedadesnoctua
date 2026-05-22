@@ -13,8 +13,13 @@ export default function GlobalError({
   reset: () => void
 }) {
   useEffect(() => {
-    // Hook here for Sentry/observability later
     console.error("[GlobalError]", error)
+    // Reportar a Sentry si está configurado (lazy import — no falla en dev sin Sentry)
+    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+      import("@sentry/nextjs").then(Sentry => {
+        Sentry.captureException(error, { tags: { boundary: "global" } })
+      }).catch(() => {})
+    }
   }, [error])
 
   return (

@@ -9,6 +9,7 @@ import {
   rejectServiceAcceptance as libReject,
   type AcceptanceEntityType,
 } from "@/lib/service-acceptance"
+import { logError } from "@/lib/observability"
 
 async function getSession() {
   const session = await auth()
@@ -63,6 +64,7 @@ export async function acceptServiceAction(formData: FormData) {
     }
     return { ok: true }
   } catch (e) {
+    logError(e, { area: "acceptance", orgId, userId, extra: { acceptanceId, action: "accept" } })
     return { error: (e as Error).message }
   }
 }
@@ -85,6 +87,7 @@ export async function rejectServiceAction(formData: FormData) {
     }
     return { ok: true }
   } catch (e) {
+    logError(e, { area: "acceptance", orgId, userId, extra: { acceptanceId, action: "reject" } })
     return { error: (e as Error).message }
   }
 }
