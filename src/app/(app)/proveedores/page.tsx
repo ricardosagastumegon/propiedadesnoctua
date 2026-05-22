@@ -12,7 +12,7 @@ import { Users, Plus, Star } from "lucide-react"
 export default async function ProveedoresPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
 
   const vendors = await prisma.vendor.findMany({
     where: { organizationId: orgId },

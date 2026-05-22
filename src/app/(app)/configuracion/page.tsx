@@ -11,8 +11,8 @@ import { UsersPanel } from "./_users-panel"
 export default async function ConfiguracionPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
-  const userId = session.user!.id!
+  const orgId = session.user.organizationId
+  const userId = session.user.id
 
   const [org, users, me, settings] = await Promise.all([
     prisma.organization.findUnique({ where: { id: orgId } }),

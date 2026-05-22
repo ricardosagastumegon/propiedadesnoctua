@@ -17,6 +17,7 @@ import {
 } from "../actions"
 import { PaymentForm, type PaymentFormData, type AcceptanceContext } from "@/components/shared/payment-form"
 import { QuoteForm, type QuoteFormData, type QuoteVendor as SharedQuoteVendor } from "@/components/shared/quote-form"
+import { computePartidaState } from "@/lib/partida-state"
 import { requestAcceptance } from "../../aceptaciones/actions"
 import { Plus, Trash2, ChevronDown, ChevronRight, Star, ExternalLink, CheckCircle2, XCircle, Package } from "lucide-react"
 
@@ -70,25 +71,24 @@ interface Props {
   vendors?: SharedQuoteVendor[]
 }
 
+// Adapter: lleva un objeto Partida del shape local al input de computePartidaState
 function computeStatus(p: Partida): string {
-  if (p.status === "CANCELLED") return "CANCELLED"
-  if (p.amountApproved > 0 && p.amountPaid >= p.amountApproved && p.deliveredAt) return "PAID"
-  if (p.deliveredAt) return "DELIVERED"
-  if (p.amountPaid > 0) return "IN_PROGRESS"
-  if (p.approvedQuoteId) return "APPROVED"
-  if (p.quotes.some(q => q.status === "PENDING")) return "AWAITING_APPROVAL"
-  if (p.quotes.length > 0) return "AWAITING_APPROVAL"
-  return "PENDING_QUOTES"
+  return partidaDisplay(p).state
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  PENDING_QUOTES: "Sin cotizaciones",
-  AWAITING_APPROVAL: "Esperando aprobacion",
-  APPROVED: "Aprobada",
-  IN_PROGRESS: "En progreso",
-  DELIVERED: "Entregada",
-  PAID: "Pagada",
-  CANCELLED: "Cancelada",
+function partidaDisplay(p: Partida) {
+  return computePartidaState({
+    status: p.status,
+    amountApproved: p.amountApproved,
+    amountPaid: p.amountPaid,
+    deliveredAt: p.deliveredAt,
+    approvedQuoteId: p.approvedQuoteId,
+    hasQuotes: p.quotes.length > 0,
+    hasApprovalPending: false,
+    hasAcceptancePending: false,
+    hasAcceptanceAccepted: false,
+    prepaymentCapPercentage: 80,
+  })
 }
 
 function StarRating({ value }: { value: number | null }) {
@@ -180,8 +180,9 @@ export function PartidaList({ projectId, partidas, authorityPolicy, expandPartid
   return (
     <div className="space-y-3">
       {partidas.map(p => {
-        const computed = computeStatus(p)
-        const colorClass = PARTIDA_STATUS_COLORS[computed] ?? "bg-gray-100 text-gray-700"
+        const display = partidaDisplay(p)
+        const computed = display.state
+        const colorClass = display.color
         const paidPct = p.amountApproved > 0 ? Math.min(100, (p.amountPaid / p.amountApproved) * 100) : 0
         const isExpanded = expanded === p.id
         const hasApprovedQuote = !!p.approvedQuoteId
@@ -198,8 +199,8 @@ export function PartidaList({ projectId, partidas, authorityPolicy, expandPartid
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-sm">{p.name}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${colorClass}`}>
-                    {STATUS_LABELS[computed]}
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${colorClass}`} title={display.reason}>
+                    {display.label}
                   </span>
                 </div>
                 {p.description && <p className="text-xs text-muted-foreground mt-0.5">{p.description}</p>}

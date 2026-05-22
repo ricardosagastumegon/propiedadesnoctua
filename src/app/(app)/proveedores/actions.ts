@@ -8,7 +8,7 @@ import { redirect } from "next/navigation"
 async function getOrgId() {
   const session = await auth()
   if (!session) throw new Error("No autenticado")
-  return (session.user as any).organizationId as string
+  return session.user.organizationId
 }
 
 export async function createVendor(formData: FormData) {

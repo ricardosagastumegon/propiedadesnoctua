@@ -42,32 +42,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           canAcceptServices: user.canAcceptServices,
           organizationId: user.organizationId,
           organizationName: user.organization.name,
-        } as any
+        }
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        const u = user as any
-        token.id = u.id
-        token.role = u.role
-        token.authorityPolicy = u.authorityPolicy
-        token.canAcceptServices = u.canAcceptServices
-        token.organizationId = u.organizationId
-        token.organizationName = u.organizationName
+        token.id = user.id
+        token.role = user.role
+        token.authorityPolicy = user.authorityPolicy
+        token.canAcceptServices = user.canAcceptServices
+        token.organizationId = user.organizationId
+        token.organizationName = user.organizationName
       }
       return token
     },
     async session({ session, token }) {
       if (token && session.user) {
-        const s = session.user as any
-        s.id = token.id
-        s.role = token.role
-        s.authorityPolicy = token.authorityPolicy
-        s.canAcceptServices = token.canAcceptServices
-        s.organizationId = token.organizationId
-        s.organizationName = token.organizationName
+        session.user.id = token.id
+        session.user.role = token.role
+        session.user.authorityPolicy = token.authorityPolicy
+        session.user.canAcceptServices = token.canAcceptServices
+        session.user.organizationId = token.organizationId
+        session.user.organizationName = token.organizationName
       }
       return session
     },

@@ -41,7 +41,7 @@ const STATUS_LABELS: Record<string, string> = {
 export default async function PropertiesPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId
+  const orgId = session.user.organizationId
 
   const properties = await prisma.property.findMany({
     where: { organizationId: orgId },

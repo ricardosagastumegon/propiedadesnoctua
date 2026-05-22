@@ -9,10 +9,10 @@ async function getSession() {
   const session = await auth()
   if (!session) throw new Error("No autenticado")
   return {
-    orgId: (session.user as any).organizationId as string,
-    userId: session.user!.id!,
-    actorName: session.user!.name ?? "Usuario",
-    authorityPolicy: (session.user as any).authorityPolicy as string | undefined,
+    orgId: session.user.organizationId,
+    userId: session.user.id,
+    actorName: session.user.name ?? "Usuario",
+    authorityPolicy: session.user.authorityPolicy,
   }
 }
 

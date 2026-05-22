@@ -13,7 +13,7 @@ import { Users, Plus, Phone, Mail } from "lucide-react"
 export default async function InquilinosPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
 
   const tenants = await prisma.tenant.findMany({
     where: { organizationId: orgId },

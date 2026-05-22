@@ -8,7 +8,7 @@ import { updateVendor } from "../../actions"
 export default async function EditarProveedorPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
   const { id } = await params
 
   const vendor = await prisma.vendor.findFirst({ where: { id, organizationId: orgId } })

@@ -9,7 +9,7 @@ export default async function EditarInquilinoPage({ params }: { params: Promise<
   const { id } = await params
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
 
   const tenant = await prisma.tenant.findFirst({ where: { id, organizationId: orgId } })
   if (!tenant) notFound()

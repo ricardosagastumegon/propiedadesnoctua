@@ -13,7 +13,7 @@ import { Package, Plus, AlertTriangle } from "lucide-react"
 export default async function ActivosPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
 
   const assets = await prisma.asset.findMany({
     where: { organizationId: orgId },

@@ -8,10 +8,10 @@ import { canMakePayment } from "@/lib/service-acceptance"
 export async function addPartidaQuote(partidaId: string, projectId: string, formData: FormData) {
   const session = await auth()
   if (!session) throw new Error("No autenticado")
-  const orgId = (session.user as any).organizationId as string
-  const userId = session.user!.id!
-  const actorName = session.user!.name ?? "Usuario"
-  const authorityPolicy = (session.user as any).authorityPolicy as string | undefined
+  const orgId = session.user.organizationId
+  const userId = session.user.id
+  const actorName = session.user.name ?? "Usuario"
+  const authorityPolicy = session.user.authorityPolicy
 
   const partida = await prisma.projectPartida.findFirst({ where: { id: partidaId, projectId }, include: { project: { select: { name: true } } } })
   if (!partida) throw new Error("Partida no encontrada")
@@ -82,10 +82,10 @@ async function getSession() {
   const session = await auth()
   if (!session) throw new Error("No autenticado")
   return {
-    userId: session.user!.id!,
-    orgId: (session.user as any).organizationId as string,
-    authorityPolicy: (session.user as any).authorityPolicy as string | undefined,
-    actorName: session.user!.name ?? "Usuario",
+    userId: session.user.id,
+    orgId: session.user.organizationId,
+    authorityPolicy: session.user.authorityPolicy,
+    actorName: session.user.name ?? "Usuario",
   }
 }
 

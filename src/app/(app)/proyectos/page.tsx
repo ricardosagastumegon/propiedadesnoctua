@@ -13,7 +13,7 @@ import { FolderOpen, Plus } from "lucide-react"
 export default async function ProyectosPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
 
   const projects = await prisma.project.findMany({
     where: { organizationId: orgId },

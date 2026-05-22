@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic"
 export default async function AuthAuditPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
 
   const [requests, users, pettyCashes] = await Promise.all([
     prisma.approvalRequest.findMany({

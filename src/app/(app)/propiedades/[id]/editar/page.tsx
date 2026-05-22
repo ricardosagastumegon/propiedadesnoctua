@@ -9,7 +9,7 @@ export default async function EditarPage({ params }: { params: Promise<{ id: str
   const { id } = await params
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
 
   const property = await prisma.property.findFirst({ where: { id, organizationId: orgId } })
   if (!property) notFound()

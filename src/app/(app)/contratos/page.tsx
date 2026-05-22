@@ -15,7 +15,7 @@ import { FileText, Plus } from "lucide-react"
 export default async function ContratosPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
 
   const contracts = await prisma.contract.findMany({
     where: { organizationId: orgId },

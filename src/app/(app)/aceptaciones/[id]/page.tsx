@@ -23,8 +23,8 @@ const STATUS_STYLE: Record<string, { label: string; className: string }> = {
 export default async function AcceptanceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
-  const userId = session.user!.id!
+  const orgId = session.user.organizationId
+  const userId = session.user.id
   const { id } = await params
 
   const acceptance = await prisma.serviceAcceptance.findFirst({

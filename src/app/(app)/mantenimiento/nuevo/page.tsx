@@ -8,7 +8,7 @@ import { createTicket } from "../actions"
 export default async function NuevoTicketPage({ searchParams }: { searchParams: Promise<{ propertyId?: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
   const sp = await searchParams
 
   const properties = await prisma.property.findMany({ where: { organizationId: orgId }, orderBy: { name: "asc" } })

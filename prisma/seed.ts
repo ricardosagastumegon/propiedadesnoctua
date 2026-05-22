@@ -438,7 +438,7 @@ async function main() {
     phone: "7788-9900", isActive: true,
   }})
 
-  // Quotes for tk6 (needs v1, v3) — v7: Quote replaces TicketQuote
+  // Quotes para tk6 (necesita v1, v3)
   await prisma.quote.create({ data: {
     organizationId: org.id, ticketId: tk6.id, vendorId: v3.id,
     subtotal: 22000, total: 22000, taxAmount: 0, taxPercent: 0,

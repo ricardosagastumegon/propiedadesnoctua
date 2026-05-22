@@ -8,13 +8,13 @@ import bcrypt from "bcryptjs"
 async function getOrgId() {
   const session = await auth()
   if (!session) throw new Error("No autenticado")
-  return (session.user as any).organizationId as string
+  return session.user.organizationId
 }
 
 async function getUserId() {
   const session = await auth()
   if (!session) throw new Error("No autenticado")
-  return session.user!.id!
+  return session.user.id
 }
 
 export async function updateOrganization(formData: FormData) {
@@ -108,9 +108,9 @@ export async function updateUserAuthorityPolicy(userId: string, authorityPolicy:
 export async function updateUserCanAcceptServices(userId: string, canAcceptServices: boolean) {
   const session = await auth()
   if (!session) throw new Error("No autenticado")
-  const me = session.user as any
+  const me = session.user
   if (me.role !== "ADMIN" && me.role !== "OWNER") return { error: "Sólo administradores pueden cambiar este permiso" }
-  const orgId = me.organizationId as string
+  const orgId = me.organizationId
   await prisma.user.updateMany({ where: { id: userId, organizationId: orgId }, data: { canAcceptServices } })
   revalidatePath("/configuracion")
 }
@@ -118,9 +118,9 @@ export async function updateUserCanAcceptServices(userId: string, canAcceptServi
 export async function updatePrepaymentCap(formData: FormData) {
   const session = await auth()
   if (!session) throw new Error("No autenticado")
-  const me = session.user as any
+  const me = session.user
   if (me.role !== "ADMIN" && me.role !== "OWNER") return { error: "Sólo administradores pueden cambiar reglas de negocio" }
-  const orgId = me.organizationId as string
+  const orgId = me.organizationId
 
   const raw = formData.get("prepaymentCapPercentage")
   const value = parseInt(raw as string, 10)

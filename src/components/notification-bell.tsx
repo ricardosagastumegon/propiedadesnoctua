@@ -6,7 +6,7 @@ import { Bell } from "lucide-react"
 export async function NotificationBell() {
   const session = await auth()
   if (!session) return null
-  const userId = session.user!.id!
+  const userId = session.user.id
 
   const count = await prisma.notification.count({ where: { userId, isRead: false } })
 

@@ -13,7 +13,7 @@ import { CreditCard, Receipt } from "lucide-react"
 export default async function PagosPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
 
   const [payments, invoices] = await Promise.all([
     prisma.payment.findMany({

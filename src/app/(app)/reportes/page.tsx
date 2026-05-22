@@ -14,7 +14,7 @@ import { subMonths, startOfMonth, endOfMonth, format } from "date-fns"
 export default async function ReportesPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
   const now = new Date()
 
   const months = Array.from({ length: 6 }, (_, i) => {

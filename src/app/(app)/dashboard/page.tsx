@@ -46,7 +46,7 @@ const PROJECT_STATUS_COLORS: Record<string, string> = {
 export default async function DashboardPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
 
   const now = new Date()
   const monthStart = startOfMonth(now)

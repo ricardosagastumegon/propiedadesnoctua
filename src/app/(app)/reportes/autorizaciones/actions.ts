@@ -7,8 +7,8 @@ async function getIds() {
   const session = await auth()
   if (!session) throw new Error("No autenticado")
   return {
-    userId: session.user!.id!,
-    orgId: (session.user as any).organizationId as string,
+    userId: session.user.id,
+    orgId: session.user.organizationId,
   }
 }
 

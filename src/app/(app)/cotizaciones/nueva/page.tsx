@@ -8,7 +8,7 @@ import { createQuote } from "../actions"
 export default async function NuevaCotizacionPage({ searchParams }: { searchParams: Promise<{ vendorId?: string; projectId?: string; partidaId?: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
   const sp = await searchParams
 
   const [vendors, projects, partidas] = await Promise.all([

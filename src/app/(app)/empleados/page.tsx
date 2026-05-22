@@ -14,7 +14,7 @@ import { Users, Plus } from "lucide-react"
 export default async function EmpleadosPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
 
   const employees = await prisma.employee.findMany({
     where: { organizationId: orgId },

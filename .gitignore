@@ -40,9 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# local sqlite dev db
+# local sqlite dev db (legacy — el proyecto ahora usa Postgres en Supabase)
 prisma/dev.db
 prisma/*.db-journal
-
-# old SQLite migrations (pre-Postgres migration)
-prisma/migrations_sqlite_backup/

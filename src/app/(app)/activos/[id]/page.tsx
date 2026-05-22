@@ -17,7 +17,7 @@ import { AlertTriangle, Building2, Hash, MapPin, Tag } from "lucide-react"
 export default async function AssetDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
   const { id } = await params
 
   await ensureDefaultRecordTypes(orgId)

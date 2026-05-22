@@ -9,8 +9,8 @@ import { LogOut } from "lucide-react"
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
   if (!session) redirect("/login")
-  const user = session.user as any
-  const orgId = user.organizationId as string
+  const user = session.user
+  const orgId = user.organizationId
 
   const [pendingApprovals, pendingAcceptances] = await Promise.all([
     prisma.approvalRequest.count({

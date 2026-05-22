@@ -17,7 +17,7 @@ import { Mail, Phone, MapPin, Star } from "lucide-react"
 export default async function VendorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
   const { id } = await params
 
   const [vendor, statement] = await Promise.all([

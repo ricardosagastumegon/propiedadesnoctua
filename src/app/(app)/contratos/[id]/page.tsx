@@ -20,7 +20,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
   const { id } = await params
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
 
   const contract = await prisma.contract.findFirst({
     where: { id, organizationId: orgId },

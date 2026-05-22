@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic"
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session) return new NextResponse("No autenticado", { status: 401 })
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
   const { id } = await ctx.params
 
   const acceptance = await prisma.serviceAcceptance.findFirst({

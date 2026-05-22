@@ -18,6 +18,7 @@ import { ActivityTrail } from "./_activity-trail"
 import { DeleteProjectButton } from "./_delete-button"
 import { getProjectActivityTrail } from "@/lib/project-activity-trail"
 import { getPrepaymentCap } from "@/lib/service-acceptance"
+import { getVendorsForOrg } from "@/lib/vendors"
 import { Building2, Calendar, CheckSquare2, Download } from "lucide-react"
 
 export default async function ProjectDetailPage({
@@ -29,9 +30,9 @@ export default async function ProjectDetailPage({
 }) {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
-  const userId = session.user!.id!
-  const authorityPolicy = (session.user as any).authorityPolicy as string | undefined
+  const orgId = session.user.organizationId
+  const userId = session.user.id
+  const authorityPolicy = session.user.authorityPolicy
   const { id } = await params
   const sp = await searchParams
   const expandPartida = sp.expandPartida
@@ -82,11 +83,7 @@ export default async function ProjectDetailPage({
         })
       : Promise.resolve([]),
     getPrepaymentCap(orgId),
-    prisma.vendor.findMany({
-      where: { organizationId: orgId, isActive: true },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, category: true, contactName: true, phone: true, email: true, rating: true },
-    }),
+    getVendorsForOrg(orgId),
   ])
   const acceptanceByPartidaId: Record<string, {
     cap: number; hasAcceptance: boolean

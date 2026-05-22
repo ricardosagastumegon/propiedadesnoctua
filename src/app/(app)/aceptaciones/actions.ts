@@ -14,9 +14,9 @@ import { logError } from "@/lib/observability"
 async function getSession() {
   const session = await auth()
   if (!session) throw new Error("No autenticado")
-  const orgId = (session.user as any).organizationId as string
-  const userId = session.user!.id!
-  const actorName = session.user!.name ?? "Usuario"
+  const orgId = session.user.organizationId
+  const userId = session.user.id
+  const actorName = session.user.name ?? "Usuario"
   return { orgId, userId, actorName }
 }
 

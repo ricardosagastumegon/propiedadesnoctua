@@ -9,10 +9,10 @@ export const dynamic = "force-dynamic"
 export default async function AutorizacionesPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const userId = session.user!.id!
-  const orgId = (session.user as any).organizationId as string
-  const authorityPolicy = ((session.user as any).authorityPolicy ?? "NONE") as string
-  const role = ((session.user as any).role ?? "VIEWER") as string
+  const userId = session.user.id
+  const orgId = session.user.organizationId
+  const authorityPolicy = (session.user.authorityPolicy ?? "NONE") as string
+  const role = (session.user.role ?? "VIEWER") as string
 
   const allRequests = await prisma.approvalRequest.findMany({
     where: { organizationId: orgId },

@@ -12,7 +12,7 @@ export default async function NuevoContratoPage({
 }) {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
   const sp = await searchParams
 
   const [properties, tenants] = await Promise.all([

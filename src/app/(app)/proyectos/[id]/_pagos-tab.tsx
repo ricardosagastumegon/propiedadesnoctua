@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card"
 import { formatGTQ, formatDate } from "@/lib/format"
 import { PAYMENT_TYPES } from "@/lib/schemas/project"
 import { ActivityTrail } from "./_activity-trail"
+import { computePartidaState } from "@/lib/partida-state"
 import type { ActivityEntry } from "@/lib/project-activity-trail"
 
 interface Payment {
@@ -27,24 +28,19 @@ interface Props {
 
 type SubTab = "resumen" | "cronograma" | "trazabilidad"
 
-const WORK_STATUS: Record<string, { label: string; color: string }> = {
-  PAID:              { label: "Pagada ✓",        color: "bg-emerald-100 text-emerald-800" },
-  DELIVERED:         { label: "Entregada",        color: "bg-blue-100 text-blue-800" },
-  IN_PROGRESS:       { label: "En progreso",      color: "bg-amber-100 text-amber-800" },
-  APPROVED:          { label: "Aprobada",         color: "bg-purple-100 text-purple-800" },
-  AWAITING_APPROVAL: { label: "Esp. aprobación",  color: "bg-gray-100 text-gray-600" },
-  PENDING_QUOTES:    { label: "Sin cotización",   color: "bg-gray-100 text-gray-500" },
-  CANCELLED:         { label: "Cancelada",        color: "bg-red-100 text-red-700" },
-}
-
-function computeDisplay(p: Partida): string {
-  if (p.status === "CANCELLED") return "CANCELLED"
-  const approved = p.amountApproved ?? 0
-  if (approved > 0 && p.amountPaid >= approved && p.deliveredAt) return "PAID"
-  if (p.deliveredAt) return "DELIVERED"
-  if (p.amountPaid > 0) return "IN_PROGRESS"
-  if (approved > 0) return "APPROVED"
-  return "PENDING_QUOTES"
+function displayFor(p: Partida) {
+  return computePartidaState({
+    status: p.status,
+    amountApproved: p.amountApproved,
+    amountPaid: p.amountPaid,
+    deliveredAt: p.deliveredAt,
+    approvedQuoteId: null,
+    hasQuotes: false,
+    hasApprovalPending: false,
+    hasAcceptancePending: false,
+    hasAcceptanceAccepted: false,
+    prepaymentCapPercentage: 80,
+  })
 }
 
 export function PagosTab({ partidas, trail }: Props) {
@@ -73,7 +69,7 @@ export function PagosTab({ partidas, trail }: Props) {
 
   // Overall project status counts
   const statusCounts = partidas.reduce((acc, p) => {
-    const d = computeDisplay(p)
+    const d = displayFor(p).state
     acc[d] = (acc[d] ?? 0) + 1
     return acc
   }, {} as Record<string, number>)
@@ -117,11 +113,13 @@ export function PagosTab({ partidas, trail }: Props) {
                 />
               </div>
               <div className="flex flex-wrap gap-2">
-                {Object.entries(statusCounts).map(([status, count]) => {
-                  const cfg = WORK_STATUS[status]
+                {Object.entries(statusCounts).map(([state, count]) => {
+                  // Tomamos cualquier partida con ese state para reusar labels/colors
+                  const sample = partidas.find(p => displayFor(p).state === state)
+                  const cfg = sample ? displayFor(sample) : null
                   if (!cfg) return null
                   return (
-                    <span key={status} className={`text-xs px-2 py-0.5 rounded-full font-medium ${cfg.color}`}>
+                    <span key={state} className={`text-xs px-2 py-0.5 rounded-full font-medium ${cfg.color}`}>
                       {count} {cfg.label}
                     </span>
                   )
@@ -158,8 +156,8 @@ export function PagosTab({ partidas, trail }: Props) {
                     {/* Partidas list with status */}
                     <div className="space-y-1.5 mb-3">
                       {v.partidas.map(p => {
-                        const displayStatus = computeDisplay(p)
-                        const cfg = WORK_STATUS[displayStatus]
+                        const cfg = displayFor(p)
+                        const displayStatus = cfg.state
                         return (
                           <div key={p.id} className="flex items-center justify-between text-xs">
                             <span className="text-muted-foreground truncate mr-2">{p.name}</span>

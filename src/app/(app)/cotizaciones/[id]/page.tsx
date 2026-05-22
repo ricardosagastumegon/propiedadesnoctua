@@ -15,7 +15,7 @@ import { DeleteQuoteButton } from "./_delete-button"
 export default async function QuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
   const { id } = await params
 
   const quote = await prisma.quote.findFirst({

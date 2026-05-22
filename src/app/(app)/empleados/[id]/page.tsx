@@ -13,7 +13,7 @@ import { Mail, Phone, Hash, Briefcase, Calendar } from "lucide-react"
 export default async function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
   const { id } = await params
 
   const employee = await prisma.employee.findFirst({

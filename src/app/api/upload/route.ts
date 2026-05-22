@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
   if (!orgId) return NextResponse.json({ error: "Sin organizacion en la sesion" }, { status: 400 })
 
   let formData: FormData

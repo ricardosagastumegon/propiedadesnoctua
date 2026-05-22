@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic"
 export default async function EstadosCuentaPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
 
   const vendors = await prisma.vendor.findMany({
     where: { organizationId: orgId },

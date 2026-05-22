@@ -36,9 +36,9 @@ interface EnrichedRow {
 export default async function AceptacionesPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
-  const canAcceptServices = !!(session.user as any).canAcceptServices
-  const role = ((session.user as any).role ?? "VIEWER") as string
+  const orgId = session.user.organizationId
+  const canAcceptServices = !!session.user.canAcceptServices
+  const role = (session.user.role ?? "VIEWER") as string
   const isOwnerOrAdmin = role === "ADMIN" || role === "OWNER"
 
   const acceptances = await prisma.serviceAcceptance.findMany({

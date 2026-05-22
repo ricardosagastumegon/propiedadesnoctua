@@ -27,7 +27,7 @@ const TYPE_COLORS: Record<string, string> = {
 export default async function CajaChicaDetailPage({ params }: { params: Promise<{ propertyId: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
   const { propertyId } = await params
 
   const property = await prisma.property.findFirst({

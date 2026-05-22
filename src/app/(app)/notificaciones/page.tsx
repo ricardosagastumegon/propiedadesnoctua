@@ -12,7 +12,7 @@ import { Bell } from "lucide-react"
 export default async function NotificacionesPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const userId = session.user!.id!
+  const userId = session.user.id
 
   const notifications = await prisma.notification.findMany({
     where: { userId },

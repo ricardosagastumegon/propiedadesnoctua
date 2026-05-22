@@ -32,7 +32,7 @@ function fmtDate(d: Date | string) {
 export default async function ProjectPDFPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
   const { id } = await params
 
   const project = await prisma.project.findFirst({

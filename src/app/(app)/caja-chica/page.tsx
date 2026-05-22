@@ -10,7 +10,7 @@ import { Wallet, TrendingDown, TrendingUp, AlertCircle } from "lucide-react"
 export default async function CajaChicaListPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
+  const orgId = session.user.organizationId
 
   const properties = await prisma.property.findMany({
     where: { organizationId: orgId },

@@ -19,6 +19,7 @@ import { EscalateButton } from "./_escalate-button"
 import { TICKET_AUTH_THRESHOLD, TICKET_PROJECT_THRESHOLD } from "../constants"
 import { getPrepaymentCap } from "@/lib/service-acceptance"
 import { computeTicketState } from "@/lib/ticket-state"
+import { getVendorsForOrg } from "@/lib/vendors"
 import {
   AlertTriangle, Building2, Calendar, User, Phone, Wrench,
   Clock, CheckCircle2, FolderKanban, Wallet, ShieldCheck, ShieldAlert, ShieldX, Shield, Download,
@@ -50,8 +51,8 @@ const PAYMENT_MODE_LABELS: Record<string, string> = {
 export default async function TicketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = (session.user as any).organizationId as string
-  const authorityPolicy = (session.user as any).authorityPolicy as string
+  const orgId = session.user.organizationId
+  const authorityPolicy = session.user.authorityPolicy
   const { id } = await params
 
   const ticket = await prisma.maintenanceRequest.findFirst({
@@ -76,11 +77,7 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
 
   const [employees, vendors, approvalRequest, ticketAcceptance, cap] = await Promise.all([
     prisma.user.findMany({ where: { organizationId: orgId, isActive: true }, orderBy: { name: "asc" } }),
-    prisma.vendor.findMany({
-      where: { organizationId: orgId, isActive: true },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, category: true, contactName: true, phone: true, email: true, rating: true },
-    }),
+    getVendorsForOrg(orgId),
     prisma.approvalRequest.findFirst({
       where: { entityType: "TICKET", entityId: ticket.id, organizationId: orgId },
       include: {
