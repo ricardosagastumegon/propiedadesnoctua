@@ -64,10 +64,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.organizationName = user.organizationName
         token.mustChangePassword = (user as { mustChangePassword?: boolean }).mustChangePassword ?? false
       }
-      // En cada refresco de session, leemos mustChangePassword fresh
+      // En cada update (client-side useSession().update()) re-lee TODO desde DB.
+      // Esto cierra el loop infinito de /cambiar-password y también refresca rol/permisos.
       if (trigger === "update" && token.id) {
-        const u = await prisma.user.findUnique({ where: { id: token.id }, select: { mustChangePassword: true } })
-        if (u) token.mustChangePassword = u.mustChangePassword
+        const u = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: {
+            mustChangePassword: true,
+            role: true,
+            authorityPolicy: true,
+            canAcceptServices: true,
+            organizationId: true,
+            name: true,
+            isActive: true,
+          },
+        })
+        if (u) {
+          token.mustChangePassword = u.mustChangePassword
+          token.role = u.role
+          token.authorityPolicy = u.authorityPolicy
+          token.canAcceptServices = u.canAcceptServices
+          token.organizationId = u.organizationId
+        }
       }
       return token
     },

@@ -1,6 +1,7 @@
 "use client"
 import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,6 +10,7 @@ import { changePassword } from "./actions"
 export function ChangePasswordForm({ forced = false }: { forced?: boolean }) {
   const ref = useRef<HTMLFormElement>(null)
   const router = useRouter()
+  const { update } = useSession()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ok, setOk] = useState(false)
@@ -24,8 +26,11 @@ export function ChangePasswordForm({ forced = false }: { forced?: boolean }) {
       setError(res.error)
     } else {
       setOk(true)
+      // CRÍTICO: forzar refresh del JWT para que el middleware vea mustChangePassword=false.
+      // Sin esto, el JWT queda con mustChangePassword=true y el middleware re-redirige
+      // a /cambiar-password en un loop infinito.
+      try { await update() } catch { /* no-op */ }
       if (forced) {
-        // Después de cambiar la forzada, ir al dashboard
         setTimeout(() => router.push("/dashboard"), 1200)
       }
     }
