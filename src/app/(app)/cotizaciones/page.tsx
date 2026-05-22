@@ -9,15 +9,29 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatDate, formatGTQ } from "@/lib/format"
 import { QUOTE_STATUSES, QUOTE_STATUS_COLORS } from "@/lib/schemas/vendor"
+import { getAccessiblePropertyIds } from "@/lib/permissions"
 import { FileText, Plus } from "lucide-react"
 
 export default async function CotizacionesPage() {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  const accessibleIds = await getAccessiblePropertyIds({
+    id: session.user.id, role: session.user.role, organizationId: orgId,
+  })
 
+  // Quotes son polimórficas: pertenecen a partida (→ project.propertyId) o a ticket (→ propertyId)
   const quotes = await prisma.quote.findMany({
-    where: { organizationId: orgId },
+    where: {
+      organizationId: orgId,
+      ...(accessibleIds !== null ? {
+        OR: [
+          { partida: { project: { propertyId: { in: accessibleIds } } } },
+          { ticket: { propertyId: { in: accessibleIds } } },
+          { project: { propertyId: { in: accessibleIds } } },
+        ],
+      } : {}),
+    },
     include: { vendor: true, project: true, partida: { select: { name: true } } },
     orderBy: { date: "desc" },
   })

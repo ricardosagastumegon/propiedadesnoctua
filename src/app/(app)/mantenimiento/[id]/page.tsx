@@ -20,6 +20,7 @@ import { TICKET_AUTH_THRESHOLD, TICKET_PROJECT_THRESHOLD } from "../constants"
 import { getPrepaymentCap } from "@/lib/service-acceptance"
 import { computeTicketState } from "@/lib/ticket-state"
 import { getVendorsForOrg } from "@/lib/vendors"
+import { assertPropertyAccess } from "@/lib/permissions"
 import {
   AlertTriangle, Building2, Calendar, User, Phone, Wrench,
   Clock, CheckCircle2, FolderKanban, Wallet, ShieldCheck, ShieldAlert, ShieldX, Shield, Download,
@@ -74,6 +75,10 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
     },
   })
   if (!ticket) notFound()
+  await assertPropertyAccess(
+    { id: session.user.id, role: session.user.role, organizationId: orgId },
+    ticket.propertyId,
+  )
 
   const [employees, vendors, approvalRequest, ticketAcceptance, cap] = await Promise.all([
     prisma.user.findMany({ where: { organizationId: orgId, isActive: true }, orderBy: { name: "asc" } }),

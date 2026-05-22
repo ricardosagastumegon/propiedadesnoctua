@@ -12,6 +12,7 @@ import { DeleteAssetButton } from "./_delete-button"
 import { ServiceLogSection } from "./_service-log"
 import { AssetRecords } from "./_asset-records"
 import { ensureDefaultRecordTypes } from "../actions"
+import { assertPropertyAccessOrNull } from "@/lib/permissions"
 import { AlertTriangle, Building2, Hash, MapPin, Tag } from "lucide-react"
 
 export default async function AssetDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -41,6 +42,10 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
     }),
   ])
   if (!asset) notFound()
+  await assertPropertyAccessOrNull(
+    { id: session.user.id, role: session.user.role, organizationId: orgId },
+    asset.propertyId,
+  )
 
   const lastLog = asset.serviceLogs[0]
   const today = new Date()

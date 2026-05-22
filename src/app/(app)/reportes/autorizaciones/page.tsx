@@ -34,7 +34,15 @@ export default async function AuthAuditPage() {
       orderBy: { name: "asc" },
     }),
     prisma.pettyCash.findMany({
-      where: { organizationId: orgId },
+      where: {
+        organizationId: orgId,
+        ...(await (async () => {
+          const ids = await import("@/lib/permissions").then(m => m.getAccessiblePropertyIds({
+            id: session.user.id, role: session.user.role, organizationId: orgId,
+          }))
+          return ids !== null ? { propertyId: { in: ids } } : {}
+        })()),
+      },
       include: {
         property: { select: { id: true, name: true } },
         movements: { where: { type: "REPLENISHMENT" }, select: { id: true, createdAt: true, amount: true } },

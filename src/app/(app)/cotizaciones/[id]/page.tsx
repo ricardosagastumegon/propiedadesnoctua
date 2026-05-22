@@ -11,6 +11,7 @@ import { VENDOR_CATEGORIES, QUOTE_STATUSES, QUOTE_STATUS_COLORS } from "@/lib/sc
 import { QuoteStatusActions } from "./_status-actions"
 import { QuoteItemsSection } from "./_items"
 import { DeleteQuoteButton } from "./_delete-button"
+import { getAccessiblePropertyIds } from "@/lib/permissions"
 
 export default async function QuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -20,9 +21,28 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
 
   const quote = await prisma.quote.findFirst({
     where: { id, organizationId: orgId },
-    include: { vendor: true, project: true, items: true },
+    include: {
+      vendor: true, project: true, items: true,
+      partida: { include: { project: { select: { propertyId: true } } } },
+      ticket: { select: { propertyId: true } },
+    },
   })
   if (!quote) notFound()
+
+  // Validar acceso por propiedad (polimórfico): partida.project.propertyId | ticket.propertyId | project.propertyId
+  const accessibleIds = await getAccessiblePropertyIds({
+    id: session.user.id, role: session.user.role, organizationId: orgId,
+  })
+  if (accessibleIds !== null) {
+    const propIds = [
+      quote.partida?.project?.propertyId,
+      quote.ticket?.propertyId,
+      quote.project?.propertyId,
+    ].filter((x): x is string => !!x)
+    const hasAccess = propIds.some(pid => accessibleIds.includes(pid))
+    // Si la cotización no está bound a ninguna propiedad accesible (o no tiene propertyId resolvible), bloquear
+    if (propIds.length > 0 && !hasAccess) notFound()
+  }
 
   return (
     <div className="p-8 max-w-4xl mx-auto">

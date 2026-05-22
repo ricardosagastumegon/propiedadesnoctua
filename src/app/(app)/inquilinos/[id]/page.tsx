@@ -12,6 +12,7 @@ import { formatGTQ, formatDate } from "@/lib/format"
 import { DOCUMENT_TYPES } from "@/lib/schemas/tenant"
 import { Pencil, Phone, Mail, User, FileText } from "lucide-react"
 import { DeleteTenantButton } from "./_delete-button"
+import { getAccessiblePropertyIds } from "@/lib/permissions"
 
 export default async function TenantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -29,6 +30,18 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
     },
   })
   if (!tenant) notFound()
+
+  // Filtro de acceso: el tenant solo es visible si el user tiene acceso a al menos
+  // una propiedad donde el tenant tiene contrato.
+  const accessibleIds = await getAccessiblePropertyIds({
+    id: session.user.id, role: session.user.role, organizationId: orgId,
+  })
+  if (accessibleIds !== null) {
+    const hasAnyAccessibleContract = tenant.contracts.some(c => accessibleIds.includes(c.propertyId))
+    if (!hasAnyAccessibleContract) notFound()
+    // Ocultar contratos en propiedades sin acceso
+    tenant.contracts = tenant.contracts.filter(c => accessibleIds.includes(c.propertyId))
+  }
 
   return (
     <div className="p-8 max-w-5xl mx-auto">

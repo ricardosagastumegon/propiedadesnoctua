@@ -8,15 +8,20 @@ import { PageHeader } from "@/components/ui/page-header"
 import { EmptyState } from "@/components/ui/empty-state"
 import { formatGTQ, formatDate } from "@/lib/format"
 import { ASSET_CATEGORIES, ASSET_STATUSES, ASSET_STATUS_COLORS } from "@/lib/schemas/asset"
+import { propertyAccessWhereOpt } from "@/lib/permissions"
 import { Package, Plus, AlertTriangle } from "lucide-react"
 
 export default async function ActivosPage() {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  // Assets pueden no tener propertyId; si user tiene restricción, ocultamos los sin property
+  const propFilter = await propertyAccessWhereOpt({
+    id: session.user.id, role: session.user.role, organizationId: orgId,
+  })
 
   const assets = await prisma.asset.findMany({
-    where: { organizationId: orgId },
+    where: { organizationId: orgId, ...propFilter },
     include: { property: true, serviceLogs: { orderBy: { date: "desc" }, take: 1 } },
     orderBy: { name: "asc" },
   })

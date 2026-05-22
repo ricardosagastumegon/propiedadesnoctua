@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { assertPropertyAccess } from "@/lib/permissions"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -17,6 +18,10 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  await assertPropertyAccess(
+    { id: session.user.id, role: session.user.role, organizationId: orgId },
+    id,
+  )
 
   const property = await prisma.property.findFirst({
     where: { id, organizationId: orgId },

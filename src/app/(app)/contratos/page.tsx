@@ -10,15 +10,19 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatGTQ, formatDate } from "@/lib/format"
 import { getContractStatus, STATUS_LABELS, STATUS_VARIANTS } from "@/lib/contracts"
+import { propertyAccessWhere } from "@/lib/permissions"
 import { FileText, Plus } from "lucide-react"
 
 export default async function ContratosPage() {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  const propFilter = await propertyAccessWhere({
+    id: session.user.id, role: session.user.role, organizationId: orgId,
+  })
 
   const contracts = await prisma.contract.findMany({
-    where: { organizationId: orgId },
+    where: { organizationId: orgId, ...propFilter },
     include: { property: true, tenant: true, unit: true },
     orderBy: { createdAt: "desc" },
   })

@@ -8,15 +8,19 @@ import { PageHeader } from "@/components/ui/page-header"
 import { EmptyState } from "@/components/ui/empty-state"
 import { formatGTQ, formatDate } from "@/lib/format"
 import { PROJECT_TYPES, PROJECT_STATUSES, PROJECT_STATUS_COLORS } from "@/lib/schemas/project"
+import { propertyAccessWhere } from "@/lib/permissions"
 import { FolderOpen, Plus } from "lucide-react"
 
 export default async function ProyectosPage() {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  const propFilter = await propertyAccessWhere({
+    id: session.user.id, role: session.user.role, organizationId: orgId,
+  })
 
   const projects = await prisma.project.findMany({
-    where: { organizationId: orgId },
+    where: { organizationId: orgId, ...propFilter },
     include: {
       property: true,
       partidas: {

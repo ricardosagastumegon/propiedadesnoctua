@@ -179,11 +179,10 @@ export function getVisibleModules(user: UserForPermissions | null | undefined): 
 
 /**
  * IDs de propiedades a las que el usuario tiene acceso.
- * - Si NO tiene filas en UserPropertyAccess → ve todas las de su org.
- * - Si tiene filas → solo esas.
+ * - Si NO tiene filas en UserPropertyAccess → null (acceso total, ve todas).
+ * - Si tiene filas → array de propertyIds.
  *
- * Devuelve `null` para indicar "todas las de la org" (no filtrar).
- * Devuelve array para indicar "solo estos IDs".
+ * Convención: null = "todas", array (incluso vacío) = "solo estas".
  */
 export async function getAccessiblePropertyIds(user: UserForPermissions): Promise<string[] | null> {
   const access = await prisma.userPropertyAccess.findMany({
@@ -195,8 +194,8 @@ export async function getAccessiblePropertyIds(user: UserForPermissions): Promis
 }
 
 /**
- * Versión síncrona: chequea si un usuario puede acceder a UNA propiedad específica,
- * dado el listado pre-cargado de propertyIds (o null = todas).
+ * Sincrónica: chequea si un usuario puede acceder a UNA propiedad específica,
+ * dado el listado pre-cargado (o null = todas).
  */
 export function canAccessProperty(
   user: UserForPermissions | null | undefined,
@@ -209,11 +208,70 @@ export function canAccessProperty(
 }
 
 /**
- * Helper para usar en where clauses de Prisma.
- * Retorna `{ propertyId: { in: [...] } }` o `{}` si tiene acceso total.
+ * Helper para `where` de Prisma sobre tablas que tienen `propertyId` directo.
+ * Ejemplo: prisma.maintenanceRequest.findMany({ where: { ...await propertyAccessWhere(user), organizationId } })
  */
 export async function propertyAccessWhere(user: UserForPermissions): Promise<{ propertyId?: { in: string[] } }> {
   const ids = await getAccessiblePropertyIds(user)
   if (ids === null) return {}
   return { propertyId: { in: ids } }
+}
+
+/**
+ * Helper para `where` cuando el `propertyId` es opcional (ej: Project.propertyId puede ser null).
+ * Si el usuario tiene acceso total → no filtra. Si tiene restricción → solo entidades
+ * con propertyId en la lista (excluye las sin propertyId).
+ */
+export async function propertyAccessWhereOpt(user: UserForPermissions): Promise<{ propertyId?: { in: string[] } }> {
+  return propertyAccessWhere(user)
+}
+
+/**
+ * Helper para tablas que NO tienen propertyId directo pero sí a través de project.
+ * Ejemplo: ProjectPartida → project → propertyId
+ */
+export async function propertyAccessWhereVia(
+  user: UserForPermissions,
+  relation: "project" | "partida" | "contract" | "asset" | "ticket",
+): Promise<Record<string, unknown>> {
+  const ids = await getAccessiblePropertyIds(user)
+  if (ids === null) return {}
+  switch (relation) {
+    case "project":
+    case "contract":
+    case "asset":
+    case "ticket":
+      return { [relation]: { propertyId: { in: ids } } }
+    case "partida":
+      // Quote → partida → project → propertyId
+      return { partida: { project: { propertyId: { in: ids } } } }
+  }
+}
+
+/**
+ * Lanza notFound() si el usuario no tiene acceso a la propiedad indicada.
+ * Usar al inicio de páginas de detalle que dependen de una propiedad.
+ */
+export async function assertPropertyAccess(
+  user: UserForPermissions,
+  propertyId: string,
+): Promise<void> {
+  const ids = await getAccessiblePropertyIds(user)
+  if (ids === null) return // acceso total
+  if (!ids.includes(propertyId)) {
+    const { notFound } = await import("next/navigation")
+    notFound()
+  }
+}
+
+/**
+ * Variante para entidades cuyo propertyId puede venir desde una relación.
+ * Ejemplo: Project.propertyId puede ser null → permitir si null.
+ */
+export async function assertPropertyAccessOrNull(
+  user: UserForPermissions,
+  propertyId: string | null | undefined,
+): Promise<void> {
+  if (propertyId == null) return // entidad sin propiedad → permitir (no propertyId que validar)
+  await assertPropertyAccess(user, propertyId)
 }

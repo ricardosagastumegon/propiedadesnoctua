@@ -14,6 +14,7 @@ import { PAYMENT_FREQUENCY } from "@/lib/schemas/contract"
 import { RegisterPaymentDialog } from "./_register-payment"
 import { CreateInvoiceDialog } from "./_create-invoice"
 import { ContractStatusActions } from "./_status-actions"
+import { assertPropertyAccess } from "@/lib/permissions"
 import { Receipt, CreditCard } from "lucide-react"
 
 export default async function ContractDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -33,6 +34,10 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
     },
   })
   if (!contract) notFound()
+  await assertPropertyAccess(
+    { id: session.user.id, role: session.user.role, organizationId: orgId },
+    contract.propertyId,
+  )
 
   const displayStatus = getContractStatus(contract)
   const totalPaid = contract.payments.reduce((s, p) => s + p.amount, 0)

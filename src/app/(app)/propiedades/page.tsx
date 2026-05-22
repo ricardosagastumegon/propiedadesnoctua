@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/auth"
+import { getAccessiblePropertyIds } from "@/lib/permissions"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -41,10 +42,16 @@ const STATUS_LABELS: Record<string, string> = {
 export default async function PropertiesPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = session.user.organizationId
+  const user = { id: session.user.id, role: session.user.role, organizationId: session.user.organizationId }
+  const orgId = user.organizationId
 
+  // Filtro de acceso por propiedad: si user tiene UserPropertyAccess restringido, solo ve esas
+  const accessibleIds = await getAccessiblePropertyIds(user)
   const properties = await prisma.property.findMany({
-    where: { organizationId: orgId },
+    where: {
+      organizationId: orgId,
+      ...(accessibleIds !== null ? { id: { in: accessibleIds } } : {}),
+    },
     orderBy: { createdAt: "desc" },
   })
 

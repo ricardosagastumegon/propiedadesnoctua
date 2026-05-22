@@ -5,15 +5,22 @@ import { prisma } from "@/lib/prisma"
 import { Card } from "@/components/ui/card"
 import { PageHeader } from "@/components/ui/page-header"
 import { formatGTQ } from "@/lib/format"
+import { getAccessiblePropertyIds } from "@/lib/permissions"
 import { Wallet, TrendingDown, TrendingUp, AlertCircle } from "lucide-react"
 
 export default async function CajaChicaListPage() {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  const accessibleIds = await getAccessiblePropertyIds({
+    id: session.user.id, role: session.user.role, organizationId: orgId,
+  })
 
   const properties = await prisma.property.findMany({
-    where: { organizationId: orgId },
+    where: {
+      organizationId: orgId,
+      ...(accessibleIds !== null ? { id: { in: accessibleIds } } : {}),
+    },
     include: {
       pettyCash: {
         include: {

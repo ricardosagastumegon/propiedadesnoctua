@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header"
 import { formatGTQ, formatDate } from "@/lib/format"
 import { BadgeCheck, Clock, CheckCircle2, XCircle, ArrowRight, Phone, Building2, Wrench, FolderKanban, User as UserIcon } from "lucide-react"
 import { AcceptanceTabs } from "./_tabs"
+import { getAccessiblePropertyIds } from "@/lib/permissions"
 
 export const dynamic = "force-dynamic"
 
@@ -40,6 +41,9 @@ export default async function AceptacionesPage() {
   const canAcceptServices = !!session.user.canAcceptServices
   const role = (session.user.role ?? "VIEWER") as string
   const isOwnerOrAdmin = role === "ADMIN" || role === "OWNER"
+  const accessibleIds = await getAccessiblePropertyIds({
+    id: session.user.id, role, organizationId: orgId,
+  })
 
   const acceptances = await prisma.serviceAcceptance.findMany({
     where: { organizationId: orgId },
@@ -78,7 +82,23 @@ export default async function AceptacionesPage() {
   const partidaMap = new Map(partidas.map(p => [p.id, p]))
   const ticketMap = new Map(tickets.map(t => [t.id, t]))
 
-  const rows: EnrichedRow[] = acceptances.map(a => {
+  // Filtro de acceso por propiedad
+  const filteredAcceptances = accessibleIds === null
+    ? acceptances
+    : acceptances.filter(a => {
+        if (a.entityType === "PARTIDA") {
+          const p = partidaMap.get(a.entityId)
+          const propId = p?.project?.propertyId
+          return propId ? accessibleIds.includes(propId) : false
+        }
+        if (a.entityType === "TICKET") {
+          const t = ticketMap.get(a.entityId)
+          return t?.propertyId ? accessibleIds.includes(t.propertyId) : false
+        }
+        return false
+      })
+
+  const rows: EnrichedRow[] = filteredAcceptances.map(a => {
     if (a.entityType === "PARTIDA") {
       const p = partidaMap.get(a.entityId)
       return {

@@ -8,15 +8,25 @@ import { Badge } from "@/components/ui/badge"
 import { PageHeader } from "@/components/ui/page-header"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { getAccessiblePropertyIds } from "@/lib/permissions"
 import { Users, Plus, Phone, Mail } from "lucide-react"
 
 export default async function InquilinosPage() {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  const accessibleIds = await getAccessiblePropertyIds({
+    id: session.user.id, role: session.user.role, organizationId: orgId,
+  })
 
   const tenants = await prisma.tenant.findMany({
-    where: { organizationId: orgId },
+    where: {
+      organizationId: orgId,
+      // Tenant no tiene propertyId directo: filtramos por contratos en propiedades accesibles
+      ...(accessibleIds !== null ? {
+        contracts: { some: { propertyId: { in: accessibleIds } } },
+      } : {}),
+    },
     include: {
       contracts: { where: { status: "ACTIVE" }, select: { id: true } },
     },

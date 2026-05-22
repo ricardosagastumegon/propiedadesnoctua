@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { ApprovalsClient } from "./_components/approvals-client"
 import type { EnrichedItem } from "./_types"
+import { getAccessiblePropertyIds } from "@/lib/permissions"
 
 export const dynamic = "force-dynamic"
 
@@ -13,6 +14,10 @@ export default async function AutorizacionesPage() {
   const orgId = session.user.organizationId
   const authorityPolicy = (session.user.authorityPolicy ?? "NONE") as string
   const role = (session.user.role ?? "VIEWER") as string
+
+  const accessibleIds = await getAccessiblePropertyIds({
+    id: session.user.id, role: session.user.role, organizationId: orgId,
+  })
 
   const allRequests = await prisma.approvalRequest.findMany({
     where: { organizationId: orgId },
@@ -285,13 +290,28 @@ export default async function AutorizacionesPage() {
     return { request, entity }
   })
 
+  // Filtro de acceso por propiedad: si user tiene UserPropertyAccess restringido,
+  // ocultar requests cuya entidad pertenezca a una propiedad fuera de su alcance.
+  const accessFiltered = accessibleIds === null
+    ? enriched
+    : enriched.filter(item => {
+        const e = item.entity as { propertyId?: string | null; type?: string }
+        if (!e.propertyId) return true // entidades sin propertyId resolvible se dejan (ej: VENDOR)
+        return accessibleIds.includes(e.propertyId)
+      })
+
+  // También filtro la lista de propiedades disponibles para el dropdown
+  const filteredProperties = accessibleIds === null
+    ? properties
+    : properties.filter(p => accessibleIds.includes(p.id))
+
   return (
     <ApprovalsClient
-      enriched={enriched}
+      enriched={accessFiltered}
       currentUserId={userId}
       authorityPolicy={authorityPolicy}
       role={role}
-      properties={properties}
+      properties={filteredProperties}
       users={users}
     />
   )

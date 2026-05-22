@@ -10,6 +10,7 @@ import { BackButton } from "@/components/shared/back-button"
 import { formatGTQ, formatDate } from "@/lib/format"
 import { ExpenseForm } from "./_expense-form"
 import { ReplenishForm } from "./_replenish-form"
+import { assertPropertyAccess } from "@/lib/permissions"
 import { Wallet, TrendingDown, TrendingUp } from "lucide-react"
 
 const TYPE_LABELS: Record<string, string> = {
@@ -29,6 +30,10 @@ export default async function CajaChicaDetailPage({ params }: { params: Promise<
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
   const { propertyId } = await params
+  await assertPropertyAccess(
+    { id: session.user.id, role: session.user.role, organizationId: orgId },
+    propertyId,
+  )
 
   const property = await prisma.property.findFirst({
     where: { id: propertyId, organizationId: orgId },

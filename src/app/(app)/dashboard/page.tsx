@@ -11,6 +11,7 @@ import {
 import { formatGTQ, formatDate } from "@/lib/format"
 import { DashboardChart } from "./_chart"
 import { subMonths, startOfMonth, endOfMonth, format } from "date-fns"
+import { getAccessiblePropertyIds } from "@/lib/permissions"
 
 const TICKET_STATUS_LABELS: Record<string, string> = {
   REPORTED: "Reportado",
@@ -47,6 +48,17 @@ export default async function DashboardPage() {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  const accessibleIds = await getAccessiblePropertyIds({
+    id: session.user.id, role: session.user.role, organizationId: orgId,
+  })
+
+  // Filtros reutilizables — si accessibleIds=null, no se agrega filtro (acceso total)
+  const propWhere = accessibleIds !== null ? { id: { in: accessibleIds } } : {}
+  const byPropertyId = accessibleIds !== null ? { propertyId: { in: accessibleIds } } : {}
+  const contractByProperty = accessibleIds !== null ? { propertyId: { in: accessibleIds } } : {}
+  const paymentByContractProperty = accessibleIds !== null
+    ? { contract: { propertyId: { in: accessibleIds } } }
+    : {}
 
   const now = new Date()
   const monthStart = startOfMonth(now)
@@ -64,42 +76,44 @@ export default async function DashboardPage() {
     recentOpenTickets,
     activeProjects,
   ] = await Promise.all([
-    prisma.property.count({ where: { organizationId: orgId } }),
-    prisma.property.count({ where: { organizationId: orgId, status: "RENTED" } }),
-    prisma.contract.count({ where: { organizationId: orgId, status: "ACTIVE" } }),
+    prisma.property.count({ where: { organizationId: orgId, ...propWhere } }),
+    prisma.property.count({ where: { organizationId: orgId, status: "RENTED", ...propWhere } }),
+    prisma.contract.count({ where: { organizationId: orgId, status: "ACTIVE", ...contractByProperty } }),
     prisma.maintenanceRequest.count({
-      where: { organizationId: orgId, status: { in: ["REPORTED", "ASSIGNED", "IN_PROGRESS"] } },
+      where: { organizationId: orgId, status: { in: ["REPORTED", "ASSIGNED", "IN_PROGRESS"] }, ...byPropertyId },
     }),
     prisma.payment.findMany({
-      where: { organizationId: orgId, paymentDate: { gte: monthStart, lte: monthEnd } },
+      where: { organizationId: orgId, paymentDate: { gte: monthStart, lte: monthEnd }, ...paymentByContractProperty },
     }),
     prisma.expense.findMany({
-      where: { organizationId: orgId, date: { gte: monthStart, lte: monthEnd } },
+      where: { organizationId: orgId, date: { gte: monthStart, lte: monthEnd }, ...byPropertyId },
     }),
     prisma.contract.findMany({
       where: {
         organizationId: orgId,
         status: "ACTIVE",
         endDate: { gte: now, lte: new Date(now.getTime() + 60 * 86400000) },
+        ...contractByProperty,
       },
       include: { tenant: true, property: true },
       orderBy: { endDate: "asc" },
       take: 5,
     }),
     prisma.approvalRequest.findMany({
+      // Polimórfico — no filtramos por propiedad acá; el detalle filtra.
       where: { organizationId: orgId, status: { in: ["PENDING", "PENDING_COSIGN"] } },
       include: { requestedBy: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
       take: 6,
     }),
     prisma.maintenanceRequest.findMany({
-      where: { organizationId: orgId, status: { in: ["REPORTED", "ASSIGNED", "IN_PROGRESS"] } },
+      where: { organizationId: orgId, status: { in: ["REPORTED", "ASSIGNED", "IN_PROGRESS"] }, ...byPropertyId },
       include: { property: { select: { name: true } } },
       orderBy: [{ priority: "desc" }, { reportedAt: "desc" }],
       take: 6,
     }),
     prisma.project.findMany({
-      where: { organizationId: orgId, status: { in: ["PLANNING", "IN_PROGRESS", "ON_HOLD"] } },
+      where: { organizationId: orgId, status: { in: ["PLANNING", "IN_PROGRESS", "ON_HOLD"] }, ...byPropertyId },
       include: {
         property: { select: { name: true } },
         partidas: { select: { amountApproved: true, amountPaid: true } },
@@ -119,8 +133,8 @@ export default async function DashboardPage() {
   })
 
   const [allPayments, allExpenses] = await Promise.all([
-    prisma.payment.findMany({ where: { organizationId: orgId, paymentDate: { gte: months[0].start } } }),
-    prisma.expense.findMany({ where: { organizationId: orgId, date: { gte: months[0].start } } }),
+    prisma.payment.findMany({ where: { organizationId: orgId, paymentDate: { gte: months[0].start }, ...paymentByContractProperty } }),
+    prisma.expense.findMany({ where: { organizationId: orgId, date: { gte: months[0].start }, ...byPropertyId } }),
   ])
 
   const chartData = months.map(m => ({

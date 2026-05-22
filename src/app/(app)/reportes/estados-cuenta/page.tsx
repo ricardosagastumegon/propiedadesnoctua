@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { EstadosCuentaClient } from "./_client"
+import { getAccessiblePropertyIds } from "@/lib/permissions"
 
 export const dynamic = "force-dynamic"
 
@@ -9,6 +10,13 @@ export default async function EstadosCuentaPage() {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  const accessibleIds = await getAccessiblePropertyIds({
+    id: session.user.id, role: session.user.role, organizationId: orgId,
+  })
+  const projectByPropertyAccess = accessibleIds !== null
+    ? { project: { organizationId: orgId, propertyId: { in: accessibleIds } } }
+    : { project: { organizationId: orgId } }
+  const byPropertyId = accessibleIds !== null ? { propertyId: { in: accessibleIds } } : {}
 
   const vendors = await prisma.vendor.findMany({
     where: { organizationId: orgId },
@@ -18,7 +26,7 @@ export default async function EstadosCuentaPage() {
 
   const [partidas, tickets, invoices] = await Promise.all([
     prisma.projectPartida.findMany({
-      where: { project: { organizationId: orgId }, vendorId: { not: null } },
+      where: { ...projectByPropertyAccess, vendorId: { not: null } },
       select: {
         id: true,
         vendorId: true,
@@ -29,7 +37,7 @@ export default async function EstadosCuentaPage() {
       },
     }),
     prisma.maintenanceRequest.findMany({
-      where: { organizationId: orgId, vendorId: { not: null } },
+      where: { organizationId: orgId, vendorId: { not: null }, ...byPropertyId },
       select: {
         id: true,
         vendorId: true,
@@ -40,7 +48,7 @@ export default async function EstadosCuentaPage() {
       },
     }),
     prisma.vendorInvoice.findMany({
-      where: { organizationId: orgId },
+      where: { organizationId: orgId, ...byPropertyId },
       select: { id: true, vendorId: true, total: true, balance: true, status: true, dueDate: true },
     }),
   ])

@@ -10,11 +10,19 @@ import { formatGTQ, formatDate } from "@/lib/format"
 import { IncomeExpenseChart } from "./_charts"
 import { buildCsv, csvDataUrl } from "@/lib/csv-export"
 import { subMonths, startOfMonth, endOfMonth, format } from "date-fns"
+import { getAccessiblePropertyIds } from "@/lib/permissions"
 
 export default async function ReportesPage() {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  const accessibleIds = await getAccessiblePropertyIds({
+    id: session.user.id, role: session.user.role, organizationId: orgId,
+  })
+  const byPropertyId = accessibleIds !== null ? { propertyId: { in: accessibleIds } } : {}
+  const paymentByContractProperty = accessibleIds !== null
+    ? { contract: { propertyId: { in: accessibleIds } } } : {}
+
   const now = new Date()
 
   const months = Array.from({ length: 6 }, (_, i) => {
@@ -23,25 +31,26 @@ export default async function ReportesPage() {
   })
 
   const [payments, expenses, contracts, tickets, projects, vendorInvoices, approvalRequests, pettyCashes] = await Promise.all([
-    prisma.payment.findMany({ where: { organizationId: orgId }, orderBy: { paymentDate: "desc" } }),
-    prisma.expense.findMany({ where: { organizationId: orgId }, orderBy: { date: "desc" } }),
+    prisma.payment.findMany({ where: { organizationId: orgId, ...paymentByContractProperty }, orderBy: { paymentDate: "desc" } }),
+    prisma.expense.findMany({ where: { organizationId: orgId, ...byPropertyId }, orderBy: { date: "desc" } }),
     prisma.contract.findMany({
-      where: { organizationId: orgId, status: "ACTIVE" },
+      where: { organizationId: orgId, status: "ACTIVE", ...byPropertyId },
       include: { tenant: true, property: true },
       orderBy: { endDate: "asc" },
     }),
     prisma.maintenanceRequest.findMany({
-      where: { organizationId: orgId },
+      where: { organizationId: orgId, ...byPropertyId },
       include: { property: { select: { name: true } } },
       orderBy: { reportedAt: "desc" },
     }),
     prisma.project.findMany({
-      where: { organizationId: orgId },
+      where: { organizationId: orgId, ...byPropertyId },
       include: { property: { select: { name: true } }, partidas: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.vendorInvoice.findMany({
-      where: { organizationId: orgId },
+      // VendorInvoice tiene propertyId opcional — si user restringido, requerir match
+      where: { organizationId: orgId, ...(accessibleIds !== null ? { propertyId: { in: accessibleIds } } : {}) },
       include: { vendor: { select: { name: true } } },
       orderBy: { date: "desc" },
     }),
@@ -51,7 +60,7 @@ export default async function ReportesPage() {
       take: 50,
     }),
     prisma.pettyCash.findMany({
-      where: { organizationId: orgId },
+      where: { organizationId: orgId, ...byPropertyId },
       include: { property: { select: { name: true } }, movements: { orderBy: { date: "desc" } } },
     }),
   ])

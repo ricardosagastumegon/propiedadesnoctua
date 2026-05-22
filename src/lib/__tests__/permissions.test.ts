@@ -1,6 +1,14 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { prismaMock } from "@/test/setup"
-import { can, getVisibleModules, getAccessiblePropertyIds, canAccessProperty } from "@/lib/permissions"
+import {
+  can, getVisibleModules, getAccessiblePropertyIds, canAccessProperty,
+  propertyAccessWhere, assertPropertyAccess,
+} from "@/lib/permissions"
+
+// Mock next/navigation.notFound para test de assertPropertyAccess
+vi.mock("next/navigation", () => ({
+  notFound: () => { throw new Error("NOT_FOUND") },
+}))
 
 const u = (role: string) => ({ id: "u1", role, organizationId: "org_1" })
 
@@ -124,5 +132,42 @@ describe("canAccessProperty (sincrónica con lista pre-cargada)", () => {
 
   it("user null → false", () => {
     expect(canAccessProperty(null, "p1", null)).toBe(false)
+  })
+})
+
+describe("propertyAccessWhere", () => {
+  it("sin restricción → {} (acceso total, no filtra)", async () => {
+    prismaMock.userPropertyAccess.findMany.mockResolvedValue([])
+    const w = await propertyAccessWhere(u("OWNER"))
+    expect(w).toEqual({})
+  })
+
+  it("con restricción → { propertyId: { in: [...] } }", async () => {
+    prismaMock.userPropertyAccess.findMany.mockResolvedValue([
+      { propertyId: "p1" }, { propertyId: "p2" },
+    ] as any)
+    const w = await propertyAccessWhere(u("SUPERVISOR"))
+    expect(w).toEqual({ propertyId: { in: ["p1", "p2"] } })
+  })
+})
+
+describe("assertPropertyAccess", () => {
+  it("usuario con acceso total → no lanza", async () => {
+    prismaMock.userPropertyAccess.findMany.mockResolvedValue([])
+    await expect(assertPropertyAccess(u("OWNER"), "any_prop")).resolves.toBeUndefined()
+  })
+
+  it("usuario con acceso a la propiedad → no lanza", async () => {
+    prismaMock.userPropertyAccess.findMany.mockResolvedValue([
+      { propertyId: "p1" }, { propertyId: "p2" },
+    ] as any)
+    await expect(assertPropertyAccess(u("SUPERVISOR"), "p1")).resolves.toBeUndefined()
+  })
+
+  it("usuario sin acceso a la propiedad → lanza notFound", async () => {
+    prismaMock.userPropertyAccess.findMany.mockResolvedValue([
+      { propertyId: "p1" },
+    ] as any)
+    await expect(assertPropertyAccess(u("SUPERVISOR"), "p99")).rejects.toThrow("NOT_FOUND")
   })
 })

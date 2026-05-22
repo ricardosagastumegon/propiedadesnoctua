@@ -19,6 +19,7 @@ import { DeleteProjectButton } from "./_delete-button"
 import { getProjectActivityTrail } from "@/lib/project-activity-trail"
 import { getPrepaymentCap } from "@/lib/service-acceptance"
 import { getVendorsForOrg } from "@/lib/vendors"
+import { assertPropertyAccessOrNull } from "@/lib/permissions"
 import { Building2, Calendar, CheckSquare2, Download } from "lucide-react"
 
 export default async function ProjectDetailPage({
@@ -61,6 +62,10 @@ export default async function ProjectDetailPage({
     },
   })
   if (!project) notFound()
+  await assertPropertyAccessOrNull(
+    { id: session.user.id, role: session.user.role, organizationId: orgId },
+    project.propertyId,
+  )
 
   // Fetch approval requests for this project's partidas + activity trail
   const partidaIds = project.partidas.map(p => p.id)

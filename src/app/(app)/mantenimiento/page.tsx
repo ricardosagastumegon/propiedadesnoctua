@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { formatDate } from "@/lib/format"
 import { CATEGORIES, PRIORITIES } from "@/lib/schemas/maintenance"
 import { computeTicketState, type TicketComputedState } from "@/lib/ticket-state"
+import { propertyAccessWhere } from "@/lib/permissions"
 import { Wrench, Plus, AlertTriangle } from "lucide-react"
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -22,10 +23,12 @@ export default async function MantenimientoPage() {
   const session = await auth()
   if (!session) redirect("/login")
   const orgId = session.user.organizationId
+  const user = { id: session.user.id, role: session.user.role, organizationId: orgId }
+  const propFilter = await propertyAccessWhere(user)
 
   const [tickets, acceptances, orgSettings] = await Promise.all([
     prisma.maintenanceRequest.findMany({
-      where: { organizationId: orgId },
+      where: { organizationId: orgId, ...propFilter },
       include: {
         property: true,
         assignedTo: true,
