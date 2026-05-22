@@ -1,15 +1,17 @@
 import { z } from "zod"
 
-// Zod 4: nullish() handles both undefined and null atomically.
-// preprocess returns null for empty/missing values so the chain reaches nullish().
+// Zod 4: z.preprocess() retorna ZodPipe que NO hereda la optionality del
+// esquema interno. Si el campo no está en el FormData (ej. latitude/longitude
+// que no tienen input en el form), Zod tira "expected nonoptional, received
+// undefined". La fix es .optional() en el OUTER del pipe.
 const numOpt = () => z.preprocess(
   v => (v === "" || v === null || v === undefined) ? null : v,
-  z.coerce.number().nullish()
-)
+  z.coerce.number().nullable()
+).optional()
 const intOpt = () => z.preprocess(
   v => (v === "" || v === null || v === undefined) ? null : v,
-  z.coerce.number().int().nullish()
-)
+  z.coerce.number().int().nullable()
+).optional()
 
 export const propertySchema = z.object({
   name: z.string().min(1, "Nombre requerido"),
