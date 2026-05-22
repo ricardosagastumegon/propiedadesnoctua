@@ -3,8 +3,11 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { NotificationBell } from "@/components/notification-bell"
 import { SidebarNav } from "@/components/shared/nav-link"
+import { DevUserSwitcher } from "@/components/shared/dev-user-switcher"
 import { prisma } from "@/lib/prisma"
 import { LogOut } from "lucide-react"
+
+const SHOW_DEV_SWITCHER = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS === "true"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -12,13 +15,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = session.user
   const orgId = user.organizationId
 
-  const [pendingApprovals, pendingAcceptances] = await Promise.all([
+  const [pendingApprovals, pendingAcceptances, devUsers] = await Promise.all([
     prisma.approvalRequest.count({
       where: { organizationId: orgId, status: { in: ["PENDING", "PENDING_COSIGN"] } },
     }),
     prisma.serviceAcceptance.count({
       where: { organizationId: orgId, status: "PENDING" },
     }),
+    SHOW_DEV_SWITCHER
+      ? prisma.user.findMany({
+          where: { organizationId: orgId, isActive: true },
+          orderBy: { role: "asc" },
+          select: { email: true, name: true, role: true },
+        })
+      : Promise.resolve([]),
   ])
 
   return (
@@ -34,8 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <SidebarNav
             pendingApprovals={pendingApprovals}
             pendingAcceptances={pendingAcceptances}
-            canAcceptServices={!!user.canAcceptServices}
-            role={user.role}
+            user={{ id: user.id, role: user.role, organizationId: user.organizationId }}
           />
         </nav>
         <div className="p-3 border-t">
@@ -57,7 +66,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-12 border-b flex items-center justify-end px-4 gap-2 bg-background shrink-0">
+        <header className="h-12 border-b flex items-center justify-end px-4 gap-3 bg-background shrink-0">
+          {SHOW_DEV_SWITCHER && devUsers.length > 0 && <DevUserSwitcher users={devUsers} />}
           <NotificationBell />
         </header>
         <main className="flex-1 bg-background overflow-auto">{children}</main>

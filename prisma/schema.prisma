@@ -53,25 +53,31 @@ model OrganizationSettings {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
+// role: OWNER | ADMIN | MANAGER | ACCOUNTANT | SUPERVISOR | ASSISTANT | TECHNICIAN | VIEWER
 // authorityPolicy: NONE | ALONE | COSIGN_REQUIRED
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  name            String
-  passwordHash    String?
-  emailVerified   DateTime?
-  image           String?
-  role            String    @default("VIEWER") // ADMIN | MANAGER | SUPERVISOR | ASSISTANT | VIEWER
-  authorityPolicy String    @default("NONE")   // NONE | ALONE | COSIGN_REQUIRED
-  canAcceptServices Boolean @default(false)
-  phone           String?
-  organizationId  String
-  isActive        Boolean   @default(true)
-  lastLoginAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  name                String
+  passwordHash        String?
+  emailVerified       DateTime?
+  image               String?
+  role                String    @default("VIEWER")
+  authorityPolicy     String    @default("NONE")
+  canAcceptServices   Boolean   @default(false)
+  phone               String?
+  organizationId      String
+  isActive            Boolean   @default(true)
+  mustChangePassword  Boolean   @default(true)
+  invitedById         String?
+  invitedAt           DateTime?
+  lastLoginAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy            User?                @relation("UserInviter", fields: [invitedById], references: [id])
+  invited              User[]               @relation("UserInviter")
   notifications        Notification[]
   assignedTickets      MaintenanceRequest[] @relation("AssignedTo")
   cosignPolicy         CosignPolicy?        @relation("PolicyOwner")
@@ -84,8 +90,26 @@ model User {
   serviceAcceptancesAccepted  ServiceAcceptance[] @relation("AcceptanceAccepted")
   serviceAcceptancesRejected  ServiceAcceptance[] @relation("AcceptanceRejected")
   createdQuotes        Quote[]              @relation("QuoteCreator")
+  propertyAccess       UserPropertyAccess[]
 
   @@index([organizationId])
+}
+
+// Acceso de un usuario a propiedades específicas.
+// Regla: usuario sin filas en esta tabla → ve TODAS las propiedades de su org (OWNER/ADMIN).
+//        usuario con 1+ filas → ve SOLO esas propiedades (encargados, SUPERVISORs).
+model UserPropertyAccess {
+  id         String   @id @default(cuid())
+  userId     String
+  propertyId String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId])
+  @@index([userId])
+  @@index([propertyId])
 }
 
 // entityType: PARTIDA | TICKET
@@ -220,6 +244,7 @@ model Property {
   utilities      UtilityAccount[]
   vendorInvoices VendorInvoice[]
   pettyCash      PettyCash?
+  userAccess     UserPropertyAccess[]
 
   @@index([organizationId])
   @@index([status])

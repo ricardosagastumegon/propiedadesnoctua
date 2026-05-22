@@ -14,54 +14,70 @@ async function main() {
   const hash = await bcrypt.hash("demo1234", 10)
 
   // ─── USERS ──────────────────────────────────────────────────────────────────
-  // Juan Mendez (owner-style admin) — approves but cannot accept services
-  const admin = await prisma.user.upsert({
-    where: { email: "admin@demo.gt" },
-    update: { authorityPolicy: "ALONE", role: "ADMIN", canAcceptServices: false, name: "Juan Mendez" },
-    create: { email: "admin@demo.gt", name: "Juan Mendez", passwordHash: hash, role: "ADMIN", authorityPolicy: "ALONE", canAcceptServices: false, organizationId: org.id },
-  })
+  // Helper to upsert demo users (mustChangePassword=false para que funcionen sin fricción)
+  async function upsertDemoUser(args: {
+    email: string; name: string; role: string; authorityPolicy: string; canAcceptServices: boolean
+  }) {
+    return prisma.user.upsert({
+      where: { email: args.email },
+      update: {
+        name: args.name, role: args.role, authorityPolicy: args.authorityPolicy,
+        canAcceptServices: args.canAcceptServices, mustChangePassword: false, isActive: true,
+      },
+      create: {
+        email: args.email, name: args.name, passwordHash: hash,
+        role: args.role, authorityPolicy: args.authorityPolicy,
+        canAcceptServices: args.canAcceptServices, mustChangePassword: false,
+        organizationId: org.id,
+      },
+    })
+  }
 
-  // Sofia Giron (manager) — CAN accept services
-  const manager = await prisma.user.upsert({
-    where: { email: "gerente@demo.gt" },
-    update: { authorityPolicy: "COSIGN_REQUIRED", role: "MANAGER", canAcceptServices: true },
-    create: { email: "gerente@demo.gt", name: "Sofia Giron", passwordHash: hash, role: "MANAGER", authorityPolicy: "COSIGN_REQUIRED", canAcceptServices: true, organizationId: org.id },
+  // v9 — 9 usuarios variados representando los 8 roles + 2 SUPERVISORs distintos
+  const admin = await upsertDemoUser({
+    email: "demo@inmobiliaria.gt", name: "Juan Rodríguez",
+    role: "OWNER", authorityPolicy: "ALONE", canAcceptServices: false,
   })
-
-  // Luis Herrera (supervisor) — no accept
-  const supervisor = await prisma.user.upsert({
-    where: { email: "super@demo.gt" },
-    update: { authorityPolicy: "COSIGN_REQUIRED", role: "SUPERVISOR", canAcceptServices: false },
-    create: { email: "super@demo.gt", name: "Luis Herrera", passwordHash: hash, role: "SUPERVISOR", authorityPolicy: "COSIGN_REQUIRED", canAcceptServices: false, organizationId: org.id },
+  const adminUser = await upsertDemoUser({
+    email: "admin@demo.gt", name: "María González",
+    role: "ADMIN", authorityPolicy: "ALONE", canAcceptServices: true,
   })
-
-  // Maria Gonzalez (admin-level accept) — CAN accept services. Originally Maria Torres.
-  const assistant1 = await prisma.user.upsert({
-    where: { email: "asist1@demo.gt" },
-    update: { authorityPolicy: "NONE", role: "ADMIN", canAcceptServices: true, name: "Maria Gonzalez" },
-    create: { email: "asist1@demo.gt", name: "Maria Gonzalez", passwordHash: hash, role: "ADMIN", authorityPolicy: "NONE", canAcceptServices: true, organizationId: org.id },
+  const manager = await upsertDemoUser({
+    email: "gerente@demo.gt", name: "José Martínez",
+    role: "MANAGER", authorityPolicy: "COSIGN_REQUIRED", canAcceptServices: false,
   })
-
-  // Pedro Vasquez (assistant) — no accept; he is the one who solicits acceptances
-  const assistant2 = await prisma.user.upsert({
-    where: { email: "asist2@demo.gt" },
-    update: { authorityPolicy: "NONE", role: "ASSISTANT", canAcceptServices: false },
-    create: { email: "asist2@demo.gt", name: "Pedro Vasquez", passwordHash: hash, role: "ASSISTANT", authorityPolicy: "NONE", canAcceptServices: false, organizationId: org.id },
+  const supervisor = await upsertDemoUser({
+    email: "super@demo.gt", name: "Pedro López",
+    role: "SUPERVISOR", authorityPolicy: "COSIGN_REQUIRED", canAcceptServices: false,
   })
-
-  // Ana Morales (viewer) — no accept
-  const viewer = await prisma.user.upsert({
-    where: { email: "demo@inmobiliaria.gt" },
-    update: { authorityPolicy: "NONE", role: "VIEWER", canAcceptServices: false },
-    create: { email: "demo@inmobiliaria.gt", name: "Ana Morales", passwordHash: hash, role: "VIEWER", authorityPolicy: "NONE", canAcceptServices: false, organizationId: org.id },
+  const accountant = await upsertDemoUser({
+    email: "contador@demo.gt", name: "Carmen Díaz",
+    role: "ACCOUNTANT", authorityPolicy: "NONE", canAcceptServices: false,
   })
-
-  // Roberto Castillo (extra assistant) — no accept
-  const roberto = await prisma.user.upsert({
-    where: { email: "roberto@demo.gt" },
-    update: { authorityPolicy: "NONE", role: "ASSISTANT", canAcceptServices: false },
-    create: { email: "roberto@demo.gt", name: "Roberto Castillo", passwordHash: hash, role: "ASSISTANT", authorityPolicy: "NONE", canAcceptServices: false, organizationId: org.id },
+  const assistant2 = await upsertDemoUser({
+    email: "asist1@demo.gt", name: "Ana García",
+    role: "ASSISTANT", authorityPolicy: "NONE", canAcceptServices: false,
   })
+  const technician = await upsertDemoUser({
+    email: "tecnico@demo.gt", name: "Roberto Pérez",
+    role: "TECHNICIAN", authorityPolicy: "NONE", canAcceptServices: false,
+  })
+  const viewer = await upsertDemoUser({
+    email: "viewer@demo.gt", name: "Lucía Morales",
+    role: "VIEWER", authorityPolicy: "NONE", canAcceptServices: false,
+  })
+  // Segundo supervisor para validar filtro de propiedades — encargada del Local Comercial
+  const supervisor2 = await upsertDemoUser({
+    email: "sofia@demo.gt", name: "Sofía Girón",
+    role: "SUPERVISOR", authorityPolicy: "COSIGN_REQUIRED", canAcceptServices: true,
+  })
+  // Roberto Castillo (extra para anti-conflict-of-interest)
+  const assistant1 = await upsertDemoUser({
+    email: "roberto@demo.gt", name: "Roberto Castillo",
+    role: "ASSISTANT", authorityPolicy: "NONE", canAcceptServices: false,
+  })
+  // (compat: variables que el resto del seed espera)
+  void supervisor2
 
   // OrganizationSettings — default 80% cap
   await prisma.organizationSettings.upsert({
@@ -71,20 +87,27 @@ async function main() {
   })
 
   // ─── COSIGN POLICIES ────────────────────────────────────────────────────────
-  // Manager needs admin to co-sign
+  // Gerente (José) requiere co-firma del OWNER (Juan)
   await prisma.cosignPolicy.upsert({
     where: { userId: manager.id },
     update: { allowedCosigners: { set: [{ id: admin.id }] } },
     create: { userId: manager.id, allowedCosigners: { connect: [{ id: admin.id }] } },
   })
-  // Supervisor needs manager or admin to co-sign
+  // Supervisor (Pedro López) requiere co-firma de Juan o María
   await prisma.cosignPolicy.upsert({
     where: { userId: supervisor.id },
-    update: { allowedCosigners: { set: [{ id: admin.id }, { id: manager.id }] } },
-    create: { userId: supervisor.id, allowedCosigners: { connect: [{ id: admin.id }, { id: manager.id }] } },
+    update: { allowedCosigners: { set: [{ id: admin.id }, { id: adminUser.id }] } },
+    create: { userId: supervisor.id, allowedCosigners: { connect: [{ id: admin.id }, { id: adminUser.id }] } },
+  })
+  // Sofía Girón requiere co-firma de Juan o María
+  await prisma.cosignPolicy.upsert({
+    where: { userId: supervisor2.id },
+    update: { allowedCosigners: { set: [{ id: admin.id }, { id: adminUser.id }] } },
+    create: { userId: supervisor2.id, allowedCosigners: { connect: [{ id: admin.id }, { id: adminUser.id }] } },
   })
 
   // ─── CLEAN ──────────────────────────────────────────────────────────────────
+  await prisma.userPropertyAccess.deleteMany({ where: { user: { organizationId: org.id } } })
   await prisma.serviceAcceptancePhoto.deleteMany({ where: { acceptance: { organizationId: org.id } } })
   await prisma.serviceAcceptance.deleteMany({ where: { organizationId: org.id } })
   await prisma.activityLog.deleteMany({ where: { organizationId: org.id } })
@@ -151,6 +174,17 @@ async function main() {
     addressLine: "Calzada Roosevelt 25-80", city: "Mixco", department: "Guatemala",
     builtArea: 600, currentValue: 1800000,
   }})
+
+  // ─── USER PROPERTY ACCESS ───────────────────────────────────────────────────
+  // Pedro López (SUPERVISOR) — encargado SOLO de la Cabaña Monterrico
+  await prisma.userPropertyAccess.create({
+    data: { userId: supervisor.id, propertyId: propMonterrico.id },
+  })
+  // Sofía Girón (SUPERVISOR) — encargada SOLO de la Oficina Zona 10 (representa "Local Comercial")
+  await prisma.userPropertyAccess.create({
+    data: { userId: supervisor2.id, propertyId: propOficina.id },
+  })
+  // El resto de usuarios no tienen filas en UserPropertyAccess → ven TODAS las propiedades
 
   // ─── TENANTS ────────────────────────────────────────────────────────────────
   const t1 = await prisma.tenant.create({ data: {

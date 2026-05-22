@@ -34,14 +34,13 @@ export async function updateOrganization(formData: FormData) {
 export async function updateMyAccount(formData: FormData) {
   const userId = await getUserId()
   const name = formData.get("name") as string
-  const email = formData.get("email") as string
+  const phone = (formData.get("phone") as string) || null
 
   if (!name?.trim()) return { error: { name: ["Nombre requerido"] } }
-  if (!email?.trim()) return { error: { email: ["Correo requerido"] } }
 
   await prisma.user.update({
     where: { id: userId },
-    data: { name, email },
+    data: { name: name.trim(), phone: phone?.trim() || null },
   })
   revalidatePath("/configuracion")
 }

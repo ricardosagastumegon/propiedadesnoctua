@@ -33,6 +33,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             : user.role === "MANAGER" || user.role === "SUPERVISOR" ? "COSIGN_REQUIRED"
             : "NONE")
 
+        // Update lastLoginAt (fire-and-forget, no esperar)
+        prisma.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date() },
+        }).catch(() => {})
+
         return {
           id: user.id,
           email: user.email,
@@ -42,12 +48,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           canAcceptServices: user.canAcceptServices,
           organizationId: user.organizationId,
           organizationName: user.organization.name,
+          mustChangePassword: user.mustChangePassword,
         }
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id
         token.role = user.role
@@ -55,6 +62,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.canAcceptServices = user.canAcceptServices
         token.organizationId = user.organizationId
         token.organizationName = user.organizationName
+        token.mustChangePassword = (user as { mustChangePassword?: boolean }).mustChangePassword ?? false
+      }
+      // En cada refresco de session, leemos mustChangePassword fresh
+      if (trigger === "update" && token.id) {
+        const u = await prisma.user.findUnique({ where: { id: token.id }, select: { mustChangePassword: true } })
+        if (u) token.mustChangePassword = u.mustChangePassword
       }
       return token
     },
@@ -66,6 +79,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.canAcceptServices = token.canAcceptServices
         session.user.organizationId = token.organizationId
         session.user.organizationName = token.organizationName
+        ;(session.user as unknown as { mustChangePassword: boolean }).mustChangePassword = token.mustChangePassword as boolean
       }
       return session
     },

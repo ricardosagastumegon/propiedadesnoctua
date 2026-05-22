@@ -6,42 +6,47 @@ import {
   FolderKanban, Receipt, Briefcase, BarChart3, Settings,
   FileCheck, UserRound, ShieldCheck, Wallet, BadgeCheck,
 } from "lucide-react"
+import { can, type Module, type UserForPermissions } from "@/lib/permissions"
 
-const NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, requiresAcceptance: false },
-  { href: "/propiedades", label: "Propiedades", icon: Building2, requiresAcceptance: false },
-  { href: "/inquilinos", label: "Inquilinos", icon: Users, requiresAcceptance: false },
-  { href: "/contratos", label: "Contratos", icon: FileText, requiresAcceptance: false },
-  { href: "/pagos", label: "Pagos y Facturas", icon: Receipt, requiresAcceptance: false },
-  { href: "/caja-chica", label: "Caja Chica", icon: Wallet, requiresAcceptance: false },
-  { href: "/mantenimiento", label: "Mantenimiento", icon: Wrench, requiresAcceptance: false },
-  { href: "/activos", label: "Activos", icon: Boxes, requiresAcceptance: false },
-  { href: "/proyectos", label: "Proyectos", icon: FolderKanban, requiresAcceptance: false },
-  { href: "/proveedores", label: "Proveedores", icon: Briefcase, requiresAcceptance: false },
-  { href: "/cotizaciones", label: "Cotizaciones", icon: FileCheck, requiresAcceptance: false },
-  { href: "/empleados", label: "Empleados", icon: UserRound, requiresAcceptance: false },
-  { href: "/autorizaciones", label: "Autorizaciones", icon: ShieldCheck, requiresAcceptance: false },
-  { href: "/aceptaciones", label: "Aceptaciones", icon: BadgeCheck, requiresAcceptance: true },
-  { href: "/reportes", label: "Reportes", icon: BarChart3, requiresAcceptance: false },
-  { href: "/configuracion", label: "Configuracion", icon: Settings, requiresAcceptance: false },
+interface NavItem {
+  href: string
+  label: string
+  icon: typeof Building2
+  module: Module
+}
+
+const NAV: NavItem[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "dashboard" },
+  { href: "/propiedades", label: "Propiedades", icon: Building2, module: "propiedades" },
+  { href: "/inquilinos", label: "Inquilinos", icon: Users, module: "inquilinos" },
+  { href: "/contratos", label: "Contratos", icon: FileText, module: "contratos" },
+  { href: "/pagos", label: "Pagos y Facturas", icon: Receipt, module: "pagos" },
+  { href: "/caja-chica", label: "Caja Chica", icon: Wallet, module: "cajaChica" },
+  { href: "/mantenimiento", label: "Mantenimiento", icon: Wrench, module: "mantenimiento" },
+  { href: "/activos", label: "Activos", icon: Boxes, module: "activos" },
+  { href: "/proyectos", label: "Proyectos", icon: FolderKanban, module: "proyectos" },
+  { href: "/proveedores", label: "Proveedores", icon: Briefcase, module: "proveedores" },
+  { href: "/cotizaciones", label: "Cotizaciones", icon: FileCheck, module: "cotizaciones" },
+  { href: "/empleados", label: "Empleados", icon: UserRound, module: "empleados" },
+  { href: "/autorizaciones", label: "Autorizaciones", icon: ShieldCheck, module: "autorizaciones" },
+  { href: "/aceptaciones", label: "Aceptaciones", icon: BadgeCheck, module: "aceptaciones" },
+  { href: "/reportes", label: "Reportes", icon: BarChart3, module: "reportes" },
+  { href: "/configuracion", label: "Configuracion", icon: Settings, module: "configuracion" },
 ]
 
 interface SidebarNavProps {
   pendingApprovals: number
   pendingAcceptances?: number
-  canAcceptServices?: boolean
-  role?: string
+  user: UserForPermissions
 }
 
-export function SidebarNav({ pendingApprovals, pendingAcceptances = 0, canAcceptServices = false, role = "VIEWER" }: SidebarNavProps) {
+export function SidebarNav({ pendingApprovals, pendingAcceptances = 0, user }: SidebarNavProps) {
   const pathname = usePathname()
-  const isOwnerOrAdmin = role === "ADMIN" || role === "OWNER"
-  const showAcceptance = canAcceptServices || isOwnerOrAdmin
 
   return (
     <>
-      {NAV.map(({ href, label, icon: Icon, requiresAcceptance }) => {
-        if (requiresAcceptance && !showAcceptance) return null
+      {NAV.map(({ href, label, icon: Icon, module }) => {
+        if (!can(user, module, "view")) return null
         const isActive = pathname === href || (href !== "/dashboard" && pathname.startsWith(href))
         return (
           <Link

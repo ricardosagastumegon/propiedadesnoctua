@@ -1,8 +1,57 @@
 // Helpers para acceder a la sesión de NextAuth desde server components y server actions.
 // Una sola fuente de verdad para "obtener orgId / userId / role" — con types correctos.
+// Re-lee role/isActive/policies/canAcceptServices desde DB para invalidar JWT viejos
+// cuando un admin cambia los permisos de un usuario.
 import { auth } from "@/auth"
+import { prisma } from "@/lib/prisma"
 import { redirect } from "next/navigation"
+import { unstable_cache } from "next/cache"
 import type { Session } from "next-auth"
+
+// Cache 30s para no pegarle a DB en cada request. Si admin cambia rol, surte
+// efecto en máximo 30s o forzando logout.
+const getFreshUserCached = unstable_cache(
+  async (userId: string) => {
+    return prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        authorityPolicy: true,
+        canAcceptServices: true,
+        organizationId: true,
+        isActive: true,
+        mustChangePassword: true,
+      },
+    })
+  },
+  ["session-user-refresh"],
+  { revalidate: 30, tags: ["session-user"] },
+)
+
+/**
+ * Refresca los campos críticos del session.user con los valores actuales de DB.
+ * Si el user fue desactivado, lanza para forzar logout.
+ */
+async function refreshSessionUser(session: Session): Promise<Session> {
+  const fresh = await getFreshUserCached(session.user.id)
+  if (!fresh) {
+    throw new Error("USER_NOT_FOUND")
+  }
+  if (!fresh.isActive) {
+    throw new Error("USER_INACTIVE")
+  }
+  // Mutate session in-place with fresh values
+  session.user.role = fresh.role
+  session.user.authorityPolicy = fresh.authorityPolicy
+  session.user.canAcceptServices = fresh.canAcceptServices
+  session.user.organizationId = fresh.organizationId
+  session.user.email = fresh.email
+  session.user.name = fresh.name
+  return session
+}
 
 /**
  * Obtiene la sesión actual. Si no hay sesión válida, redirige a /login.
@@ -13,7 +62,14 @@ export async function getSessionOrRedirect(): Promise<Session> {
   if (!session?.user?.organizationId) {
     redirect("/login")
   }
-  return session
+  try {
+    return await refreshSessionUser(session)
+  } catch (e) {
+    if ((e as Error).message === "USER_INACTIVE" || (e as Error).message === "USER_NOT_FOUND") {
+      redirect("/login")
+    }
+    throw e
+  }
 }
 
 /**

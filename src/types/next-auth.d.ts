@@ -17,6 +17,7 @@ declare module "next-auth" {
       canAcceptServices: boolean
       organizationId: string
       organizationName: string
+      mustChangePassword: boolean
     }
   }
 
@@ -29,6 +30,7 @@ declare module "next-auth" {
     canAcceptServices: boolean
     organizationId: string
     organizationName: string
+    mustChangePassword?: boolean
   }
 }
 
@@ -40,5 +42,6 @@ declare module "next-auth/jwt" {
     canAcceptServices: boolean
     organizationId: string
     organizationName: string
+    mustChangePassword: boolean
   }
 }
