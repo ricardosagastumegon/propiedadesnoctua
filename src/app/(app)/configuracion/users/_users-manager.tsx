@@ -9,13 +9,33 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { formatDate } from "@/lib/format"
+import { ROLE_PERMISSIONS, MODULES, type Module, type ModulePermission } from "@/lib/permissions"
 import {
   inviteUser, updateUserAdmin, deactivateUser, reactivateUser, resetUserPassword,
 } from "./actions"
 import {
-  Plus, ChevronDown, ChevronRight, Power, PowerOff, KeyRound,
-  Shield, BadgeCheck, Copy, CheckCheck,
+  Plus, ChevronDown, ChevronRight, KeyRound, PowerOff, Power,
+  Shield, BadgeCheck, Copy, CheckCheck, Pencil, Check, Minus,
 } from "lucide-react"
+
+const MODULE_LABELS: Record<Module, string> = {
+  dashboard: "Dashboard",
+  propiedades: "Propiedades",
+  inquilinos: "Inquilinos",
+  contratos: "Contratos",
+  pagos: "Pagos",
+  cajaChica: "Caja chica",
+  mantenimiento: "Mantenimiento",
+  activos: "Activos",
+  proyectos: "Proyectos",
+  proveedores: "Proveedores",
+  cotizaciones: "Cotizaciones",
+  empleados: "Empleados",
+  autorizaciones: "Autorizaciones",
+  aceptaciones: "Aceptaciones",
+  reportes: "Reportes",
+  configuracion: "Configuración",
+}
 
 export const ROLES: Record<string, string> = {
   OWNER: "Propietario",
@@ -205,11 +225,14 @@ function UserRowItem({
 
   return (
     <div className={`border rounded-lg ${!user.isActive ? "opacity-60" : ""}`}>
-      <div className="flex items-center justify-between p-3">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <button onClick={onToggleExpand} className="text-muted-foreground hover:text-foreground shrink-0">
+      <div className="flex items-center justify-between p-3 gap-3">
+        <button
+          onClick={onToggleExpand}
+          className="flex items-center gap-2 flex-1 min-w-0 text-left hover:bg-muted/40 -m-1 p-1 rounded transition-colors"
+        >
+          <span className="text-muted-foreground shrink-0">
             {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-          </button>
+          </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-sm font-medium">{user.name}</p>
@@ -230,24 +253,42 @@ function UserRowItem({
               {user.lastLoginAt && <span> · Último ingreso: {formatDate(user.lastLoginAt)}</span>}
             </p>
           </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
+        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onToggleExpand}
+            className="h-7 text-xs"
+          >
+            <Pencil className="size-3 mr-1" />
+            {isExpanded ? "Cerrar" : "Editar"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             onClick={handleResetPassword}
             disabled={loading !== null}
-            title="Resetear contraseña"
-            className="p-1.5 hover:bg-muted rounded transition-colors text-muted-foreground hover:text-foreground"
+            className="h-7 text-xs"
+            title="Genera una contraseña temporal nueva"
           >
-            <KeyRound className="size-3.5" />
-          </button>
-          {isSelf ? (
-            <span className="text-[10px] text-muted-foreground italic">activo</span>
-          ) : (
-            <Switch
-              checked={user.isActive}
-              onCheckedChange={handleToggleActive}
+            <KeyRound className="size-3 mr-1" />
+            Contraseña
+          </Button>
+          {!isSelf && (
+            <Button
+              size="sm"
+              variant={user.isActive ? "outline" : "default"}
+              onClick={() => handleToggleActive(!user.isActive)}
               disabled={loading !== null}
-            />
+              className={`h-7 text-xs ${user.isActive ? "text-destructive hover:text-destructive" : ""}`}
+            >
+              {user.isActive ? (
+                <><PowerOff className="size-3 mr-1" />Suspender</>
+              ) : (
+                <><Power className="size-3 mr-1" />Reactivar</>
+              )}
+            </Button>
           )}
         </div>
       </div>
@@ -407,6 +448,8 @@ function EditUserPanel({
         )}
       </div>
 
+      <RolePermissionsPreview role={role} />
+
       {error && <p className="text-xs text-destructive">{error}</p>}
 
       <div className="flex justify-end gap-2">
@@ -417,6 +460,89 @@ function EditUserPanel({
       </div>
     </div>
   )
+}
+
+/**
+ * Muestra qué módulos y acciones puede hacer el rol seleccionado.
+ * Read-only — el rol define los permisos; para cambiar acceso a un usuario
+ * específico, cambiar su rol.
+ */
+function RolePermissionsPreview({ role }: { role: string }) {
+  const perms = ROLE_PERMISSIONS[role] ?? ROLE_PERMISSIONS.VIEWER
+  const accessibleModules = MODULES.filter(m => perms[m].view)
+  const noAccessModules = MODULES.filter(m => !perms[m].view)
+
+  return (
+    <div className="space-y-2 border rounded-md p-3 bg-background">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs flex items-center gap-2">
+          <Shield className="size-3" />
+          Módulos accesibles para {ROLES[role] ?? role}
+        </Label>
+        <span className="text-[10px] text-muted-foreground">
+          {accessibleModules.length} de {MODULES.length} módulos
+        </span>
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-snug">
+        Para darle acceso distinto a este usuario, cambiá su <strong>Rol</strong> arriba.
+        Los módulos están determinados por el rol — no se pueden activar individualmente.
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1">
+        {MODULES.map(m => {
+          const p: ModulePermission = perms[m]
+          const can = p.view
+          return (
+            <div
+              key={m}
+              className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded ${can ? "bg-emerald-50 text-emerald-900" : "bg-muted text-muted-foreground"}`}
+              title={can ? actionsList(p) : "Sin acceso"}
+            >
+              {can ? <Check className="size-3 text-emerald-600 shrink-0" /> : <Minus className="size-3 shrink-0" />}
+              <span className="truncate">{MODULE_LABELS[m]}</span>
+              {can && <ActionDots perms={p} />}
+            </div>
+          )
+        })}
+      </div>
+      {noAccessModules.length > 0 && (
+        <p className="text-[10px] text-muted-foreground pt-1">
+          Sin acceso a: {noAccessModules.map(m => MODULE_LABELS[m]).join(", ")}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function ActionDots({ perms }: { perms: ModulePermission }) {
+  // V = view, C = create, E = edit, D = delete
+  const flags = [
+    { key: "V", on: perms.view },
+    { key: "C", on: perms.create },
+    { key: "E", on: perms.edit },
+    { key: "D", on: perms.delete },
+  ]
+  return (
+    <span className="ml-auto flex gap-0.5">
+      {flags.map(f => (
+        <span
+          key={f.key}
+          className={`text-[9px] font-mono w-3 h-3 flex items-center justify-center rounded ${f.on ? "bg-emerald-200 text-emerald-900" : "bg-muted-foreground/20 text-muted-foreground/50"}`}
+          title={`${f.key === "V" ? "Ver" : f.key === "C" ? "Crear" : f.key === "E" ? "Editar" : "Eliminar"}: ${f.on ? "sí" : "no"}`}
+        >
+          {f.key}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+function actionsList(p: ModulePermission): string {
+  const a = []
+  if (p.view) a.push("ver")
+  if (p.create) a.push("crear")
+  if (p.edit) a.push("editar")
+  if (p.delete) a.push("eliminar")
+  return `Puede: ${a.join(", ")}`
 }
 
 function InviteUserDialog({
@@ -525,6 +651,8 @@ function InviteUserDialog({
               </div>
             </div>
           )}
+
+          <RolePermissionsPreview role={role} />
 
           <div className="space-y-2">
             <Label className="text-xs flex items-center gap-2">
