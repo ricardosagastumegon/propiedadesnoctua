@@ -26,12 +26,15 @@ export function ChangePasswordForm({ forced = false }: { forced?: boolean }) {
       setError(res.error)
     } else {
       setOk(true)
-      // CRÍTICO: forzar refresh del JWT para que el middleware vea mustChangePassword=false.
-      // Sin esto, el JWT queda con mustChangePassword=true y el middleware re-redirige
-      // a /cambiar-password en un loop infinito.
-      try { await update() } catch { /* no-op */ }
+      // La action ya re-emitió cookies via signIn server-side. Hacemos un HARD
+      // reload (window.location) en vez de router.push para forzar al browser
+      // a mandar las cookies nuevas y que el proxy las re-evalúe correctamente.
+      // router.push hace nav cliente y a veces lleva cookies viejas → loop.
+      try { await update() } catch { /* no-op, fallback */ }
       if (forced) {
-        setTimeout(() => router.push("/dashboard"), 1200)
+        setTimeout(() => { window.location.href = "/dashboard" }, 800)
+      } else {
+        setTimeout(() => { window.location.reload() }, 800)
       }
     }
   }

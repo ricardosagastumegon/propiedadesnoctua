@@ -172,8 +172,10 @@ async function main() {
   }
   console.log("Después:")
   for (const [k, v] of Object.entries(after)) {
-    if (k === "settingsKept") console.log(`  settings:            ${v ? `cap=${v.prepaymentCapPercentage}%` : "FALTA"}`)
-    else console.log(`  ${k.padEnd(20)} ${v}`)
+    if (k === "settingsKept") {
+      const s = v as { prepaymentCapPercentage: number } | null
+      console.log(`  settings:            ${s ? `cap=${s.prepaymentCapPercentage}%` : "FALTA"}`)
+    } else console.log(`  ${k.padEnd(20)} ${v}`)
   }
 }
 
