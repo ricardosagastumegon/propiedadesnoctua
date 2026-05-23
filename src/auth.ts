@@ -19,25 +19,34 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const password = credentials?.password as string
         if (!email || !password) return null
 
-        // Rate limit por IP — anti brute-force. Si excede, throw para que
-        // NextAuth devuelva CredentialsSignin pero el log servidor muestra el motivo.
         const ip = (request?.headers.get("x-forwarded-for")?.split(",")[0].trim()
           ?? request?.headers.get("x-real-ip")
           ?? "anonymous")
-        const r = await checkRateLimit("login", `${ip}:${email.toLowerCase()}`)
-        if (!r.success) {
-          console.warn(`[auth] rate limit hit for ${ip}/${email}`)
-          return null
-        }
+        const rlKey = `${ip}:${email.toLowerCase()}`
 
         const user = await prisma.user.findUnique({
-          where: { email },
+          where: { email: email.toLowerCase() },
           include: { organization: true },
         })
+        // Si el email no existe → null sin contar contra rate limit.
+        // (evita que un atacante bloquee cualquier cuenta inundando con un email
+        // que no existe; y permite al admin probar combinaciones sin penalizar.)
         if (!user?.passwordHash) return null
 
         const ok = await bcrypt.compare(password, user.passwordHash)
-        if (!ok) return null
+        if (!ok) {
+          // Solo intentos FALLIDOS con email válido cuentan contra rate limit
+          const r = await checkRateLimit("login", rlKey)
+          if (!r.success) {
+            console.warn(`[auth] rate limit hit for ${ip}/${email}`)
+          }
+          return null
+        }
+
+        if (!user.isActive) {
+          console.warn(`[auth] login attempt on inactive user: ${email}`)
+          return null
+        }
 
         // Fallback: derive authority from role when not explicitly set
         const effectivePolicy = user.authorityPolicy

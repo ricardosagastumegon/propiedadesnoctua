@@ -235,3 +235,29 @@ export async function resetUserPassword(targetId: string) {
   revalidatePath("/configuracion")
   return { ok: true, tempPassword, userEmail: target.email, userName: target.name }
 }
+
+/**
+ * Admin establece una contraseña ESPECÍFICA para un usuario, sin forzarlo a
+ * cambiarla en el próximo login. Útil cuando el admin quiere darle al usuario
+ * una contraseña ya definida y que entre directo al dashboard.
+ */
+export async function setUserPasswordManual(targetId: string, password: string, forceChange: boolean) {
+  const { orgId, userId: meId, actorName } = await requireAdminSession()
+  if (!password || password.length < 8) {
+    return { error: "La contraseña debe tener al menos 8 caracteres" }
+  }
+  const target = await prisma.user.findFirst({ where: { id: targetId, organizationId: orgId } })
+  if (!target) return { error: "Usuario no encontrado" }
+
+  const hash = await bcrypt.hash(password, 12)
+  await prisma.user.update({
+    where: { id: targetId },
+    data: { passwordHash: hash, mustChangePassword: forceChange },
+  })
+  await logActivity({
+    orgId, entityType: "USER", entityId: targetId, action: "PASSWORD_SET_MANUAL",
+    actorId: meId, actorName, metadata: { name: target.name, forceChange },
+  })
+  revalidatePath("/configuracion")
+  return { ok: true, userEmail: target.email, userName: target.name, forceChange }
+}

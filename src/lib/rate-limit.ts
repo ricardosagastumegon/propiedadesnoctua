@@ -33,12 +33,12 @@ function makeLimiter(limit: number, window: `${number} ${"s" | "m" | "h"}`, pref
   return null
 }
 
-const loginLimiter = makeLimiter(5, "15 m", "rl:login")
+const loginLimiter = makeLimiter(10, "15 m", "rl:login")
 const signupLimiter = makeLimiter(3, "1 h", "rl:signup")
 const resetLimiter = makeLimiter(3, "1 h", "rl:reset")
 
 const WINDOWS = {
-  login: { limit: 5, ms: 15 * 60 * 1000 },
+  login: { limit: 10, ms: 15 * 60 * 1000 },
   signup: { limit: 3, ms: 60 * 60 * 1000 },
   reset: { limit: 3, ms: 60 * 60 * 1000 },
 }

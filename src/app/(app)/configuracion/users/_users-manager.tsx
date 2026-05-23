@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { formatDate } from "@/lib/format"
 import { ROLE_PERMISSIONS, MODULES, type Module, type ModulePermission } from "@/lib/permissions"
 import {
-  inviteUser, updateUserAdmin, deactivateUser, reactivateUser, resetUserPassword,
+  inviteUser, updateUserAdmin, deactivateUser, reactivateUser, resetUserPassword, setUserPasswordManual,
 } from "./actions"
 import {
   Plus, ChevronDown, ChevronRight, KeyRound, PowerOff, Power,
@@ -199,22 +199,11 @@ function UserRowItem({
   onCredsGenerated: (creds: { email: string; password: string; name: string }) => void
 }) {
   const [loading, setLoading] = useState<string | null>(null)
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false)
   const isSelf = user.id === currentUserId
   const propertiesText = user.propertyIds.length === 0
     ? "Todas las propiedades"
     : `${user.propertyIds.length} propiedad${user.propertyIds.length !== 1 ? "es" : ""}`
-
-  async function handleResetPassword() {
-    if (!confirm(`¿Generar una nueva contraseña temporal para ${user.name}?`)) return
-    setLoading("reset")
-    const res = await resetUserPassword(user.id)
-    setLoading(null)
-    if (res?.ok) {
-      onCredsGenerated({ email: res.userEmail!, password: res.tempPassword!, name: res.userName! })
-    } else {
-      alert(res?.error)
-    }
-  }
 
   async function handleToggleActive(v: boolean) {
     setLoading("toggle")
@@ -267,10 +256,10 @@ function UserRowItem({
           <Button
             size="sm"
             variant="outline"
-            onClick={handleResetPassword}
+            onClick={() => setShowPasswordDialog(true)}
             disabled={loading !== null}
             className="h-7 text-xs"
-            title="Genera una contraseña temporal nueva"
+            title="Cambiar contraseña del usuario"
           >
             <KeyRound className="size-3 mr-1" />
             Contraseña
@@ -302,8 +291,187 @@ function UserRowItem({
           onSaved={() => onToggleExpand()}
         />
       )}
+
+      <PasswordDialog
+        open={showPasswordDialog}
+        onOpenChange={setShowPasswordDialog}
+        user={user}
+        onCredsGenerated={(c) => {
+          setShowPasswordDialog(false)
+          onCredsGenerated(c)
+        }}
+      />
     </div>
   )
+}
+
+function PasswordDialog({
+  open, onOpenChange, user, onCredsGenerated,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  user: UserRow
+  onCredsGenerated: (creds: { email: string; password: string; name: string }) => void
+}) {
+  const [mode, setMode] = useState<"temp" | "manual">("temp")
+  const [manualPassword, setManualPassword] = useState("")
+  const [forceChange, setForceChange] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [successManual, setSuccessManual] = useState<{ password: string; forceChange: boolean } | null>(null)
+
+  function reset() {
+    setMode("temp")
+    setManualPassword("")
+    setForceChange(false)
+    setError(null)
+    setSuccessManual(null)
+  }
+
+  async function handleSubmit() {
+    setError(null)
+    setLoading(true)
+    if (mode === "temp") {
+      const res = await resetUserPassword(user.id)
+      setLoading(false)
+      if (res?.ok) {
+        reset()
+        onCredsGenerated({ email: res.userEmail!, password: res.tempPassword!, name: res.userName! })
+      } else {
+        setError(res?.error ?? "Error al generar contraseña")
+      }
+    } else {
+      if (manualPassword.length < 8) {
+        setError("La contraseña debe tener al menos 8 caracteres")
+        setLoading(false)
+        return
+      }
+      const res = await setUserPasswordManual(user.id, manualPassword, forceChange)
+      setLoading(false)
+      if (res?.ok) {
+        setSuccessManual({ password: manualPassword, forceChange })
+      } else {
+        setError(res?.error ?? "Error al establecer contraseña")
+      }
+    }
+  }
+
+  function handleClose() {
+    reset()
+    onOpenChange(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else onOpenChange(v) }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Contraseña de {user.name}</DialogTitle>
+        </DialogHeader>
+
+        {successManual ? (
+          <div className="space-y-3">
+            <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md p-3">
+              Contraseña actualizada para <strong>{user.email}</strong>.
+              {successManual.forceChange
+                ? " Le pediremos cambiarla en su próximo login."
+                : " Puede entrar directo con esta contraseña."}
+            </div>
+            <pre className="text-xs bg-muted p-3 rounded-md font-mono whitespace-pre-wrap break-all">
+              Email: {user.email}{"\n"}Contraseña: {successManual.password}
+            </pre>
+            <div className="flex justify-end">
+              <Button size="sm" onClick={handleClose}>Cerrar</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs">¿Cómo querés cambiar la contraseña?</Label>
+              <div className="space-y-2">
+                <label className="flex items-start gap-2 p-3 border rounded-md cursor-pointer hover:bg-muted/50">
+                  <input
+                    type="radio"
+                    name="mode"
+                    checked={mode === "temp"}
+                    onChange={() => setMode("temp")}
+                    className="mt-0.5"
+                  />
+                  <div className="text-sm">
+                    <div className="font-medium">Generar temporal</div>
+                    <div className="text-xs text-muted-foreground">
+                      Crea una contraseña aleatoria segura. El usuario será obligado a cambiarla en su próximo login.
+                    </div>
+                  </div>
+                </label>
+                <label className="flex items-start gap-2 p-3 border rounded-md cursor-pointer hover:bg-muted/50">
+                  <input
+                    type="radio"
+                    name="mode"
+                    checked={mode === "manual"}
+                    onChange={() => setMode("manual")}
+                    className="mt-0.5"
+                  />
+                  <div className="text-sm flex-1">
+                    <div className="font-medium">Establecer manualmente</div>
+                    <div className="text-xs text-muted-foreground">
+                      Vos elegís la contraseña. Por defecto, el usuario entra directo sin tener que cambiarla.
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {mode === "manual" && (
+              <div className="space-y-3 border rounded-md p-3 bg-muted/20">
+                <div className="space-y-1.5">
+                  <Label htmlFor="manualPass" className="text-xs">Nueva contraseña</Label>
+                  <Input
+                    id="manualPass"
+                    type="text"
+                    value={manualPassword}
+                    onChange={e => setManualPassword(e.target.value)}
+                    placeholder="Mínimo 8 caracteres"
+                    autoComplete="off"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Si la querés generar segura, copiá algo como: <code className="bg-background px-1 rounded">{generateRandomPasswordHint()}</code>
+                  </p>
+                </div>
+                <label className="flex items-start gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={forceChange}
+                    onChange={e => setForceChange(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    Forzar al usuario a cambiarla en su próximo login (más seguro)
+                  </span>
+                </label>
+              </div>
+            )}
+
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleClose}>Cancelar</Button>
+              <Button type="button" onClick={handleSubmit} disabled={loading}>
+                {loading ? "Guardando…" : mode === "temp" ? "Generar y mostrar" : "Establecer contraseña"}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// Solo para hint visual — el usuario puede copiar y modificar
+function generateRandomPasswordHint(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+  let r = ""
+  for (let i = 0; i < 10; i++) r += chars[Math.floor(Math.random() * chars.length)]
+  return r
 }
 
 function EditUserPanel({
