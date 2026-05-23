@@ -2,6 +2,7 @@ import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
+import { checkRateLimit } from "@/lib/rate-limit"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
@@ -13,10 +14,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: {},
         password: {},
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const email = credentials?.email as string
         const password = credentials?.password as string
         if (!email || !password) return null
+
+        // Rate limit por IP — anti brute-force. Si excede, throw para que
+        // NextAuth devuelva CredentialsSignin pero el log servidor muestra el motivo.
+        const ip = (request?.headers.get("x-forwarded-for")?.split(",")[0].trim()
+          ?? request?.headers.get("x-real-ip")
+          ?? "anonymous")
+        const r = await checkRateLimit("login", `${ip}:${email.toLowerCase()}`)
+        if (!r.success) {
+          console.warn(`[auth] rate limit hit for ${ip}/${email}`)
+          return null
+        }
 
         const user = await prisma.user.findUnique({
           where: { email },

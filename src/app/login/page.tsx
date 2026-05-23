@@ -1,7 +1,8 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { signIn } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,7 +14,14 @@ const SHOW_DEMO = process.env.NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS === "true"
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (searchParams.get("reset") === "ok") {
+      toast.success("Contraseña actualizada. Iniciá sesión con la nueva.")
+    }
+  }, [searchParams])
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -25,7 +33,7 @@ export default function LoginPage() {
       redirect: false,
     })
     setLoading(false)
-    if (res?.error) toast.error("Credenciales invalidas")
+    if (res?.error) toast.error("Credenciales invalidas o demasiados intentos")
     else router.push("/dashboard")
   }
 
@@ -69,7 +77,16 @@ export default function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Ingresando..." : "Ingresar"}
             </Button>
+            <p className="text-xs text-right">
+              <Link href="/recuperar-password" className="text-muted-foreground hover:text-primary hover:underline">
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </p>
           </form>
+          <p className="text-sm text-muted-foreground mt-6 text-center">
+            ¿No tenés cuenta?{" "}
+            <Link href="/signup" className="text-primary hover:underline font-medium">Registrate</Link>
+          </p>
           {SHOW_DEMO && (
             <p className="text-xs text-muted-foreground mt-6">
               Demo: demo@inmobiliaria.gt / demo1234

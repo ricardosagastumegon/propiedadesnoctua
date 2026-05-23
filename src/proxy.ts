@@ -1,6 +1,20 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 
+// Rutas accesibles sin sesión (signup, recuperar, restablecer).
+const PUBLIC_PATHS = new Set<string>([
+  "/login",
+  "/signup",
+  "/recuperar-password",
+  "/restablecer-password",
+])
+
+// Si el usuario ya está logueado, estas rutas lo redirigen al dashboard.
+const REDIRECT_IF_LOGGED_IN = new Set<string>([
+  "/login",
+  "/signup",
+])
+
 export const proxy = auth(req => {
   const { nextUrl } = req
   const session = req.auth
@@ -15,7 +29,7 @@ export const proxy = auth(req => {
   }
 
   if (!session?.user) {
-    if (nextUrl.pathname === "/login") return NextResponse.next()
+    if (PUBLIC_PATHS.has(nextUrl.pathname)) return NextResponse.next()
     return NextResponse.redirect(new URL("/login", nextUrl.origin))
   }
 
@@ -24,7 +38,7 @@ export const proxy = auth(req => {
     return NextResponse.redirect(new URL("/cambiar-password", nextUrl.origin))
   }
 
-  if (nextUrl.pathname === "/login") {
+  if (REDIRECT_IF_LOGGED_IN.has(nextUrl.pathname)) {
     return NextResponse.redirect(new URL("/dashboard", nextUrl.origin))
   }
 
