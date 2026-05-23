@@ -77,7 +77,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.mustChangePassword = (user as { mustChangePassword?: boolean }).mustChangePassword ?? false
       }
       // En cada update (client-side useSession().update()) re-lee TODO desde DB.
-      // Esto cierra el loop infinito de /cambiar-password y también refresca rol/permisos.
       if (trigger === "update" && token.id) {
         const u = await prisma.user.findUnique({
           where: { id: token.id },
@@ -97,6 +96,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.authorityPolicy = u.authorityPolicy
           token.canAcceptServices = u.canAcceptServices
           token.organizationId = u.organizationId
+        }
+      }
+      // BULLETPROOF: mientras el usuario tenga mustChangePassword=true en el JWT,
+      // re-chequear DB en cada request. Apenas cambien la password en DB, este
+      // callback lo detecta sin depender de update() ni de signIn server-side.
+      // Cuesta 1 query extra solo durante la ventana de "debe cambiar password"
+      // (típicamente segundos). Una vez false, no se ejecuta más.
+      else if (token.mustChangePassword === true && token.id) {
+        const fresh = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { mustChangePassword: true },
+        })
+        if (fresh && !fresh.mustChangePassword) {
+          token.mustChangePassword = false
         }
       }
       return token

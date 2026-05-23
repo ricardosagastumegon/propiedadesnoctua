@@ -1,5 +1,5 @@
 "use server"
-import { auth, signIn } from "@/auth"
+import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import { updateTag } from "next/cache"
@@ -8,7 +8,6 @@ export async function changePassword(formData: FormData) {
   const session = await auth()
   if (!session?.user?.id) return { error: "No autenticado" }
   const userId = session.user.id
-  const email = session.user.email
 
   const current = formData.get("current") as string
   const newPass = formData.get("newPass") as string
@@ -31,23 +30,8 @@ export async function changePassword(formData: FormData) {
     data: { passwordHash: hash, mustChangePassword: false },
   })
   updateTag("session-user")
-
-  // CRÍTICO: re-emitir cookies con un signIn server-side. Si solo confiamos en
-  // useSession().update() del cliente, la cookie no se actualiza a tiempo y el
-  // proxy (que lee mustChangePassword del JWT) re-redirige a /cambiar-password
-  // = loop infinito.
-  if (email) {
-    try {
-      await signIn("credentials", {
-        email,
-        password: newPass,
-        redirect: false,
-      })
-    } catch {
-      // Si falla (rate limit, etc.), el cliente igual recibe ok=true y puede
-      // hacer logout manual + login. Pero no fallar la operación.
-    }
-  }
-
+  // El JWT callback en auth.ts re-chequea DB mientras token.mustChangePassword=true.
+  // El próximo request del cliente (window.location.href = "/dashboard") va a leer
+  // el flag actualizado y el proxy lo deja pasar al dashboard sin loop.
   return { ok: true }
 }
