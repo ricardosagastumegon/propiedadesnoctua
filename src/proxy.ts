@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 
-// Rutas accesibles sin sesión (signup, recuperar, restablecer).
+// Rutas accesibles sin sesión.
 const PUBLIC_PATHS = new Set<string>([
+  "/",
   "/login",
   "/signup",
   "/recuperar-password",
   "/restablecer-password",
+  "/presentaciones",
 ])
 
 // Si el usuario ya está logueado, estas rutas lo redirigen al dashboard.
+// La landing "/" NO va acá — usuarios autenticados también pueden visitarla
+// (ven el botón "Ir al panel" en el header).
 const REDIRECT_IF_LOGGED_IN = new Set<string>([
   "/login",
   "/signup",
