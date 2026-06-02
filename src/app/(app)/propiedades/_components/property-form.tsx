@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card } from "@/components/ui/card"
 import { MoneyInput } from "@/components/ui/money-input"
 import { PROPERTY_TYPES, PROPERTY_STATUSES, DEPARTMENTS } from "@/lib/schemas/property"
+import { CoordPicker } from "./coord-picker"
 import type { Property } from "@prisma/client"
 
 interface Props {
@@ -149,6 +150,15 @@ export function PropertyForm({ property, action, submitLabel = "Guardar" }: Prop
             <Label htmlFor="postalCode">Codigo postal</Label>
             <Input id="postalCode" name="postalCode" defaultValue={property?.postalCode ?? ""} />
           </div>
+        </div>
+
+        {/* Ubicación en el mapa */}
+        <div className="pt-4 border-t">
+          <h4 className="text-sm font-medium mb-1">Ubicación en el mapa</h4>
+          <p className="text-xs text-muted-foreground mb-3">
+            Marcá dónde está la propiedad para que aparezca en el mapa de propiedades.
+          </p>
+          <CoordPicker initialLat={property?.latitude} initialLon={property?.longitude} initialPolygon={property?.mapPolygon} />
         </div>
       </Card>
 

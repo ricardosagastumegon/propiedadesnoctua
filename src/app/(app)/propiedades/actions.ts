@@ -6,11 +6,26 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { logError } from "@/lib/observability"
 import { tryGuard, guardAction, ActionForbiddenError } from "@/lib/action-guard"
+import { isValidPolygon } from "@/lib/geo"
+import { Prisma } from "@prisma/client"
 
 async function getOrgId() {
   const session = await auth()
   if (!session) throw new Error("No autenticado")
   return session.user.organizationId
+}
+
+/**
+ * Convierte el string JSON del form en el valor JSON para Prisma.
+ * "" o inválido → null (borra el polígono). Array válido → guarda.
+ */
+function parsePolygon(value: string | undefined): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  if (!value || value.trim() === "") return Prisma.JsonNull
+  try {
+    const arr = JSON.parse(value)
+    if (isValidPolygon(arr)) return arr as Prisma.InputJsonValue
+  } catch { /* ignore */ }
+  return Prisma.JsonNull
 }
 
 export async function createProperty(formData: FormData) {
@@ -28,12 +43,13 @@ export async function createProperty(formData: FormData) {
     return { error: `Tu sesión apunta a una organización que ya no existe (id ${orgId.slice(0, 8)}…). Cerrá sesión y volvé a entrar.` }
   }
 
-  const d = parsed.data
+  const { mapPolygon, ...d } = parsed.data
   try {
     const property = await prisma.property.create({
       data: {
         organizationId: orgId,
         ...d,
+        mapPolygon: parsePolygon(mapPolygon),
         acquisitionDate: d.acquisitionDate ? new Date(d.acquisitionDate) : null,
       },
     })
@@ -61,16 +77,18 @@ export async function updateProperty(id: string, formData: FormData) {
   const parsed = propertySchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
-  const d = parsed.data
+  const { mapPolygon, ...d } = parsed.data
   await prisma.property.updateMany({
     where: { id, organizationId: orgId },
     data: {
       ...d,
+      mapPolygon: parsePolygon(mapPolygon),
       acquisitionDate: d.acquisitionDate ? new Date(d.acquisitionDate) : null,
     },
   })
   revalidatePath("/propiedades")
   revalidatePath(`/propiedades/${id}`)
+  revalidatePath("/mapa")
   return { redirectTo: `/propiedades/${id}` }
 }
 

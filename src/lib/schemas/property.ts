@@ -26,6 +26,8 @@ export const propertySchema = z.object({
   postalCode: z.string().optional(),
   latitude: numOpt(),
   longitude: numOpt(),
+  // JSON string del array de vértices [lat, lon]; "" si no hay polígono.
+  mapPolygon: z.string().optional(),
   totalArea: numOpt(),
   builtArea: numOpt(),
   bedrooms: intOpt(),

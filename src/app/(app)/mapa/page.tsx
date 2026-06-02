@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card"
 import { getAccessiblePropertyIds } from "@/lib/permissions"
 import { MapWrapper } from "./_map-wrapper"
 import { differenceInDays } from "date-fns"
+import { isValidPolygon, type LatLng } from "@/lib/geo"
 
 export const dynamic = "force-dynamic"
 
@@ -31,6 +32,8 @@ export interface MapProperty {
   monthlyRent: number | null
   /** Días hasta vencimiento (negativo si ya venció) */
   daysToExpiry: number | null
+  /** Contorno del lote [lat,lon][]; null si solo hay pin */
+  polygon: LatLng[] | null
 }
 
 export default async function MapaPage() {
@@ -55,6 +58,7 @@ export default async function MapaPage() {
       type: true,
       latitude: true,
       longitude: true,
+      mapPolygon: true,
       contracts: {
         where: { status: { in: ["ACTIVE", "RENEWED"] } },
         orderBy: { endDate: "desc" },
@@ -73,6 +77,7 @@ export default async function MapaPage() {
   const mapped: MapProperty[] = properties
     .filter(p => p.latitude != null && p.longitude != null)
     .map(p => {
+      const poly = isValidPolygon(p.mapPolygon) ? p.mapPolygon : null
       const c = p.contracts[0]
       let status: PropertyStatus = "VACANT"
       let expirationMonth: number | null = null
@@ -108,6 +113,7 @@ export default async function MapaPage() {
         tenantName,
         monthlyRent,
         daysToExpiry,
+        polygon: poly,
       }
     })
 

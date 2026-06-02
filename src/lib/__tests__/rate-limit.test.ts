@@ -7,17 +7,17 @@ beforeEach(() => {
 })
 
 describe("checkRateLimit (in-memory fallback, sin Upstash)", () => {
-  it("permite los primeros 5 intentos de login", async () => {
+  it("permite los primeros 10 intentos de login", async () => {
     const { checkRateLimit } = await import("@/lib/rate-limit")
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 10; i++) {
       const r = await checkRateLimit("login", "ip-test-1")
       expect(r.success, `intento ${i + 1}`).toBe(true)
     }
   })
 
-  it("rechaza el sexto intento de login dentro de la ventana", async () => {
+  it("rechaza el intento 11 de login dentro de la ventana", async () => {
     const { checkRateLimit } = await import("@/lib/rate-limit")
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 10; i++) {
       await checkRateLimit("login", "ip-test-2")
     }
     const r = await checkRateLimit("login", "ip-test-2")
@@ -37,7 +37,7 @@ describe("checkRateLimit (in-memory fallback, sin Upstash)", () => {
 
   it("identificadores diferentes no se afectan entre sí", async () => {
     const { checkRateLimit } = await import("@/lib/rate-limit")
-    for (let i = 0; i < 5; i++) await checkRateLimit("login", "ip-a")
+    for (let i = 0; i < 10; i++) await checkRateLimit("login", "ip-a")
     // ip-a está agotado; ip-b sigue limpio
     const a = await checkRateLimit("login", "ip-a")
     const b = await checkRateLimit("login", "ip-b")

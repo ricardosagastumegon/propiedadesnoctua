@@ -1,6 +1,6 @@
 "use client"
 import { useState, useMemo } from "react"
-import { MapContainer, TileLayer, WMSTileLayer, CircleMarker, Popup, ZoomControl, LayersControl } from "react-leaflet"
+import { MapContainer, TileLayer, WMSTileLayer, CircleMarker, Polygon, Popup, ZoomControl, LayersControl } from "react-leaflet"
 import "leaflet/dist/leaflet.css"
 import type { MapProperty, PropertyStatus } from "./page"
 import { formatGTQ } from "@/lib/format"
@@ -134,6 +134,54 @@ export function MapView({ properties, center }: { properties: MapProperty[]; cen
           </LayersControl>
           {properties.map(p => {
             const c = colorFor(p)
+            const popup = (
+              <Popup>
+                <div style={{ minWidth: 200 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
+                  {p.alias && <div style={{ fontSize: 12, color: "#666" }}>{p.alias}</div>}
+                  <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+                    {p.city}, {p.department}
+                  </div>
+                  <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #eee", fontSize: 13 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLORS[p.status].fill, display: "inline-block" }} />
+                      <strong>{STATUS_COLORS[p.status].label}</strong>
+                    </div>
+                    {p.tenantName && <div style={{ marginTop: 4 }}>Inquilino: {p.tenantName}</div>}
+                    {p.monthlyRent && <div>Renta: {formatGTQ(p.monthlyRent)}/mes</div>}
+                    {p.daysToExpiry != null && (
+                      <div style={{ marginTop: 4, color: p.daysToExpiry < 0 ? "#C8454F" : p.daysToExpiry <= 90 ? "#C77816" : "#666" }}>
+                        {p.daysToExpiry < 0
+                          ? `Venció hace ${Math.abs(p.daysToExpiry)} días`
+                          : `Vence en ${p.daysToExpiry} días`}
+                        {p.expirationMonth && p.expirationYear && (
+                          <span> ({MONTH_NAMES[p.expirationMonth - 1]} {p.expirationYear})</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <a
+                    href={`/propiedades/${p.id}`}
+                    style={{ display: "inline-block", marginTop: 10, fontSize: 12, color: "#3F8E5C", fontWeight: 600, textDecoration: "none" }}
+                  >
+                    Ver propiedad →
+                  </a>
+                </div>
+              </Popup>
+            )
+
+            // Si tiene contorno, dibujamos el polígono; si no, un círculo en el pin.
+            if (p.polygon && p.polygon.length >= 3) {
+              return (
+                <Polygon
+                  key={p.id}
+                  positions={p.polygon}
+                  pathOptions={{ fillColor: c.fill, fillOpacity: 0.55, color: c.stroke, weight: 2 }}
+                >
+                  {popup}
+                </Polygon>
+              )
+            }
             return (
               <CircleMarker
                 key={p.id}
@@ -141,39 +189,7 @@ export function MapView({ properties, center }: { properties: MapProperty[]; cen
                 radius={12}
                 pathOptions={{ fillColor: c.fill, fillOpacity: 0.85, color: c.stroke, weight: 2 }}
               >
-                <Popup>
-                  <div style={{ minWidth: 200 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
-                    {p.alias && <div style={{ fontSize: 12, color: "#666" }}>{p.alias}</div>}
-                    <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
-                      {p.city}, {p.department}
-                    </div>
-                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #eee", fontSize: 13 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLORS[p.status].fill, display: "inline-block" }} />
-                        <strong>{STATUS_COLORS[p.status].label}</strong>
-                      </div>
-                      {p.tenantName && <div style={{ marginTop: 4 }}>Inquilino: {p.tenantName}</div>}
-                      {p.monthlyRent && <div>Renta: {formatGTQ(p.monthlyRent)}/mes</div>}
-                      {p.daysToExpiry != null && (
-                        <div style={{ marginTop: 4, color: p.daysToExpiry < 0 ? "#C8454F" : p.daysToExpiry <= 90 ? "#C77816" : "#666" }}>
-                          {p.daysToExpiry < 0
-                            ? `Venció hace ${Math.abs(p.daysToExpiry)} días`
-                            : `Vence en ${p.daysToExpiry} días`}
-                          {p.expirationMonth && p.expirationYear && (
-                            <span> ({MONTH_NAMES[p.expirationMonth - 1]} {p.expirationYear})</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <a
-                      href={`/propiedades/${p.id}`}
-                      style={{ display: "inline-block", marginTop: 10, fontSize: 12, color: "#3F8E5C", fontWeight: 600, textDecoration: "none" }}
-                    >
-                      Ver propiedad →
-                    </a>
-                  </div>
-                </Popup>
+                {popup}
               </CircleMarker>
             )
           })}

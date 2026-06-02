@@ -232,6 +232,9 @@ model Property {
   postalCode      String?
   latitude        Float?
   longitude       Float?
+  // Contorno del lote: array de vértices [lat, lon] en JSON.
+  // Si existe, en el mapa se dibuja el polígono; si no, un pin en lat/lon.
+  mapPolygon      Json?
   totalArea       Float?
   builtArea       Float?
   bedrooms        Int?
