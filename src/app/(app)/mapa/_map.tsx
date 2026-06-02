@@ -1,9 +1,13 @@
 "use client"
 import { useState, useMemo } from "react"
-import { MapContainer, TileLayer, CircleMarker, Popup, ZoomControl } from "react-leaflet"
+import { MapContainer, TileLayer, WMSTileLayer, CircleMarker, Popup, ZoomControl, LayersControl } from "react-leaflet"
 import "leaflet/dist/leaflet.css"
 import type { MapProperty, PropertyStatus } from "./page"
 import { formatGTQ } from "@/lib/format"
+
+// MapTiler key opcional. Si está, usamos su satélite (más nítido). Si no,
+// caemos a Esri World Imagery (gratis, sin key).
+const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY
 
 type ViewMode = "status" | "expiration"
 
@@ -80,11 +84,54 @@ export function MapView({ properties, center }: { properties: MapProperty[]; cen
           style={{ height: "640px", width: "100%" }}
           zoomControl={false}
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
           <ZoomControl position="topright" />
+          <LayersControl position="topright">
+            {/* BASEMAPS — el usuario elige uno */}
+            <LayersControl.BaseLayer checked name="Satélite">
+              {MAPTILER_KEY ? (
+                <TileLayer
+                  attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a> &copy; OpenStreetMap'
+                  url={`https://api.maptiler.com/maps/satellite/{z}/{x}/{y}.jpg?key=${MAPTILER_KEY}`}
+                />
+              ) : (
+                <TileLayer
+                  attribution='&copy; <a href="https://www.esri.com/">Esri</a> World Imagery'
+                  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                  maxZoom={19}
+                />
+              )}
+            </LayersControl.BaseLayer>
+
+            <LayersControl.BaseLayer name="Satélite + etiquetas">
+              <TileLayer
+                attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                maxZoom={19}
+              />
+            </LayersControl.BaseLayer>
+
+            <LayersControl.BaseLayer name="Calles">
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+            </LayersControl.BaseLayer>
+
+            {/* OVERLAY — catastro oficial del RIC Guatemala (opcional, sin key) */}
+            <LayersControl.Overlay name="Catastro RIC (Guatemala)">
+              <WMSTileLayer
+                url="https://portal.ric.gob.gt/geoserver/wms"
+                params={{
+                  layers: "GEO_RIC:PREDIO",
+                  format: "image/png",
+                  transparent: true,
+                  version: "1.1.1",
+                }}
+                opacity={0.6}
+                attribution='Catastro &copy; <a href="https://portal.ric.gob.gt/">RIC Guatemala</a>'
+              />
+            </LayersControl.Overlay>
+          </LayersControl>
           {properties.map(p => {
             const c = colorFor(p)
             return (
