@@ -66,8 +66,11 @@ export async function checkRateLimit(kind: Kind, identifier: string): Promise<Ra
     const r = await limiter.limit(identifier)
     return { success: r.success, remaining: r.remaining, reset: r.reset }
   }
-  const w = WINDOWS[kind]
-  return memoryCheck(`${kind}:${identifier}`, w.limit, w.ms)
+  // Sin Upstash configurado NO aplicamos rate limit: el contador en memoria es
+  // inconsistente entre instancias serverless de Vercel y produce falsos
+  // positivos ("demasiados intentos") que bloquean usuarios legítimos.
+  // Para activar protección real anti brute-force, configurar Upstash (ver docs).
+  return { success: true, remaining: 999, reset: 0 }
 }
 
 export function isRateLimitConfigured(): boolean {
