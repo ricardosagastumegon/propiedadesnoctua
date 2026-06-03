@@ -252,6 +252,7 @@ model Property {
 
   organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   units          PropertyUnit[]
+  parcels        PropertyParcel[]
   contracts      Contract[]
   maintenances   MaintenanceRequest[]
   assets         Asset[]
@@ -266,6 +267,27 @@ model Property {
 
   @@index([organizationId])
   @@index([status])
+}
+
+// Predio / parcela catastral dentro de una finca (Property).
+// Una finca puede tener varios predios, cada uno con su número de catastro RIC
+// y su propio polígono. El área de la finca = suma de las áreas de sus predios.
+model PropertyParcel {
+  id              String   @id @default(cuid())
+  propertyId      String
+  name            String?  // ej. "Predio norte", "Lote 2"
+  cadastralNumber String?  // nº de catastro RIC, ej. "18-03-06-00001"
+  mapPolygon      Json?    // array de vértices [lat, lon]
+  areaHectares    Float?   // área calculada o ingresada
+  notes           String?
+  orderIndex      Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  property  Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  contracts Contract[]
+
+  @@index([propertyId])
 }
 
 model PropertyUnit {
@@ -313,6 +335,7 @@ model Contract {
   contractNumber    String
   propertyId        String
   unitId            String?
+  parcelId          String?   // si aplica a un predio específico; null = finca completa
   tenantId          String
   startDate         DateTime
   endDate           DateTime
@@ -333,10 +356,11 @@ model Contract {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  property     Property      @relation(fields: [propertyId], references: [id])
-  unit         PropertyUnit? @relation(fields: [unitId], references: [id])
-  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property        @relation(fields: [propertyId], references: [id])
+  unit         PropertyUnit?   @relation(fields: [unitId], references: [id])
+  parcel       PropertyParcel? @relation(fields: [parcelId], references: [id])
+  tenant       Tenant          @relation(fields: [tenantId], references: [id])
   invoices     Invoice[]
   payments     Payment[]
   documents    Document[]

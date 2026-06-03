@@ -170,7 +170,38 @@ export function MapView({ properties, center }: { properties: MapProperty[]; cen
               </Popup>
             )
 
-            // Si tiene contorno, dibujamos el polígono; si no, un círculo en el pin.
+            // Si la finca tiene predios con contorno, dibujamos cada uno.
+            if (p.parcels && p.parcels.length > 0) {
+              return p.parcels.map(parcel => (
+                <Polygon
+                  key={parcel.id}
+                  positions={parcel.polygon}
+                  pathOptions={{ fillColor: c.fill, fillOpacity: 0.5, color: c.stroke, weight: 2 }}
+                >
+                  <Popup>
+                    <div style={{ minWidth: 200 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
+                      <div style={{ fontSize: 12, color: "#666" }}>
+                        Predio: {parcel.name || parcel.cadastralNumber || "s/n"}
+                        {parcel.cadastralNumber && parcel.name && <> · {parcel.cadastralNumber}</>}
+                      </div>
+                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #eee", fontSize: 13 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLORS[p.status].fill, display: "inline-block" }} />
+                          <strong>{STATUS_COLORS[p.status].label}</strong>
+                        </div>
+                        {p.tenantName && <div style={{ marginTop: 4 }}>Inquilino: {p.tenantName}</div>}
+                      </div>
+                      <a href={`/propiedades/${p.id}`} style={{ display: "inline-block", marginTop: 10, fontSize: 12, color: "#3F8E5C", fontWeight: 600, textDecoration: "none" }}>
+                        Ver finca →
+                      </a>
+                    </div>
+                  </Popup>
+                </Polygon>
+              ))
+            }
+
+            // Si la finca tiene su propio contorno, dibujamos el polígono.
             if (p.polygon && p.polygon.length >= 3) {
               return (
                 <Polygon

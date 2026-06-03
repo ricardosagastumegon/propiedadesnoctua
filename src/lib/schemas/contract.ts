@@ -4,6 +4,7 @@ export const contractSchema = z.object({
   contractNumber: z.string().min(1, "Numero de contrato requerido"),
   propertyId: z.string().min(1, "Propiedad requerida"),
   unitId: z.string().optional().nullable(),
+  parcelId: z.string().optional().nullable(),
   tenantId: z.string().min(1, "Inquilino requerido"),
   startDate: z.string().min(1, "Fecha de inicio requerida"),
   endDate: z.string().min(1, "Fecha de fin requerida"),

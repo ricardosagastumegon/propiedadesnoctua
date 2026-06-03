@@ -25,6 +25,7 @@ export async function createContract(formData: FormData) {
       contractNumber: d.contractNumber,
       propertyId: d.propertyId,
       unitId: d.unitId || null,
+      parcelId: d.parcelId || null,
       tenantId: d.tenantId,
       startDate: new Date(d.startDate),
       endDate: new Date(d.endDate),

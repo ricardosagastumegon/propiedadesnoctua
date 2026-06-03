@@ -11,29 +11,36 @@ import { Card } from "@/components/ui/card"
 import { PAYMENT_FREQUENCY } from "@/lib/schemas/contract"
 import type { Property, Tenant } from "@prisma/client"
 
+export interface ParcelOption { id: string; name: string | null; cadastralNumber: string | null }
+
 interface Props {
   properties: Property[]
   tenants: Tenant[]
+  parcelsByProperty?: Record<string, ParcelOption[]>
   defaultPropertyId?: string
   defaultTenantId?: string
   suggestedNumber?: string
   action: (fd: FormData) => Promise<any>
 }
 
-export function ContractForm({ properties, tenants, defaultPropertyId, defaultTenantId, suggestedNumber, action }: Props) {
+export function ContractForm({ properties, tenants, parcelsByProperty = {}, defaultPropertyId, defaultTenantId, suggestedNumber, action }: Props) {
   const router = useRouter()
   const formRef = useRef<HTMLFormElement>(null)
   const [pending, startTransition] = useTransition()
   const [propertyId, setPropertyId] = useState(defaultPropertyId ?? "")
   const [tenantId, setTenantId] = useState(defaultTenantId ?? "")
+  const [parcelId, setParcelId] = useState("")
   const [frequency, setFrequency] = useState("MONTHLY")
   const [status, setStatus] = useState("DRAFT")
+
+  const availableParcels = parcelsByProperty[propertyId] ?? []
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const fd = new FormData(formRef.current!)
     fd.set("propertyId", propertyId)
     fd.set("tenantId", tenantId)
+    fd.set("parcelId", parcelId)
     fd.set("paymentFrequency", frequency)
     fd.set("status", status)
     startTransition(async () => {
@@ -63,14 +70,32 @@ export function ContractForm({ properties, tenants, defaultPropertyId, defaultTe
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Propiedad *</Label>
-            <Select value={propertyId} onValueChange={setPropertyId}>
+            <Label>Finca / Propiedad *</Label>
+            <Select value={propertyId} onValueChange={(v) => { setPropertyId(v); setParcelId("") }}>
               <SelectTrigger><SelectValue placeholder="Selecciona..." /></SelectTrigger>
               <SelectContent>
                 {properties.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
+          {availableParcels.length > 0 && (
+            <div className="space-y-2">
+              <Label>Predio (opcional)</Label>
+              <Select value={parcelId || "__ALL__"} onValueChange={(v) => setParcelId(v === "__ALL__" ? "" : v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__ALL__">Toda la finca</SelectItem>
+                  {availableParcels.map((pc) => (
+                    <SelectItem key={pc.id} value={pc.id}>
+                      {pc.name || pc.cadastralNumber || "Predio"}
+                      {pc.cadastralNumber && pc.name ? ` · ${pc.cadastralNumber}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Si el contrato es solo de un predio, seleccionalo. Si es de toda la finca, dejá "Toda la finca".</p>
+            </div>
+          )}
           <div className="space-y-2">
             <Label>Inquilino *</Label>
             <Select value={tenantId} onValueChange={setTenantId}>

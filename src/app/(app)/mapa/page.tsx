@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card"
 import { getAccessiblePropertyIds } from "@/lib/permissions"
 import { MapWrapper } from "./_map-wrapper"
 import { differenceInDays } from "date-fns"
-import { isValidPolygon, type LatLng } from "@/lib/geo"
+import { isValidPolygon, centroid, type LatLng } from "@/lib/geo"
 
 export const dynamic = "force-dynamic"
 
@@ -34,6 +34,8 @@ export interface MapProperty {
   daysToExpiry: number | null
   /** Contorno del lote [lat,lon][]; null si solo hay pin */
   polygon: LatLng[] | null
+  /** Predios de la finca, cada uno con su contorno y catastro */
+  parcels: { id: string; name: string | null; cadastralNumber: string | null; polygon: LatLng[] }[]
 }
 
 export default async function MapaPage() {
@@ -59,6 +61,7 @@ export default async function MapaPage() {
       latitude: true,
       longitude: true,
       mapPolygon: true,
+      parcels: { select: { id: true, name: true, cadastralNumber: true, mapPolygon: true } },
       contracts: {
         where: { status: { in: ["ACTIVE", "RENEWED"] } },
         orderBy: { endDate: "desc" },
@@ -75,9 +78,31 @@ export default async function MapaPage() {
 
   const now = new Date()
   const mapped: MapProperty[] = properties
-    .filter(p => p.latitude != null && p.longitude != null)
     .map(p => {
-      const poly = isValidPolygon(p.mapPolygon) ? p.mapPolygon : null
+      // Predios con contorno válido
+      const parcelPolys = (p.parcels ?? [])
+        .map(pc => ({
+          id: pc.id, name: pc.name, cadastralNumber: pc.cadastralNumber,
+          polygon: isValidPolygon(pc.mapPolygon) ? (pc.mapPolygon as LatLng[]) : null,
+        }))
+        .filter((pc): pc is { id: string; name: string | null; cadastralNumber: string | null; polygon: LatLng[] } => pc.polygon !== null)
+
+      const poly = isValidPolygon(p.mapPolygon) ? (p.mapPolygon as LatLng[]) : null
+
+      // Punto representativo: lat/lon propio, o centroide del polígono, o centroide de predios
+      let lat = p.latitude
+      let lon = p.longitude
+      if ((lat == null || lon == null)) {
+        const src = poly ?? (parcelPolys[0]?.polygon)
+        const allPts = poly ? poly : parcelPolys.flatMap(pc => pc.polygon)
+        const c2 = centroid(allPts.length ? allPts : (src ?? []))
+        if (c2) { lat = c2[0]; lon = c2[1] }
+      }
+      return { p, parcelPolys, poly, lat, lon }
+    })
+    // Mostrar solo las que tienen alguna ubicación (pin, polígono o predios)
+    .filter(x => x.lat != null && x.lon != null)
+    .map(({ p, parcelPolys, poly, lat, lon }) => {
       const c = p.contracts[0]
       let status: PropertyStatus = "VACANT"
       let expirationMonth: number | null = null
@@ -106,14 +131,15 @@ export default async function MapaPage() {
         department: p.department,
         type: p.type,
         status,
-        lat: p.latitude!,
-        lon: p.longitude!,
+        lat: lat!,
+        lon: lon!,
         expirationMonth,
         expirationYear,
         tenantName,
         monthlyRent,
         daysToExpiry,
         polygon: poly,
+        parcels: parcelPolys,
       }
     })
 
@@ -125,8 +151,9 @@ export default async function MapaPage() {
       }
     : { lat: 14.6349, lon: -90.5069 } // Guatemala City default
 
-  // Propiedades SIN coordenadas (las mostramos en una lista aparte)
-  const withoutCoords = properties.filter(p => p.latitude == null || p.longitude == null)
+  // Propiedades SIN ubicación: ni lat/lon, ni polígono propio, ni predios con contorno
+  const mappedIds = new Set(mapped.map(m => m.id))
+  const withoutCoords = properties.filter(p => !mappedIds.has(p.id))
 
   // Stats
   const stats = {

@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-import { assertPropertyAccess } from "@/lib/permissions"
+import { assertPropertyAccess, can } from "@/lib/permissions"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +12,7 @@ import { formatGTQ, formatDate } from "@/lib/format"
 import { PROPERTY_TYPES, PROPERTY_STATUSES } from "@/lib/schemas/property"
 import { MapPin, Pencil, Plus, Building2, FileText, Wrench, Boxes, FolderKanban, Zap } from "lucide-react"
 import { DeletePropertyButton } from "./_delete-button"
+import { ParcelsManager, type ParcelRow } from "./_parcels-manager"
 
 export default async function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -32,12 +33,22 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
       assets: { orderBy: { createdAt: "desc" }, take: 10 },
       projects: { orderBy: { createdAt: "desc" }, take: 10 },
       utilities: { include: { bills: { orderBy: { dueDate: "desc" }, take: 1 } } },
+      parcels: { orderBy: { orderIndex: "asc" } },
     },
   })
   if (!property) notFound()
 
   const statusLabel = PROPERTY_STATUSES[property.status] ?? property.status
   const typeLabel = PROPERTY_TYPES[property.type] ?? property.type
+  const canEditProp = can({ id: session.user.id, role: session.user.role, organizationId: orgId }, "propiedades", "edit")
+  const parcelRows: ParcelRow[] = property.parcels.map(p => ({
+    id: p.id,
+    name: p.name,
+    cadastralNumber: p.cadastralNumber,
+    areaHectares: p.areaHectares,
+    notes: p.notes,
+    mapPolygon: p.mapPolygon,
+  }))
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -118,6 +129,11 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
                 <p className="text-sm whitespace-pre-wrap">{property.notes}</p>
               </Card>
             )}
+          </div>
+
+          {/* Predios / catastros de la finca */}
+          <div className="mt-4">
+            <ParcelsManager propertyId={id} parcels={parcelRows} canEdit={canEditProp} />
           </div>
         </TabsContent>
 
