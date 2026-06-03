@@ -16,6 +16,10 @@ export default async function AdminPage() {
       id: true, name: true, slug: true, createdAt: true,
       settings: { select: { enabledModules: true } },
       _count: { select: { users: true, properties: true } },
+      users: {
+        orderBy: { role: "asc" },
+        select: { id: true, name: true, email: true, role: true, isActive: true, lastLoginAt: true },
+      },
     },
   })
 
@@ -27,6 +31,10 @@ export default async function AdminPage() {
     users: o._count.users,
     properties: o._count.properties,
     enabledModules: parseEnabledModules(o.settings?.enabledModules),
+    userList: o.users.map(u => ({
+      id: u.id, name: u.name, email: u.email, role: u.role,
+      isActive: u.isActive, lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
+    })),
   }))
 
   return (

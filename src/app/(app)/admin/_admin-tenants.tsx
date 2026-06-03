@@ -7,8 +7,22 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { TOGGLEABLE_MODULES } from "@/lib/permissions"
-import { adminCreateTenant, adminSetModules } from "./actions"
-import { Plus, Building2, Users, ChevronDown, ChevronRight } from "lucide-react"
+import { adminCreateTenant, adminSetModules, adminResetUserPassword, adminToggleUserActive } from "./actions"
+import { Plus, Building2, Users, ChevronDown, ChevronRight, KeyRound, Power, PowerOff } from "lucide-react"
+
+export interface TenantUser {
+  id: string
+  name: string
+  email: string
+  role: string
+  isActive: boolean
+  lastLoginAt: string | null
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  OWNER: "Propietario", ADMIN: "Administrador", MANAGER: "Gerente", ACCOUNTANT: "Contador",
+  SUPERVISOR: "Encargado", ASSISTANT: "Asistente", TECHNICIAN: "Técnico", VIEWER: "Solo lectura",
+}
 
 const MODULE_LABELS: Record<string, string> = {
   propiedades: "Propiedades + Mapa", inquilinos: "Inquilinos", contratos: "Contratos",
@@ -26,6 +40,7 @@ export interface TenantRow {
   users: number
   properties: number
   enabledModules: string[] | null
+  userList: TenantUser[]
 }
 
 export function AdminTenants({ tenants }: { tenants: TenantRow[] }) {
@@ -41,7 +56,7 @@ export function AdminTenants({ tenants }: { tenants: TenantRow[] }) {
       </div>
 
       <div className="space-y-2">
-        {tenants.map(t => <TenantItem key={t.id} tenant={t} />)}
+        {tenants.map(t => <TenantItem key={t.id} tenant={t} onCreds={setCreds} />)}
       </div>
 
       <CreateTenantDialog
@@ -52,8 +67,8 @@ export function AdminTenants({ tenants }: { tenants: TenantRow[] }) {
 
       <Dialog open={!!creds} onOpenChange={(v) => !v && setCreds(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Tenant creado</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">Credenciales del administrador del nuevo tenant. Compartilas de forma segura.</p>
+          <DialogHeader><DialogTitle>Credenciales</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Compartí estas credenciales de forma segura. El usuario puede entrar directo y cambiarlas luego.</p>
           <pre className="text-xs bg-muted p-3 rounded-md font-mono whitespace-pre-wrap break-all">
             Email: {creds?.email}{"\n"}Contraseña: {creds?.password}
           </pre>
@@ -64,10 +79,29 @@ export function AdminTenants({ tenants }: { tenants: TenantRow[] }) {
   )
 }
 
-function TenantItem({ tenant }: { tenant: TenantRow }) {
+function TenantItem({ tenant, onCreds }: { tenant: TenantRow; onCreds: (c: { email: string; password: string }) => void }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [busyUser, setBusyUser] = useState<string | null>(null)
+
+  async function resetPwd(userId: string) {
+    if (!confirm("¿Generar una contraseña nueva para este usuario? La actual dejará de funcionar.")) return
+    setBusyUser(userId)
+    const res = await adminResetUserPassword(userId)
+    setBusyUser(null)
+    if ("error" in res) { alert(res.error); return }
+    onCreds({ email: res.email, password: res.password })
+    router.refresh()
+  }
+
+  async function toggleActive(userId: string, isActive: boolean) {
+    setBusyUser(userId)
+    const res = await adminToggleUserActive(userId, isActive)
+    setBusyUser(null)
+    if ("error" in res) { alert(res.error); return }
+    router.refresh()
+  }
   // null = todos habilitados → marcamos todos
   const [selected, setSelected] = useState<Set<string>>(
     new Set(tenant.enabledModules ?? TOGGLEABLE_MODULES),
@@ -128,6 +162,41 @@ function TenantItem({ tenant }: { tenant: TenantRow }) {
               Todos
             </Button>
             <Button size="sm" onClick={save} disabled={saving}>{saving ? "Guardando…" : "Guardar módulos"}</Button>
+          </div>
+
+          {/* Usuarios del tenant */}
+          <div className="pt-3 border-t">
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+              Usuarios ({tenant.userList.length})
+            </div>
+            <div className="space-y-1.5">
+              {tenant.userList.map(u => (
+                <div key={u.id} className="flex items-center justify-between gap-2 bg-background rounded-md px-3 py-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium flex items-center gap-2 flex-wrap">
+                      {u.name}
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">{ROLE_LABELS[u.role] ?? u.role}</span>
+                      {!u.isActive && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700">Inactivo</span>}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busyUser === u.id} onClick={() => resetPwd(u.id)}>
+                      <KeyRound className="size-3 mr-1" />Reset clave
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={u.isActive ? "outline" : "default"}
+                      className={`h-7 text-xs ${u.isActive ? "text-destructive" : ""}`}
+                      disabled={busyUser === u.id}
+                      onClick={() => toggleActive(u.id, !u.isActive)}
+                    >
+                      {u.isActive ? <PowerOff className="size-3" /> : <Power className="size-3" />}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

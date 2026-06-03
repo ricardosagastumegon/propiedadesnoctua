@@ -1,4 +1,5 @@
 "use server"
+import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@prisma/client"
 import { revalidatePath } from "next/cache"
@@ -10,6 +11,39 @@ async function requirePlatformAdmin() {
   if (!(await isCurrentUserPlatformAdmin())) {
     throw new Error("No autorizado")
   }
+}
+
+function genPassword(): string {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ", lower = "abcdefghijkmnopqrstuvwxyz", digits = "23456789", sym = "!@#$%&*"
+  const pick = (s: string) => s[Math.floor(Math.random() * s.length)]
+  const pool = [pick(upper), pick(upper), pick(lower), pick(lower), pick(lower), pick(digits), pick(digits), pick(sym)]
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]] }
+  return pool.join("")
+}
+
+/**
+ * Resetea la contraseña de cualquier usuario (de cualquier tenant).
+ * Genera una temporal, NO fuerza cambio (entra directo). Solo platform admin.
+ */
+export async function adminResetUserPassword(userId: string): Promise<{ ok: true; email: string; name: string; password: string } | { error: string }> {
+  try { await requirePlatformAdmin() } catch { return { error: "No autorizado" } }
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } })
+  if (!user) return { error: "Usuario no encontrado" }
+  const password = genPassword()
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash: await bcrypt.hash(password, 12), mustChangePassword: false, isActive: true },
+  })
+  revalidatePath("/admin")
+  return { ok: true, email: user.email, name: user.name, password }
+}
+
+/** Activa/desactiva un usuario de cualquier tenant. Solo platform admin. */
+export async function adminToggleUserActive(userId: string, isActive: boolean): Promise<{ ok: true } | { error: string }> {
+  try { await requirePlatformAdmin() } catch { return { error: "No autorizado" } }
+  await prisma.user.update({ where: { id: userId }, data: { isActive } })
+  revalidatePath("/admin")
+  return { ok: true }
 }
 
 /** Crea una organización nueva (tenant) con su admin. Solo platform admin. */
