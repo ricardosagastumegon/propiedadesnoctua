@@ -134,6 +134,38 @@ export function parseGeoJSON(text: string): LatLng[] | null {
   }
 }
 
+// Conversiones de área para Guatemala.
+// 1 hectárea = 10,000 m²
+// 1 manzana  ≈ 0.6987 ha (10,000 varas², vara = 0.8359 m)
+// 1 caballería = 64 manzanas ≈ 44.72 ha
+const HA_PER_MANZANA = 0.6987
+const MANZANAS_PER_CABALLERIA = 64
+
+export interface AreaUnits {
+  hectareas: number
+  manzanas: number
+  caballerias: number
+}
+
+/** Convierte hectáreas a las tres unidades usadas en Guatemala. */
+export function areaConversions(hectareas: number): AreaUnits {
+  const manzanas = hectareas / HA_PER_MANZANA
+  return {
+    hectareas,
+    manzanas,
+    caballerias: manzanas / MANZANAS_PER_CABALLERIA,
+  }
+}
+
+/** Texto compacto "12.40 ha · 17.75 mz · 0.28 cab". */
+export function formatAreaUnits(hectareas: number): string {
+  if (!hectareas || hectareas <= 0) return "—"
+  const u = areaConversions(hectareas)
+  const parts = [`${u.hectareas.toFixed(2)} ha`, `${u.manzanas.toFixed(2)} mz`]
+  if (u.caballerias >= 0.01) parts.push(`${u.caballerias.toFixed(2)} cab`)
+  return parts.join(" · ")
+}
+
 /**
  * Área de un polígono [lat, lon] en hectáreas, usando la fórmula esférica
  * (suficientemente precisa para predios y fincas).

@@ -8,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
 import { CoordPicker } from "../_components/coord-picker"
 import { createParcel, updateParcel, deleteParcel } from "../parcels-actions"
+import { FincaMap, type FincaMapParcel } from "./_finca-map"
+import { formatAreaUnits, isValidPolygon, type LatLng } from "@/lib/geo"
 import { Plus, MapPin, Pencil, Trash2, Layers } from "lucide-react"
 
 export interface ParcelRow {
@@ -31,6 +33,15 @@ export function ParcelsManager({ propertyId, parcels, canEdit }: Props) {
 
   const totalHa = parcels.reduce((s, p) => s + (p.areaHectares ?? 0), 0)
 
+  // Predios con contorno válido, para el mapa de vista previa
+  const mapParcels: FincaMapParcel[] = parcels
+    .map(p => ({
+      id: p.id,
+      label: p.name || p.cadastralNumber || "Predio",
+      polygon: isValidPolygon(p.mapPolygon) ? (p.mapPolygon as LatLng[]) : null,
+    }))
+    .filter((p): p is FincaMapParcel => p.polygon !== null)
+
   return (
     <Card className="p-5">
       <div className="flex items-center justify-between mb-1">
@@ -46,8 +57,15 @@ export function ParcelsManager({ propertyId, parcels, canEdit }: Props) {
       </div>
       <p className="text-xs text-muted-foreground mb-4">
         Una finca puede tener varios predios catastrales, cada uno con su número de catastro y su contorno.
-        {totalHa > 0 && <> Área total: <strong>{totalHa.toFixed(2)} ha</strong>.</>}
+        {totalHa > 0 && <> Área total: <strong>{formatAreaUnits(totalHa)}</strong>.</>}
       </p>
+
+      {/* Mapa de vista previa de la finca */}
+      {mapParcels.length > 0 && (
+        <div className="mb-4">
+          <FincaMap parcels={mapParcels} />
+        </div>
+      )}
 
       {adding && (
         <ParcelForm
@@ -79,7 +97,7 @@ export function ParcelsManager({ propertyId, parcels, canEdit }: Props) {
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    {p.areaHectares != null ? `${p.areaHectares.toFixed(2)} ha` : "área sin calcular"}
+                    {p.areaHectares != null && p.areaHectares > 0 ? formatAreaUnits(p.areaHectares) : "área sin calcular"}
                     {p.notes && <> · {p.notes}</>}
                   </div>
                 </div>

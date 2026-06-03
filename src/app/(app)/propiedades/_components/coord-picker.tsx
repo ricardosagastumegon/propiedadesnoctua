@@ -4,7 +4,7 @@ import { useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { parseGeoFile, geoJsonToPolygon, centroid, isValidPolygon, polygonAreaHectares, gtmTraverseToPolygon, parseTraverseTable, type LatLng } from "@/lib/geo"
+import { parseGeoFile, geoJsonToPolygon, centroid, isValidPolygon, polygonAreaHectares, formatAreaUnits, gtmTraverseToPolygon, parseTraverseTable, type LatLng } from "@/lib/geo"
 import { Textarea } from "@/components/ui/textarea"
 import { MapPin, Pencil, Upload, Trash2, Check, FileText } from "lucide-react"
 
@@ -262,12 +262,7 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon }: Props) {
       {polygon ? (
         <p className="text-xs text-emerald-700">
           ✓ Contorno marcado ({polygon.length} puntos
-          {polygon.length >= 3 && (() => {
-            const ha = polygonAreaHectares(polygon)
-            return ha >= 1
-              ? ` · ${ha.toFixed(2)} ha`
-              : ` · ${(ha * 10000).toFixed(0)} m²`
-          })()}
+          {polygon.length >= 3 && ` · ${formatAreaUnits(polygonAreaHectares(polygon))}`}
           ) — se dibujará como polígono en el mapa.
         </p>
       ) : hasValidCoords ? (
