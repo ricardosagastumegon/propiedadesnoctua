@@ -11,6 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { getAccessiblePropertyIds } from "@/lib/permissions"
 import { Users, Plus, Phone, Mail } from "lucide-react"
 
+export const dynamic = "force-dynamic"
+
 export default async function InquilinosPage() {
   const session = await auth()
   if (!session) redirect("/login")

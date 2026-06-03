@@ -12,6 +12,8 @@ import { QUOTE_STATUSES, QUOTE_STATUS_COLORS } from "@/lib/schemas/vendor"
 import { getAccessiblePropertyIds } from "@/lib/permissions"
 import { FileText, Plus } from "lucide-react"
 
+export const dynamic = "force-dynamic"
+
 export default async function CotizacionesPage() {
   const session = await auth()
   if (!session) redirect("/login")

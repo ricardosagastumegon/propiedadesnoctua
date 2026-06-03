@@ -13,6 +13,8 @@ import { getContractStatus, STATUS_LABELS, STATUS_VARIANTS } from "@/lib/contrac
 import { propertyAccessWhere } from "@/lib/permissions"
 import { FileText, Plus } from "lucide-react"
 
+export const dynamic = "force-dynamic"
+
 export default async function ContratosPage() {
   const session = await auth()
   if (!session) redirect("/login")

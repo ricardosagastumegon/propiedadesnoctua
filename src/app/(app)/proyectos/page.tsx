@@ -11,6 +11,8 @@ import { PROJECT_TYPES, PROJECT_STATUSES, PROJECT_STATUS_COLORS } from "@/lib/sc
 import { propertyAccessWhere } from "@/lib/permissions"
 import { FolderOpen, Plus } from "lucide-react"
 
+export const dynamic = "force-dynamic"
+
 export default async function ProyectosPage() {
   const session = await auth()
   if (!session) redirect("/login")

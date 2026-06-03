@@ -39,6 +39,8 @@ const STATUS_LABELS: Record<string, string> = {
   SOLD: "Vendida",
 }
 
+export const dynamic = "force-dynamic"
+
 export default async function PropertiesPage() {
   const session = await auth()
   if (!session) redirect("/login")

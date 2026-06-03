@@ -10,6 +10,8 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { formatGTQ, formatDate } from "@/lib/format"
 import { CreditCard, Receipt } from "lucide-react"
 
+export const dynamic = "force-dynamic"
+
 export default async function PagosPage() {
   const session = await auth()
   if (!session) redirect("/login")

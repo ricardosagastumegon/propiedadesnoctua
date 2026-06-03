@@ -11,6 +11,8 @@ import { formatDate, formatGTQ } from "@/lib/format"
 import { EMPLOYEE_STATUSES, EMPLOYEE_STATUS_COLORS, PAY_PERIODS } from "@/lib/schemas/employee"
 import { Users, Plus } from "lucide-react"
 
+export const dynamic = "force-dynamic"
+
 export default async function EmpleadosPage() {
   const session = await auth()
   if (!session) redirect("/login")

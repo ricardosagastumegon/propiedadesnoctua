@@ -11,6 +11,8 @@ import { ASSET_CATEGORIES, ASSET_STATUSES, ASSET_STATUS_COLORS } from "@/lib/sch
 import { propertyAccessWhereOpt } from "@/lib/permissions"
 import { Package, Plus, AlertTriangle } from "lucide-react"
 
+export const dynamic = "force-dynamic"
+
 export default async function ActivosPage() {
   const session = await auth()
   if (!session) redirect("/login")
