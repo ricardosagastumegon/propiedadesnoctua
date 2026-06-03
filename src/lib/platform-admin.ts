@@ -3,11 +3,17 @@
 // por comas) — seguro porque no se puede escalar desde la app, solo desde el deploy.
 import { auth } from "@/auth"
 
+// Super-admins de fábrica (dueños de Noctua). Se pueden agregar más por env.
+const BUILTIN_PLATFORM_ADMINS = [
+  "ricardosagastumegon@gmail.com",
+]
+
 function allowedEmails(): string[] {
-  return (process.env.PLATFORM_ADMIN_EMAILS ?? "")
+  const fromEnv = (process.env.PLATFORM_ADMIN_EMAILS ?? "")
     .split(",")
     .map(e => e.trim().toLowerCase())
     .filter(Boolean)
+  return [...BUILTIN_PLATFORM_ADMINS.map(e => e.toLowerCase()), ...fromEnv]
 }
 
 export function isPlatformAdminEmail(email: string | null | undefined): boolean {
