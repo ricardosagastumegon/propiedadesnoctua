@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+<title>QGIS vs ArcGIS — Precios, créditos y consumo</title>
+<style>
+  :root {
+    --charcoal: #2D2D2D; --jade: #3F8E5C; --jade-soft: #4FA570;
+    --crema: #FAF8F4; --crema-dark: #F2EFE7; --gray-700: #4A4A4A;
+    --gray-500: #767676; --gray-300: #C9C5BC; --gray-200: #E3DFD6;
+    --amber: #C7891C; --rose: #B0413E; --blue: #3E6FB0;
+    --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.07);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { background: var(--crema); color: var(--charcoal); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+  .serif { font-family: Georgia, "Times New Roman", serif; }
+
+  header.top { background: var(--charcoal); color: var(--crema); padding: 52px 0 60px; }
+  header.top h1 { font-size: clamp(28px, 5vw, 50px); line-height: 1.08; font-weight: 600; letter-spacing: -0.02em; }
+  header.top p { font-size: clamp(16px, 2vw, 19px); opacity: 0.82; margin-top: 16px; max-width: 740px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--jade-soft); font-weight: 600; margin-bottom: 14px; }
+
+  section { padding: 44px 0; }
+  h2.sec { font-family: Georgia, serif; font-size: clamp(23px, 3.4vw, 32px); font-weight: 600; letter-spacing: -0.01em; margin-bottom: 8px; }
+  .sub { color: var(--gray-500); font-size: 15px; margin-bottom: 26px; max-width: 760px; }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 800px) { .two { grid-template-columns: 1fr; } }
+  .card { background: white; border: 1px solid var(--gray-200); border-radius: 14px; padding: 26px; box-shadow: var(--shadow); }
+  .card.q { border-top: 4px solid var(--jade); }
+  .card.a { border-top: 4px solid var(--blue); }
+  .card h3 { font-size: 24px; }
+  .card .tag { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gray-500); font-weight: 600; margin-bottom: 4px; }
+  .card .big { font-family: Georgia, serif; font-size: 30px; font-weight: 600; margin: 14px 0 4px; }
+  .card .big small { font-size: 14px; color: var(--gray-500); font-family: -apple-system, sans-serif; font-weight: 400; }
+  .card ul { list-style: none; margin-top: 14px; }
+  .card li { font-size: 14px; color: var(--gray-700); padding: 4px 0 4px 20px; position: relative; }
+  .card li::before { content: ""; position: absolute; left: 4px; top: 11px; width: 6px; height: 6px; border-radius: 50%; background: var(--jade); }
+  .card.a li::before { background: var(--blue); }
+  .card li.bad::before { background: var(--rose); border-radius: 1px; }
+
+  .tablecard { background: white; border: 1px solid var(--gray-200); border-radius: 14px; overflow-x: auto; box-shadow: var(--shadow); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 560px; }
+  thead th { background: var(--charcoal); color: var(--crema); padding: 14px; text-align: left; font-weight: 600; font-size: 13px; }
+  tbody td, tbody th { padding: 12px 14px; border-bottom: 1px solid var(--crema-dark); vertical-align: top; }
+  tbody th { text-align: left; font-weight: 600; font-size: 14px; }
+  tbody td { text-align: left; color: var(--gray-700); }
+  tbody td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tbody tr:last-child td, tbody tr:last-child th { border-bottom: none; }
+  .group-row th { background: var(--crema-dark); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gray-500); }
+  .cell-note { display: block; font-size: 11px; color: var(--gray-500); font-weight: 400; margin-top: 2px; }
+
+  .callout { background: white; border: 1px solid var(--gray-200); border-left: 4px solid var(--amber); border-radius: 10px; padding: 20px 24px; box-shadow: var(--shadow); }
+  .callout.rose { border-left-color: var(--rose); }
+  .callout h3 { font-size: 17px; margin-bottom: 6px; }
+  .callout p { font-size: 14px; color: var(--gray-700); }
+
+  .scenario { background: white; border: 1px solid var(--gray-200); border-radius: 14px; padding: 24px; box-shadow: var(--shadow); }
+  .scenario h4 { font-size: 16px; margin-bottom: 14px; }
+  .scenario table { min-width: 0; }
+  .total-row td { font-weight: 700; color: var(--charcoal); border-top: 2px solid var(--charcoal); }
+
+  .hero-cost { display:grid; grid-template-columns: repeat(3,1fr); gap:14px; margin: 8px 0 26px; }
+  @media (max-width:800px){ .hero-cost{ grid-template-columns:1fr; } }
+  .hero-cost .col { background:white; border:1px solid var(--gray-200); border-radius:12px; padding:22px; text-align:center; }
+  .hero-cost .col.alert { border:2px solid var(--rose); }
+  .hero-cost .col .label { font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:var(--gray-500); font-weight:600; }
+  .hero-cost .col .amount { font-family:Georgia,serif; font-size:30px; font-weight:600; margin:8px 0 4px; }
+  .hero-cost .col.alert .amount { color: var(--rose); }
+  .hero-cost .col .per { font-size:12px; color:var(--gray-500); }
+
+  footer { padding: 28px 0; color: var(--gray-500); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="eyebrow">Guía de costos · Sistemas GIS</div>
+    <h1>QGIS vs ArcGIS</h1>
+    <p>
+      Las dos plataformas de cartografía más usadas. Una es gratis y abierta; la otra es comercial
+      y cobra por <strong>licencias + créditos</strong>. Acá te explicamos en detalle cómo funciona el
+      modelo de créditos de ArcGIS —qué los consume y cuánto cuesta— y por qué, para una operación de
+      pocas fincas, el costo por finca se dispara.
+    </p>
+  </div>
+</header>
+
+<!-- RESUMEN -->
+<section>
+  <div class="wrap">
+    <h2 class="sec">En resumen</h2>
+    <p class="sub">Mismo objetivo (mapear y analizar territorio), modelos de costo opuestos.</p>
+    <div class="two">
+      <div class="card q">
+        <div class="tag">Open source · Escritorio</div>
+        <h3>QGIS</h3>
+        <div class="big">Gratis<small> / licencia GPL</small></div>
+        <ul>
+          <li>Descarga e instalación sin costo, sin límite de usuarios</li>
+          <li>Sin créditos, sin medidor, sin factura mensual</li>
+          <li>Mismas funciones núcleo de cartografía y análisis</li>
+          <li class="bad">Lo corrés y mantenés vos (no hay nube incluida)</li>
+          <li class="bad">Sin soporte oficial (comunidad y consultores)</li>
+          <li class="bad">Compartir en web o multiusuario = montar servidor propio</li>
+        </ul>
+      </div>
+      <div class="card a">
+        <div class="tag">Comercial · Esri</div>
+        <h3>ArcGIS</h3>
+        <div class="big">Licencia anual + créditos<small> / por usuario</small></div>
+        <ul>
+          <li>Suite completa: ArcGIS Pro (escritorio) + ArcGIS Online (nube)</li>
+          <li>Nube gestionada, apps de campo, soporte oficial</li>
+          <li>Estándar de la industria GIS</li>
+          <li class="bad">Pagás por usuario/año <em>y además</em> por créditos consumidos</li>
+          <li class="bad">El costo sube con el uso — difícil de presupuestar</li>
+          <li class="bad">Almacenar tus datos e imágenes consume créditos cada mes</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRECIOS ARCGIS -->
+<section style="padding-top:0;">
+  <div class="wrap">
+    <h2 class="sec">ArcGIS: precio de las licencias (por usuario / año)</h2>
+    <p class="sub">ArcGIS Online se licencia por "tipos de usuario". Necesitás al menos un usuario base (Creator o superior); los demás se le suman. Este costo es fijo: lo pagás tengas 5 fincas o 500.</p>
+    <div class="tablecard">
+      <table>
+        <thead><tr><th>Tipo de usuario</th><th>Qué puede hacer</th><th style="text-align:right">Precio aprox. / año</th></tr></thead>
+        <tbody>
+          <tr><th>Viewer</th><td>Solo ver mapas compartidos. No crea ni edita.</td><td class="num">$100 – 115</td></tr>
+          <tr><th>Contributor / Editor</th><td>Editar datos, pero no análisis avanzado.</td><td class="num">$350 – 385</td></tr>
+          <tr><th>Creator</th><td>Crear mapas y apps. Incluye ArcGIS Pro Basic.</td><td class="num">≈ $845</td></tr>
+          <tr><th>Professional</th><td>Creator + ArcGIS Pro Standard (más análisis).</td><td class="num">$1,500 – 2,000</td></tr>
+          <tr><th>Professional Plus</th><td>ArcGIS Pro Advanced + extensiones.</td><td class="num">$2,500 – 4,000+</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout" style="margin-top:18px;">
+      <h3>Y eso es solo la licencia</h3>
+      <p>El precio anual te da acceso al software y una bolsa inicial de créditos (500 para Creator/Professional, 250 para usuarios de campo). Cuando se acaban, <strong>comprás más</strong>. Acá es donde el costo se vuelve impredecible.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CRÉDITOS -->
+<section style="padding-top:0;">
+  <div class="wrap">
+    <h2 class="sec">¿Qué son los créditos de ArcGIS y cuánto valen?</h2>
+    <p class="sub">Los créditos son la "moneda" interna de ArcGIS Online. Se compran en bloques de 1,000 y vencen a los 24 meses.</p>
+
+    <div class="hero-cost">
+      <div class="col">
+        <div class="label">Valor aprox.</div>
+        <div class="amount">~$0.10</div>
+        <div class="per">por crédito (USD)</div>
+      </div>
+      <div class="col">
+        <div class="label">Se compran en</div>
+        <div class="amount">1,000</div>
+        <div class="per">bloque ≈ $100</div>
+      </div>
+      <div class="col">
+        <div class="label">Incluidos / usuario</div>
+        <div class="amount">500</div>
+        <div class="per">Creator · se agotan rápido con uso real</div>
+      </div>
+    </div>
+
+    <div class="callout rose" style="margin-bottom:24px;">
+      <h3>El problema: el costo no para de correr</h3>
+      <p>
+        Cada vez que geocodificás direcciones, corrés un análisis (NDVI, zonas, distancias), generás mosaicos para
+        ver el mapa rápido, o simplemente <strong>guardás tus imágenes de dron y capas en la nube</strong>, se descuentan créditos —
+        el almacenamiento se cobra <strong>cada mes, de forma continua</strong>. En una operación activa, los créditos se
+        convierten en el gasto que más crece y más difícil de prever.
+      </p>
+    </div>
+
+    <h2 class="sec" style="font-size:22px;">Cuánto consume cada operación</h2>
+    <p class="sub">Tarifas de referencia publicadas por Esri (pueden cambiar; verificá en tu cuenta).</p>
+    <div class="tablecard">
+      <table>
+        <thead><tr><th>Operación</th><th>Costo en créditos</th><th style="text-align:right">≈ USD</th></tr></thead>
+        <tbody>
+          <tr class="group-row"><th colspan="3">Almacenamiento (cargo mensual continuo)</th></tr>
+          <tr><th>Datos vectoriales (features)</th><td>~2.4 créditos / 10 MB / mes</td><td class="num">~$0.24 /mes</td></tr>
+          <tr><th>Imágenes de dron / satélite (raster)</th><td>~1.2 créditos / GB / mes</td><td class="num">~$0.12 /GB/mes</td></tr>
+          <tr><th>Mosaicos / tiles</th><td>&lt; 5 créditos por 2 GB</td><td class="num">~$0.50</td></tr>
+
+          <tr class="group-row"><th colspan="3">Operaciones por transacción</th></tr>
+          <tr><th>Geocodificar direcciones</th><td>40 créditos / 1,000 direcciones</td><td class="num">~$4 /1,000</td></tr>
+          <tr><th>Enriquecer con datos demográficos</th><td>10 créditos / 1,000 atributos</td><td class="num">~$1 /1,000</td></tr>
+          <tr><th>Ruteo de flota (Plan Routes)</th><td>1 crédito por vehículo/ruta</td><td class="num">~$0.10</td></tr>
+          <tr><th>Áreas de tiempo de viaje (drive-time)</th><td>0.5 crédito por área</td><td class="num">~$0.05</td></tr>
+          <tr><th>Generar caché de tiles</th><td>1 crédito / 1,000 tiles</td><td class="num">~$0.10 /1,000</td></tr>
+          <tr><th>Análisis espacial (NDVI, resumen, intersección…)</th><td>varía según registros y salida</td><td class="num">variable</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ESCENARIO 5-10 FINCAS -->
+<section style="padding-top:0;">
+  <div class="wrap">
+    <h2 class="sec">El costo real: una operación pequeña de 5 a 10 fincas</h2>
+    <p class="sub">
+      Acá está la trampa. El gran costo de ArcGIS son las <strong>licencias y los créditos</strong> — y esos no bajan
+      porque tengas pocas fincas. Repartido entre una operación chica, el costo <strong>por finca</strong> se vuelve altísimo.
+    </p>
+
+    <div class="hero-cost">
+      <div class="col">
+        <div class="label">Operación de</div>
+        <div class="amount">5–10</div>
+        <div class="per">fincas</div>
+      </div>
+      <div class="col alert">
+        <div class="label">Costo promedio</div>
+        <div class="amount">~$200</div>
+        <div class="per">por finca · por mes</div>
+      </div>
+      <div class="col alert">
+        <div class="label">Al año (8 fincas)</div>
+        <div class="amount">~$19,000</div>
+        <div class="per">y sube con el uso</div>
+      </div>
+    </div>
+
+    <div class="scenario">
+      <h4>Desglose anual aproximado — 8 fincas con monitoreo activo en ArcGIS</h4>
+      <table>
+        <tbody>
+          <tr class="group-row"><th colspan="2" style="text-align:left">Licencias (costo fijo, no baja con pocas fincas)</th></tr>
+          <tr><td>1 usuario Professional (ArcGIS Pro Standard)</td><td class="num">≈ $1,800</td></tr>
+          <tr><td>2 usuarios Creator</td><td class="num">≈ $1,690</td></tr>
+          <tr><td>3 usuarios de campo / Editor</td><td class="num">≈ $1,155</td></tr>
+
+          <tr class="group-row"><th colspan="2" style="text-align:left">Créditos (variable, sube con el uso)</th></tr>
+          <tr><td>Almacenamiento de imágenes de dron / ortomosaicos (refrescados)</td><td class="num">≈ $2,000 – 3,500</td></tr>
+          <tr><td>Análisis recurrente (NDVI, zonas, distancias, resúmenes)</td><td class="num">≈ $3,000 – 5,000</td></tr>
+          <tr><td>Geocodificación y rutas del equipo de campo</td><td class="num">≈ $1,200 – 2,500</td></tr>
+          <tr><td>Generación de tiles y publicación de mapas</td><td class="num">≈ $800 – 1,500</td></tr>
+
+          <tr class="group-row"><th colspan="2" style="text-align:left">Otros</th></tr>
+          <tr><td>Soporte, capacitación y mantenimiento</td><td class="num">≈ $1,500 – 3,000</td></tr>
+
+          <tr class="total-row"><td>Total año (aprox.)</td><td class="num">$15,000 – 22,000</td></tr>
+          <tr class="total-row"><td>Por finca / mes (8 fincas)</td><td class="num">≈ $160 – 230</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:12px;color:var(--gray-500);margin-top:12px;">
+        Promedio ≈ <strong>$200 por finca al mes</strong>. Con menos fincas, el costo por finca es aún mayor (las licencias se reparten entre menos predios).
+        El monto sube con la intensidad de uso: más análisis, más imágenes y más equipo de campo = más créditos.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- TABLA COMPARATIVA -->
+<section style="padding-top:0;">
+  <div class="wrap">
+    <h2 class="sec">QGIS vs ArcGIS — lado a lado</h2>
+    <div class="tablecard">
+      <table>
+        <thead><tr><th>Tema</th><th>QGIS</th><th>ArcGIS</th></tr></thead>
+        <tbody>
+          <tr><th>Costo de licencia</th><td>Gratis</td><td>$100 – $4,000+ / usuario / año</td></tr>
+          <tr><th>Modelo de créditos</th><td>No existe</td><td>Sí — operaciones y almacenamiento consumen créditos</td></tr>
+          <tr><th>Costo predecible</th><td>Sí (cero)</td><td>No — varía con el uso</td></tr>
+          <tr><th>Costo por finca (operación chica)</th><td>$0</td><td>~$200 / finca / mes</td></tr>
+          <tr><th>Nube incluida</th><td>No (self-host)</td><td>Sí (ArcGIS Online)</td></tr>
+          <tr><th>Apps de campo (celular)</th><td>Limitado / terceros</td><td>Sí (Field Maps, Survey123)</td></tr>
+          <tr><th>Soporte oficial</th><td>Comunidad</td><td>Sí (de pago)</td></tr>
+          <tr><th>Curva de aprendizaje</th><td>Alta</td><td>Alta</td></tr>
+          <tr><th>Potencia de análisis</th><td>Muy alta</td><td>Muy alta (la mayor del mercado)</td></tr>
+          <tr><th>Formatos (KML, GeoJSON, Shapefile)</th><td>Sí</td><td>Sí</td></tr>
+          <tr><th>Ideal para</th><td>Quien tiene un experto y quiere costo cero</td><td>Empresas con depto. GIS y presupuesto</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Guía informativa. QGIS® y ArcGIS® son marcas de sus respectivos dueños. Precios y tarifas de créditos de Esri
+    son aproximados (referencia 2025), en USD, y pueden variar según versión, región, intensidad de uso y contrato.
+    Verificá los valores vigentes en esri.com.
+  </div>
+</footer>
+
+</body>
+</html>
