@@ -4,9 +4,9 @@ import { usePathname } from "next/navigation"
 import {
   Building2, LayoutDashboard, Users, FileText, Wrench, Boxes,
   FolderKanban, Receipt, Briefcase, BarChart3, Settings,
-  FileCheck, UserRound, ShieldCheck, Wallet, BadgeCheck, Map,
+  FileCheck, UserRound, ShieldCheck, Wallet, BadgeCheck, Map, Shield,
 } from "lucide-react"
-import { can, type Module, type UserForPermissions } from "@/lib/permissions"
+import { can, isModuleEnabled, type Module, type UserForPermissions } from "@/lib/permissions"
 
 interface NavItem {
   href: string
@@ -39,15 +39,31 @@ interface SidebarNavProps {
   pendingApprovals: number
   pendingAcceptances?: number
   user: UserForPermissions
+  enabledModules?: string[] | null
+  isPlatformAdmin?: boolean
 }
 
-export function SidebarNav({ pendingApprovals, pendingAcceptances = 0, user }: SidebarNavProps) {
+export function SidebarNav({ pendingApprovals, pendingAcceptances = 0, user, enabledModules = null, isPlatformAdmin = false }: SidebarNavProps) {
   const pathname = usePathname()
 
   return (
     <>
+      {isPlatformAdmin && (
+        <Link
+          href="/admin"
+          className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors mb-1 ${
+            pathname.startsWith("/admin")
+              ? "bg-sidebar-accent text-sidebar-foreground font-medium"
+              : "text-sidebar-foreground hover:bg-sidebar-accent"
+          }`}
+        >
+          <Shield className={`size-4 ${pathname.startsWith("/admin") ? "text-foreground" : "text-muted-foreground"}`} />
+          <span className="flex-1">Admin (tenants)</span>
+        </Link>
+      )}
       {NAV.map(({ href, label, icon: Icon, module }) => {
         if (!can(user, module, "view")) return null
+        if (!isModuleEnabled(module, enabledModules)) return null
         const isActive = pathname === href || (href !== "/dashboard" && pathname.startsWith(href))
         return (
           <Link

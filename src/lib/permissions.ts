@@ -24,6 +24,30 @@ export const MODULES = [
 ] as const
 export type Module = typeof MODULES[number]
 
+// Módulos que SIEMPRE están disponibles, no se pueden apagar por organización.
+export const ALWAYS_ON_MODULES: Module[] = ["dashboard", "configuracion"]
+
+// Módulos que un admin puede activar/desactivar por organización (modo inmobiliario, etc.)
+export const TOGGLEABLE_MODULES: Module[] = MODULES.filter(m => !ALWAYS_ON_MODULES.includes(m))
+
+/**
+ * ¿El módulo está habilitado para la organización?
+ * enabledModules = null/undefined → todos habilitados (default).
+ * Los ALWAYS_ON siempre están habilitados.
+ */
+export function isModuleEnabled(module: Module, enabledModules: string[] | null | undefined): boolean {
+  if (ALWAYS_ON_MODULES.includes(module)) return true
+  if (enabledModules == null) return true
+  return enabledModules.includes(module)
+}
+
+/** Normaliza el valor JSON de enabledModules a string[] | null. */
+export function parseEnabledModules(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null
+  const valid = value.filter((m): m is string => typeof m === "string" && (MODULES as readonly string[]).includes(m))
+  return valid
+}
+
 export interface ModulePermission {
   view: boolean
   create: boolean

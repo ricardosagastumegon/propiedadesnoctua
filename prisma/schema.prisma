@@ -47,6 +47,9 @@ model Organization {
 model OrganizationSettings {
   organizationId          String @id
   prepaymentCapPercentage Int    @default(80)
+  // Módulos habilitados para esta organización (array de claves de Module).
+  // null = todos habilitados. Permite tenants "modo inmobiliario" con menos módulos.
+  enabledModules          Json?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 

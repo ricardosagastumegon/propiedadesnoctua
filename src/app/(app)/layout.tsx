@@ -5,6 +5,8 @@ import { SidebarNav } from "@/components/shared/nav-link"
 import { DevUserSwitcher } from "@/components/shared/dev-user-switcher"
 import { AppShell, LogoutButton } from "@/components/shared/app-shell"
 import { prisma } from "@/lib/prisma"
+import { parseEnabledModules } from "@/lib/permissions"
+import { isPlatformAdminEmail } from "@/lib/platform-admin"
 
 const SHOW_DEV_SWITCHER = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS === "true"
 
@@ -14,7 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = session.user
   const orgId = user.organizationId
 
-  const [pendingApprovals, pendingAcceptances, devUsers] = await Promise.all([
+  const [pendingApprovals, pendingAcceptances, devUsers, settings] = await Promise.all([
     prisma.approvalRequest.count({
       where: { organizationId: orgId, status: { in: ["PENDING", "PENDING_COSIGN"] } },
     }),
@@ -28,7 +30,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           select: { email: true, name: true, role: true },
         })
       : Promise.resolve([]),
+    prisma.organizationSettings.findUnique({
+      where: { organizationId: orgId },
+      select: { enabledModules: true },
+    }),
   ])
+
+  const enabledModules = parseEnabledModules(settings?.enabledModules)
+  const isPlatformAdmin = isPlatformAdminEmail(user.email)
 
   return (
     <AppShell
@@ -51,6 +60,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           pendingApprovals={pendingApprovals}
           pendingAcceptances={pendingAcceptances}
           user={{ id: user.id, role: user.role, organizationId: user.organizationId }}
+          enabledModules={enabledModules}
+          isPlatformAdmin={isPlatformAdmin}
         />
       }
       headerExtras={

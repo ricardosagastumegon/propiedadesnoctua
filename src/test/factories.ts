@@ -240,6 +240,7 @@ export function makeOrgSettings(over: Partial<OrganizationSettings> = {}): Organ
   return {
     organizationId: "org_default",
     prepaymentCapPercentage: 80,
+    enabledModules: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...over,
