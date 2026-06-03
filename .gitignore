@@ -43,3 +43,6 @@ next-env.d.ts
 # local sqlite dev db (legacy — el proyecto ahora usa Postgres en Supabase)
 prisma/dev.db
 prisma/*.db-journal
+
+# Materiales de ventas (HTML) — no versionar
+docs/*.html
