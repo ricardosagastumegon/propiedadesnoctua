@@ -4,8 +4,9 @@ import { useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { parseGeoFile, centroid, isValidPolygon, type LatLng } from "@/lib/geo"
-import { MapPin, Pencil, Upload, Trash2, Check } from "lucide-react"
+import { parseGeoFile, centroid, isValidPolygon, gtmTraverseToPolygon, parseTraverseTable, type LatLng } from "@/lib/geo"
+import { Textarea } from "@/components/ui/textarea"
+import { MapPin, Pencil, Upload, Trash2, Check, FileText } from "lucide-react"
 
 const MapPicker = dynamic(() => import("./coord-map").then(m => m.CoordMap), {
   ssr: false,
@@ -32,6 +33,13 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon }: Props) {
   const [drawing, setDrawing] = useState(false)
   const [fileError, setFileError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // GTM (plano catastral Guatemala)
+  const [showGtm, setShowGtm] = useState(false)
+  const [gtmEste, setGtmEste] = useState("")
+  const [gtmNorte, setGtmNorte] = useState("")
+  const [gtmTable, setGtmTable] = useState("")
+  const [gtmError, setGtmError] = useState<string | null>(null)
 
   const latNum = lat ? parseFloat(lat) : null
   const lonNum = lon ? parseFloat(lon) : null
@@ -71,6 +79,29 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon }: Props) {
   function clearPolygon() {
     setPolygon(null)
     setDrawing(false)
+  }
+
+  function computeGtm() {
+    setGtmError(null)
+    const este = parseFloat(gtmEste)
+    const norte = parseFloat(gtmNorte)
+    if (isNaN(este) || isNaN(norte)) {
+      setGtmError("Ingresá las coordenadas del Punto 0 (Este y Norte en metros).")
+      return
+    }
+    const legs = parseTraverseTable(gtmTable)
+    if (legs.length < 2) {
+      setGtmError("No se pudieron leer los tramos de la tabla. Pegá las columnas de azimut y distancia.")
+      return
+    }
+    try {
+      const poly = gtmTraverseToPolygon(este, norte, legs)
+      setPolygon(poly)
+      syncCentroid(poly)
+      setShowGtm(false)
+    } catch {
+      setGtmError("Error al calcular el polígono. Verificá los datos.")
+    }
   }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -113,6 +144,10 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon }: Props) {
         </Button>
         <input ref={fileRef} type="file" accept=".kml,.geojson,.json,application/json,application/vnd.google-earth.kml+xml"
           className="hidden" onChange={handleFile} />
+        <Button type="button" size="sm" variant="outline" onClick={() => setShowGtm(v => !v)}>
+          <FileText className="size-3.5 mr-1" />
+          Plano catastral (GTM)
+        </Button>
         {polygon && (
           <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={clearPolygon}>
             <Trash2 className="size-3.5 mr-1" />
@@ -120,6 +155,47 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon }: Props) {
           </Button>
         )}
       </div>
+
+      {/* Panel GTM — importar desde plano catastral de Guatemala */}
+      {showGtm && (
+        <div className="border rounded-md p-4 space-y-3 bg-muted/20">
+          <div>
+            <h4 className="text-sm font-medium">Importar desde plano catastral (GTM Guatemala)</h4>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Tu plano del RIC trae abajo el <strong>Punto 0</strong> y una tabla de <strong>azimut + distancia</strong>.
+              Copiá esos datos acá y calculamos el contorno exacto.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Punto 0 — Este (E)</Label>
+              <Input value={gtmEste} onChange={e => setGtmEste(e.target.value)} placeholder="637392.811" inputMode="decimal" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Punto 0 — Norte (N)</Label>
+              <Input value={gtmNorte} onChange={e => setGtmNorte(e.target.value)} placeholder="1697172.387" inputMode="decimal" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Tabla de tramos (azimut y distancia, una fila por línea)</Label>
+            <Textarea
+              value={gtmTable}
+              onChange={e => setGtmTable(e.target.value)}
+              rows={6}
+              placeholder={`195°15'35.57\"  4644.16\n246°57'35.55\"  6572.76\n245°59'33.57\"  2607.45\n...`}
+              className="font-mono text-xs"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Pegá las columnas de Azimut y Distancia del plano. Acepta formato 195°15&apos;35&quot; o 195 15 35.
+            </p>
+          </div>
+          {gtmError && <p className="text-xs text-destructive">{gtmError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => setShowGtm(false)}>Cancelar</Button>
+            <Button type="button" size="sm" onClick={computeGtm}>Calcular contorno</Button>
+          </div>
+        </div>
+      )}
 
       {drawing && (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2">

@@ -1,7 +1,112 @@
-// Utilidades geográficas: parseo de KML/GeoJSON y cálculo de centroide.
+// Utilidades geográficas: parseo de KML/GeoJSON, GTM (catastro Guatemala) y centroide.
 // Los polígonos se guardan como array de vértices [lat, lon].
+import proj4 from "proj4"
 
 export type LatLng = [number, number]
+
+// GTM = Guatemala Transverse Mercator (proyección oficial del catastro/RIC)
+const GTM_PROJ = "+proj=tmerc +lat_0=0 +lon_0=-90.5 +k=0.9998 +x_0=500000 +y_0=0 +datum=WGS84 +units=m +no_defs"
+
+/** Convierte un punto GTM (Este, Norte en metros) a [lat, lon] WGS84. */
+export function gtmToLatLng(este: number, norte: number): LatLng {
+  // proj4 espera [x=Este, y=Norte] → devuelve [lon, lat]
+  const [lon, lat] = proj4(GTM_PROJ, "WGS84", [este, norte])
+  return [lat, lon]
+}
+
+/**
+ * Parsea un azimut en grados. Acepta:
+ *  - decimal: "195.26"
+ *  - DMS: "195°15'35.57\"" o "195 15 35.57" o "195-15-35.57"
+ */
+export function parseAzimuth(input: string): number | null {
+  const s = input.trim()
+  if (!s) return null
+  // decimal puro
+  if (/^-?\d+(\.\d+)?$/.test(s)) return parseFloat(s)
+  // DMS: extraer números
+  const nums = s.match(/\d+(\.\d+)?/g)
+  if (!nums || nums.length < 1) return null
+  const deg = parseFloat(nums[0])
+  const min = nums[1] ? parseFloat(nums[1]) : 0
+  const sec = nums[2] ? parseFloat(nums[2]) : 0
+  return deg + min / 60 + sec / 3600
+}
+
+export interface TraverseLeg {
+  azimuth: number   // grados decimales
+  distance: number  // metros
+}
+
+/**
+ * Calcula los vértices de un polígono a partir de:
+ *  - Punto 0 en GTM (Este, Norte)
+ *  - lista de tramos (azimut + distancia) que recorren el perímetro
+ * Devuelve vértices [lat, lon] en WGS84.
+ *
+ * Azimut medido desde el Norte, sentido horario:
+ *   ΔNorte = d·cos(az),  ΔEste = d·sin(az)
+ */
+export function gtmTraverseToPolygon(
+  punto0Este: number,
+  punto0Norte: number,
+  legs: TraverseLeg[],
+): LatLng[] {
+  let e = punto0Este
+  let n = punto0Norte
+  const points: LatLng[] = [gtmToLatLng(e, n)]
+  for (const leg of legs) {
+    const rad = (leg.azimuth * Math.PI) / 180
+    e += leg.distance * Math.sin(rad)
+    n += leg.distance * Math.cos(rad)
+    points.push(gtmToLatLng(e, n))
+  }
+  return points
+}
+
+/**
+ * Parsea texto pegado de la tabla del plano. Cada línea: azimut + distancia.
+ * Tolera columnas extra (EST, PO) al inicio — toma los últimos dos campos
+ * relevantes: azimut (puede tener °'") y distancia (número con decimales).
+ * Ejemplos de línea válida:
+ *   "0  1  195°15'35.57\"  4644.16"
+ *   "195 15 35.57, 4644.16"
+ *   "246°57'35.55\"  6572.76"
+ */
+export function parseTraverseTable(text: string): TraverseLeg[] {
+  const legs: TraverseLeg[] = []
+  for (const line of text.split(/\r?\n/)) {
+    const t = line.trim()
+    if (!t) continue
+    // La distancia es el último número decimal de la línea
+    const distMatch = t.match(/(\d+\.\d+)\s*$/)
+    if (!distMatch) continue
+    const distance = parseFloat(distMatch[1])
+    // El azimut es lo que está antes de la distancia, después de quitar
+    // columnas iniciales de enteros sueltos (EST PO). Tomamos el bloque DMS.
+    const before = t.slice(0, distMatch.index).trim()
+    // Buscar patrón DMS (con ° ' ") o secuencia de 1-3 números al final del "before"
+    const dmsMatch = before.match(/(\d+)\s*[°º]\s*(\d+)\s*['′]\s*([\d.]+)\s*["″]?/)
+    let azimuth: number | null = null
+    if (dmsMatch) {
+      azimuth = parseFloat(dmsMatch[1]) + parseFloat(dmsMatch[2]) / 60 + parseFloat(dmsMatch[3]) / 3600
+    } else {
+      // últimos 1-3 números del before
+      const nums = before.match(/\d+(\.\d+)?/g)
+      if (nums && nums.length >= 1) {
+        // descartar primeros enteros si hay muchos (EST PO); tomar últimos 3
+        const tail = nums.slice(-3).map(parseFloat)
+        if (tail.length === 3) azimuth = tail[0] + tail[1] / 60 + tail[2] / 3600
+        else if (tail.length === 2) azimuth = tail[0] + tail[1] / 60
+        else azimuth = tail[0]
+      }
+    }
+    if (azimuth != null && !isNaN(distance)) {
+      legs.push({ azimuth, distance })
+    }
+  }
+  return legs
+}
 
 /** Centroide simple (promedio de vértices). Suficiente para centrar/pin. */
 export function centroid(points: LatLng[]): LatLng | null {
