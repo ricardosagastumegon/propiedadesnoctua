@@ -150,3 +150,11 @@
     }
   }
 }
+
+/* Leaflet: confinar el mapa a un stacking context bajo (z-index 0) para que
+   NUNCA tape diálogos/modales (que usan z-50). Sin esto, los controles y tiles
+   de Leaflet (z-index hasta 1000) se montan por encima del modal. */
+.leaflet-container {
+  position: relative;
+  z-index: 0;
+}

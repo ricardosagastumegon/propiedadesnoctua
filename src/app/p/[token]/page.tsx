@@ -19,7 +19,7 @@ async function getProperty(token: string) {
       latitude: true, longitude: true, mapPolygon: true,
       bedrooms: true, bathrooms: true, parkingSpaces: true,
       totalArea: true, builtArea: true, currentValue: true,
-      coverImageUrl: true, notes: true,
+      coverImageUrl: true, galleryUrls: true, notes: true,
       organization: { select: { name: true } },
       parcels: { select: { id: true, name: true, cadastralNumber: true, mapPolygon: true, areaHectares: true } },
     },
@@ -137,6 +137,16 @@ export default async function PublicPropertyPage({ params }: { params: Promise<{
             <div className="text-lg font-medium">
               {totalParcelHa > 0 ? formatAreaUnits(totalParcelHa) : `${p.totalArea} m²`}
             </div>
+          </div>
+        )}
+
+        {/* Galería de fotos */}
+        {p.galleryUrls.length > 0 && (
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {p.galleryUrls.map((url, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={i} src={url} alt={`foto ${i + 1}`} className="w-full aspect-[4/3] object-cover rounded-lg border border-[#E3DFD6]" />
+            ))}
           </div>
         )}
 

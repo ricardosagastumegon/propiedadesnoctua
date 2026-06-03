@@ -23,17 +23,19 @@ export interface ParcelRow {
 
 interface Props {
   propertyId: string
+  propertyName?: string
+  propertyPolygon?: unknown
   parcels: ParcelRow[]
   canEdit: boolean
 }
 
-export function ParcelsManager({ propertyId, parcels, canEdit }: Props) {
+export function ParcelsManager({ propertyId, propertyName, propertyPolygon, parcels, canEdit }: Props) {
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
 
   const totalHa = parcels.reduce((s, p) => s + (p.areaHectares ?? 0), 0)
 
-  // Predios con contorno válido, para el mapa de vista previa
+  // Mapa: predios con contorno + (si la finca tiene su propio contorno) el de la finca
   const mapParcels: FincaMapParcel[] = parcels
     .map(p => ({
       id: p.id,
@@ -41,6 +43,10 @@ export function ParcelsManager({ propertyId, parcels, canEdit }: Props) {
       polygon: isValidPolygon(p.mapPolygon) ? (p.mapPolygon as LatLng[]) : null,
     }))
     .filter((p): p is FincaMapParcel => p.polygon !== null)
+
+  if (isValidPolygon(propertyPolygon)) {
+    mapParcels.unshift({ id: "__finca__", label: propertyName || "Finca", polygon: propertyPolygon as LatLng[] })
+  }
 
   return (
     <Card className="p-5">

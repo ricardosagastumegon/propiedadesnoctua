@@ -28,6 +28,8 @@ export function PropertyForm({ property, action, submitLabel = "Guardar" }: Prop
   const [department, setDepartment] = useState(property?.department ?? "Guatemala")
   const [coverUrl, setCoverUrl] = useState(property?.coverImageUrl ?? "")
   const [uploading, setUploading] = useState(false)
+  const [gallery, setGallery] = useState<string[]>(property?.galleryUrls ?? [])
+  const [galleryUploading, setGalleryUploading] = useState(false)
 
   async function uploadImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -42,6 +44,24 @@ export function PropertyForm({ property, action, submitLabel = "Guardar" }: Prop
     setUploading(false)
   }
 
+  async function uploadGallery(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
+    setGalleryUploading(true)
+    const urls: string[] = []
+    for (const file of files) {
+      const fd = new FormData()
+      fd.append("file", file)
+      fd.append("type", "properties")
+      const res = await fetch("/api/upload", { method: "POST", body: fd })
+      const json = await res.json()
+      if (json.url) urls.push(json.url)
+    }
+    setGallery(prev => [...prev, ...urls])
+    setGalleryUploading(false)
+    e.target.value = ""
+  }
+
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({})
 
   function handleSubmit(e: React.FormEvent) {
@@ -52,6 +72,7 @@ export function PropertyForm({ property, action, submitLabel = "Guardar" }: Prop
     fd.set("status", status)
     fd.set("department", department)
     if (coverUrl) fd.set("coverImageUrl", coverUrl)
+    fd.set("galleryUrls", JSON.stringify(gallery))
     startTransition(async () => {
       const res = await action(fd)
       if (res?.error) {
@@ -85,6 +106,36 @@ export function PropertyForm({ property, action, submitLabel = "Guardar" }: Prop
           </div>
         </div>
         <input type="hidden" name="coverImageUrl" value={coverUrl} />
+
+        {/* Galería de fotos (para fichas inmobiliarias) */}
+        <div className="mt-5 pt-5 border-t">
+          <Label className="mb-1 block">Galería de fotos</Label>
+          <p className="text-xs text-muted-foreground mb-3">
+            Subí varias fotos (recomendado 3 o más para fichas inmobiliarias). Aparecen en el link público.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {gallery.map((url, i) => (
+              <div key={i} className="relative group">
+                <img src={url} alt={`foto ${i + 1}`} className="w-24 h-20 rounded-lg object-cover border" />
+                <button
+                  type="button"
+                  onClick={() => setGallery(prev => prev.filter((_, idx) => idx !== i))}
+                  className="absolute -top-2 -right-2 bg-destructive text-white rounded-full w-5 h-5 text-xs flex items-center justify-center shadow"
+                  title="Quitar"
+                >×</button>
+              </div>
+            ))}
+            <input type="file" accept="image/*" multiple className="hidden" id="gallery-input" onChange={uploadGallery} />
+            <button
+              type="button"
+              onClick={() => document.getElementById("gallery-input")?.click()}
+              disabled={galleryUploading}
+              className="w-24 h-20 rounded-lg border border-dashed flex flex-col items-center justify-center text-xs text-muted-foreground hover:bg-muted/50 disabled:opacity-50"
+            >
+              {galleryUploading ? "Subiendo…" : "+ Agregar"}
+            </button>
+          </div>
+        </div>
       </Card>
 
       {/* General info */}

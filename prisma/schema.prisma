@@ -250,6 +250,8 @@ model Property {
   propertyTaxYear Float?
   notes           String?
   coverImageUrl   String?
+  // Galería de fotos adicionales (URLs). Para fichas inmobiliarias.
+  galleryUrls     String[]  @default([])
   // Token para compartir la propiedad públicamente (solo lectura, sin login).
   // null = no compartida. Se genera/revoca desde el detalle.
   publicShareToken String?  @unique

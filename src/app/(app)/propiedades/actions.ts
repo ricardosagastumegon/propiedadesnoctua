@@ -20,6 +20,15 @@ async function getOrgId() {
  * Convierte el string JSON del form en el valor JSON para Prisma.
  * "" o inválido → null (borra el polígono). Array válido → guarda.
  */
+function parseGallery(value: string | undefined): string[] {
+  if (!value || value.trim() === "") return []
+  try {
+    const arr = JSON.parse(value)
+    if (Array.isArray(arr)) return arr.filter((u): u is string => typeof u === "string")
+  } catch { /* ignore */ }
+  return []
+}
+
 function parsePolygon(value: string | undefined): Prisma.InputJsonValue | typeof Prisma.JsonNull {
   if (!value || value.trim() === "") return Prisma.JsonNull
   try {
@@ -44,13 +53,14 @@ export async function createProperty(formData: FormData) {
     return { error: `Tu sesión apunta a una organización que ya no existe (id ${orgId.slice(0, 8)}…). Cerrá sesión y volvé a entrar.` }
   }
 
-  const { mapPolygon, ...d } = parsed.data
+  const { mapPolygon, galleryUrls, ...d } = parsed.data
   try {
     const property = await prisma.property.create({
       data: {
         organizationId: orgId,
         ...d,
         mapPolygon: parsePolygon(mapPolygon),
+        galleryUrls: parseGallery(galleryUrls),
         acquisitionDate: d.acquisitionDate ? new Date(d.acquisitionDate) : null,
       },
     })
@@ -78,12 +88,13 @@ export async function updateProperty(id: string, formData: FormData) {
   const parsed = propertySchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
-  const { mapPolygon, ...d } = parsed.data
+  const { mapPolygon, galleryUrls, ...d } = parsed.data
   await prisma.property.updateMany({
     where: { id, organizationId: orgId },
     data: {
       ...d,
       mapPolygon: parsePolygon(mapPolygon),
+      galleryUrls: parseGallery(galleryUrls),
       acquisitionDate: d.acquisitionDate ? new Date(d.acquisitionDate) : null,
     },
   })

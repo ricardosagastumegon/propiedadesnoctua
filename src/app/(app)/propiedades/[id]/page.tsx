@@ -135,7 +135,13 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
 
           {/* Predios / catastros de la finca */}
           <div className="mt-4">
-            <ParcelsManager propertyId={id} parcels={parcelRows} canEdit={canEditProp} />
+            <ParcelsManager
+              propertyId={id}
+              propertyName={property.name}
+              propertyPolygon={property.mapPolygon}
+              parcels={parcelRows}
+              canEdit={canEditProp}
+            />
           </div>
         </TabsContent>
 

@@ -40,6 +40,8 @@ export const propertySchema = z.object({
   propertyTaxYear: numOpt(),
   notes: z.string().optional(),
   coverImageUrl: z.string().optional().nullable(),
+  // JSON string de array de URLs (galería). "" o ausente = sin galería.
+  galleryUrls: z.string().optional(),
 })
 
 export type PropertyFormValues = z.infer<typeof propertySchema>
