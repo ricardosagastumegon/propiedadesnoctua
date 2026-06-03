@@ -232,7 +232,6 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
               {/* Cost closure form */}
               <CostForm
                 ticketId={ticket.id}
-                estimatedCost={ticket.estimatedCost}
                 actualCost={ticket.actualCost}
                 resolutionNotes={ticket.resolutionNotes}
               />

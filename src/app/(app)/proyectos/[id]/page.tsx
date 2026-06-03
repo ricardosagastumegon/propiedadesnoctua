@@ -263,12 +263,6 @@ export default async function ProjectDetailPage({
                   <span>{formatDate(project.endDate)}</span>
                 </div>
               )}
-              {project.budgetEstimate && (
-                <div>
-                  <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Presupuesto estimado</p>
-                  <span className="tabular-nums">{formatGTQ(project.budgetEstimate)}</span>
-                </div>
-              )}
               <div>
                 <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Progreso general</p>
                 <span className="flex items-center gap-1"><CheckSquare2 className="size-3" />{project.progressPercent}%</span>

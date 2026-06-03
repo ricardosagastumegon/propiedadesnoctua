@@ -411,8 +411,6 @@ export function PartidaList({ projectId, partidas, authorityPolicy, expandPartid
               className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
             <input name="description" placeholder="Descripcion (opcional)"
               className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
-            <input name="budgetEstimate" type="number" step="0.01" placeholder="Presupuesto estimado"
-              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
             <div className="flex gap-2">
               <Button type="submit" size="sm" disabled={loading}>Guardar</Button>
               <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm(false)}>Cancelar</Button>

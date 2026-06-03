@@ -9,12 +9,10 @@ import { updateTicketCost } from "../actions"
 
 export function CostForm({
   ticketId,
-  estimatedCost,
   actualCost,
   resolutionNotes,
 }: {
   ticketId: string
-  estimatedCost: number | null
   actualCost: number | null
   resolutionNotes: string | null
 }) {

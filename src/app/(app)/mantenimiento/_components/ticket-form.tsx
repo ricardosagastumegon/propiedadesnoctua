@@ -105,14 +105,6 @@ export function TicketForm({
         </div>
       </Card>
 
-      <Card className="p-6 space-y-4">
-        <h3 className="font-medium text-sm">Costo estimado (opcional)</h3>
-        <div className="space-y-1.5">
-          <Label>Costo estimado (Q)</Label>
-          <Input name="estimatedCost" type="number" min="0" step="0.01" defaultValue={defaultValues?.estimatedCost} placeholder="0.00" />
-        </div>
-      </Card>
-
       <div className="flex gap-3">
         <Button type="submit" disabled={loading}>{loading ? "Guardando..." : "Crear ticket"}</Button>
         <Button type="button" variant="outline" onClick={() => history.back()}>Cancelar</Button>

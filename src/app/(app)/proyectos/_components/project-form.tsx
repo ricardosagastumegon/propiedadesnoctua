@@ -90,7 +90,7 @@ export function ProjectForm({
       </Card>
 
       <Card className="p-6 space-y-4">
-        <h3 className="font-medium text-sm">Fechas y presupuesto</h3>
+        <h3 className="font-medium text-sm">Fechas y avance</h3>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>Fecha inicio</Label>
@@ -102,11 +102,6 @@ export function ProjectForm({
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label>Presupuesto estimado (Q)</Label>
-            <Input name="budgetEstimate" type="number" min="0" step="0.01" defaultValue={defaultValues?.budgetEstimate ?? ""} placeholder="Se calcula desde partidas" />
-            {error.budgetEstimate && <p className="text-xs text-destructive">{error.budgetEstimate[0]}</p>}
-          </div>
           <div className="space-y-1.5">
             <Label>Avance (%)</Label>
             <Input name="progressPercent" type="number" min="0" max="100" defaultValue={defaultValues?.progressPercent ?? "0"} />
