@@ -116,18 +116,41 @@ export function centroid(points: LatLng[]): LatLng | null {
   return [lat, lon]
 }
 
-/** Extrae el primer polígono de un GeoJSON. Devuelve vértices [lat, lon]. */
+/** Convierte un objeto GeoJSON (ya parseado) al primer polígono [lat, lon]. */
+export function geoJsonToPolygon(data: unknown): LatLng[] | null {
+  const geom = findFirstPolygonGeometry(data)
+  if (!geom) return null
+  // GeoJSON usa [lon, lat]; lo invertimos a [lat, lon]
+  const ring: number[][] = geom.coordinates[0]
+  return ring.map(([lon, lat]) => [lat, lon] as LatLng)
+}
+
+/** Extrae el primer polígono de un GeoJSON (texto). Devuelve vértices [lat, lon]. */
 export function parseGeoJSON(text: string): LatLng[] | null {
   try {
-    const data = JSON.parse(text)
-    const geom = findFirstPolygonGeometry(data)
-    if (!geom) return null
-    // GeoJSON usa [lon, lat]; lo invertimos a [lat, lon]
-    const ring: number[][] = geom.coordinates[0]
-    return ring.map(([lon, lat]) => [lat, lon] as LatLng)
+    return geoJsonToPolygon(JSON.parse(text))
   } catch {
     return null
   }
+}
+
+/**
+ * Área de un polígono [lat, lon] en hectáreas, usando la fórmula esférica
+ * (suficientemente precisa para predios y fincas).
+ */
+export function polygonAreaHectares(points: LatLng[]): number {
+  const n = points.length
+  if (n < 3) return 0
+  const R = 6378137 // radio terrestre en metros (WGS84)
+  const toRad = (d: number) => (d * Math.PI) / 180
+  let area = 0
+  for (let i = 0; i < n; i++) {
+    const [lat1, lon1] = points[i]
+    const [lat2, lon2] = points[(i + 1) % n]
+    area += toRad(lon2 - lon1) * (2 + Math.sin(toRad(lat1)) + Math.sin(toRad(lat2)))
+  }
+  area = (area * R * R) / 2
+  return Math.abs(area) / 10000 // m² → hectáreas
 }
 
 function findFirstPolygonGeometry(data: any): { type: string; coordinates: any } | null {

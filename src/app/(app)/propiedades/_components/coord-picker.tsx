@@ -4,7 +4,7 @@ import { useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { parseGeoFile, centroid, isValidPolygon, gtmTraverseToPolygon, parseTraverseTable, type LatLng } from "@/lib/geo"
+import { parseGeoFile, geoJsonToPolygon, centroid, isValidPolygon, polygonAreaHectares, gtmTraverseToPolygon, parseTraverseTable, type LatLng } from "@/lib/geo"
 import { Textarea } from "@/components/ui/textarea"
 import { MapPin, Pencil, Upload, Trash2, Check, FileText } from "lucide-react"
 
@@ -108,10 +108,28 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon }: Props) {
     setFileError(null)
     const file = e.target.files?.[0]
     if (!file) return
-    const text = await file.text()
-    const poly = parseGeoFile(file.name, text)
+    const lower = file.name.toLowerCase()
+
+    let poly: LatLng[] | null = null
+    try {
+      if (lower.endsWith(".zip") || lower.endsWith(".shp")) {
+        // Shapefile (lo que exporta QGIS/ArcGIS). shpjs reproyecta a WGS84 si trae .prj
+        const shp = (await import("shpjs")).default
+        const buf = await file.arrayBuffer()
+        const geojson = await shp(buf)
+        poly = geoJsonToPolygon(geojson)
+      } else {
+        // KML / GeoJSON (texto)
+        const text = await file.text()
+        poly = parseGeoFile(file.name, text)
+      }
+    } catch {
+      setFileError("No se pudo leer el archivo. Verificá que sea un Shapefile (.zip), KML o GeoJSON válido.")
+      return
+    }
+
     if (!poly || poly.length < 3) {
-      setFileError("No se pudo leer un polígono del archivo. Asegurate que sea KML o GeoJSON con un área.")
+      setFileError("No se encontró un polígono en el archivo. Asegurate que contenga un área (no solo puntos o líneas).")
       return
     }
     setPolygon(poly)
@@ -140,9 +158,9 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon }: Props) {
         )}
         <Button type="button" size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
           <Upload className="size-3.5 mr-1" />
-          Subir KML / GeoJSON
+          Subir KML / GeoJSON / Shapefile
         </Button>
-        <input ref={fileRef} type="file" accept=".kml,.geojson,.json,application/json,application/vnd.google-earth.kml+xml"
+        <input ref={fileRef} type="file" accept=".kml,.geojson,.json,.zip,.shp,application/json,application/zip,application/vnd.google-earth.kml+xml"
           className="hidden" onChange={handleFile} />
         <Button type="button" size="sm" variant="outline" onClick={() => setShowGtm(v => !v)}>
           <FileText className="size-3.5 mr-1" />
@@ -242,7 +260,16 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon }: Props) {
       </div>
 
       {polygon ? (
-        <p className="text-xs text-emerald-700">✓ Contorno marcado ({polygon.length} puntos) — la propiedad se dibujará como polígono en el mapa.</p>
+        <p className="text-xs text-emerald-700">
+          ✓ Contorno marcado ({polygon.length} puntos
+          {polygon.length >= 3 && (() => {
+            const ha = polygonAreaHectares(polygon)
+            return ha >= 1
+              ? ` · ${ha.toFixed(2)} ha`
+              : ` · ${(ha * 10000).toFixed(0)} m²`
+          })()}
+          ) — se dibujará como polígono en el mapa.
+        </p>
       ) : hasValidCoords ? (
         <p className="text-xs text-emerald-700">✓ Ubicación marcada — aparecerá como pin en el mapa.</p>
       ) : null}
