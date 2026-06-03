@@ -33,7 +33,10 @@ export const proxy = auth(req => {
   }
 
   if (!session?.user) {
-    if (PUBLIC_PATHS.has(nextUrl.pathname)) return NextResponse.next()
+    // /p/<token> = fichas públicas de propiedades (solo lectura, sin login)
+    if (PUBLIC_PATHS.has(nextUrl.pathname) || nextUrl.pathname.startsWith("/p/")) {
+      return NextResponse.next()
+    }
     return NextResponse.redirect(new URL("/login", nextUrl.origin))
   }
 

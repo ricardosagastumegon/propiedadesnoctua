@@ -13,6 +13,7 @@ import { PROPERTY_TYPES, PROPERTY_STATUSES } from "@/lib/schemas/property"
 import { MapPin, Pencil, Plus, Building2, FileText, Wrench, Boxes, FolderKanban, Zap } from "lucide-react"
 import { DeletePropertyButton } from "./_delete-button"
 import { ParcelsManager, type ParcelRow } from "./_parcels-manager"
+import { ShareButton } from "./_share-button"
 
 export default async function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -75,7 +76,8 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <ShareButton propertyId={id} propertyName={property.name} initialToken={property.publicShareToken} />
           <Button variant="outline" size="sm" asChild>
             <Link href={`/propiedades/${id}/editar`}><Pencil className="size-4 mr-1" />Editar</Link>
           </Button>

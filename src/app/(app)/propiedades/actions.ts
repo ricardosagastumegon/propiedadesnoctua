@@ -1,4 +1,5 @@
 "use server"
+import crypto from "crypto"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { propertySchema } from "@/lib/schemas/property"
@@ -114,4 +115,39 @@ export async function updatePropertyImage(id: string, url: string) {
     data: { coverImageUrl: url },
   })
   revalidatePath(`/propiedades/${id}`)
+}
+
+/**
+ * Activa el link público de una propiedad (genera token si no tiene) y lo
+ * devuelve. Solo quien pueda editar la propiedad.
+ */
+export async function enablePublicShare(id: string) {
+  const g = await tryGuard({ module: "propiedades", action: "edit", propertyId: id })
+  if ("error" in g) return { error: g.error }
+
+  const prop = await prisma.property.findFirst({
+    where: { id, organizationId: g.user.organizationId },
+    select: { publicShareToken: true },
+  })
+  if (!prop) return { error: "Propiedad no encontrada" }
+
+  let token = prop.publicShareToken
+  if (!token) {
+    token = crypto.randomBytes(9).toString("base64url") // ~12 chars URL-safe
+    await prisma.property.update({ where: { id }, data: { publicShareToken: token } })
+  }
+  revalidatePath(`/propiedades/${id}`)
+  return { ok: true, token }
+}
+
+/** Revoca el link público (el link deja de funcionar). */
+export async function disablePublicShare(id: string) {
+  const g = await tryGuard({ module: "propiedades", action: "edit", propertyId: id })
+  if ("error" in g) return { error: g.error }
+  await prisma.property.updateMany({
+    where: { id, organizationId: g.user.organizationId },
+    data: { publicShareToken: null },
+  })
+  revalidatePath(`/propiedades/${id}`)
+  return { ok: true }
 }

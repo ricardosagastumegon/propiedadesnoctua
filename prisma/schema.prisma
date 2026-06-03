@@ -247,6 +247,9 @@ model Property {
   propertyTaxYear Float?
   notes           String?
   coverImageUrl   String?
+  // Token para compartir la propiedad públicamente (solo lectura, sin login).
+  // null = no compartida. Se genera/revoca desde el detalle.
+  publicShareToken String?  @unique
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
