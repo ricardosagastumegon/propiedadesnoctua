@@ -21,9 +21,13 @@ interface Props {
   initialLat?: number | null
   initialLon?: number | null
   initialPolygon?: unknown
+  /** Nombre del input hidden del polígono (default "mapPolygon"). */
+  fieldName?: string
+  /** Si true, oculta los campos de lat/lon y pegar (solo contorno + mapa). */
+  polygonOnly?: boolean
 }
 
-export function CoordPicker({ initialLat, initialLon, initialPolygon }: Props) {
+export function CoordPicker({ initialLat, initialLon, initialPolygon, fieldName = "mapPolygon", polygonOnly = false }: Props) {
   const [lat, setLat] = useState<string>(initialLat != null ? String(initialLat) : "")
   const [lon, setLon] = useState<string>(initialLon != null ? String(initialLon) : "")
   const [pasteValue, setPasteValue] = useState("")
@@ -139,9 +143,9 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon }: Props) {
 
   return (
     <div className="space-y-4">
-      <input type="hidden" name="latitude" value={lat} />
-      <input type="hidden" name="longitude" value={lon} />
-      <input type="hidden" name="mapPolygon" value={polygon ? JSON.stringify(polygon) : ""} />
+      {!polygonOnly && <input type="hidden" name="latitude" value={lat} />}
+      {!polygonOnly && <input type="hidden" name="longitude" value={lon} />}
+      <input type="hidden" name={fieldName} value={polygon ? JSON.stringify(polygon) : ""} />
 
       {/* Acciones de contorno */}
       <div className="flex flex-wrap gap-2">
@@ -231,39 +235,43 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon }: Props) {
         onPick={handleMapClick}
       />
 
-      {/* Pegar coordenadas (para pin rápido) */}
-      <div className="space-y-1.5">
-        <Label htmlFor="coordPaste" className="text-sm flex items-center gap-1.5">
-          <MapPin className="size-3.5" /> Pegar coordenadas de Google Maps (opcional)
-        </Label>
-        <Input
-          id="coordPaste"
-          value={pasteValue}
-          onChange={e => handlePaste(e.target.value)}
-          placeholder="Ej: 14.634915, -90.506882"
-        />
-        <p className="text-xs text-muted-foreground">
-          Click derecho en Google Maps sobre el lugar → se copian las coordenadas → pegalas acá.
-        </p>
-      </div>
+      {!polygonOnly && (
+        <>
+          {/* Pegar coordenadas (para pin rápido) */}
+          <div className="space-y-1.5">
+            <Label htmlFor="coordPaste" className="text-sm flex items-center gap-1.5">
+              <MapPin className="size-3.5" /> Pegar coordenadas de Google Maps (opcional)
+            </Label>
+            <Input
+              id="coordPaste"
+              value={pasteValue}
+              onChange={e => handlePaste(e.target.value)}
+              placeholder="Ej: 14.634915, -90.506882"
+            />
+            <p className="text-xs text-muted-foreground">
+              Click derecho en Google Maps sobre el lugar → se copian las coordenadas → pegalas acá.
+            </p>
+          </div>
 
-      {/* Manual */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="latManual" className="text-sm">Latitud</Label>
-          <Input id="latManual" value={lat} onChange={e => setLat(e.target.value)} placeholder="14.634915" inputMode="decimal" />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="lonManual" className="text-sm">Longitud</Label>
-          <Input id="lonManual" value={lon} onChange={e => setLon(e.target.value)} placeholder="-90.506882" inputMode="decimal" />
-        </div>
-      </div>
+          {/* Manual */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="latManual" className="text-sm">Latitud</Label>
+              <Input id="latManual" value={lat} onChange={e => setLat(e.target.value)} placeholder="14.634915" inputMode="decimal" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="lonManual" className="text-sm">Longitud</Label>
+              <Input id="lonManual" value={lon} onChange={e => setLon(e.target.value)} placeholder="-90.506882" inputMode="decimal" />
+            </div>
+          </div>
+        </>
+      )}
 
       {polygon ? (
         <p className="text-xs text-emerald-700">
           ✓ Contorno marcado ({polygon.length} puntos
           {polygon.length >= 3 && ` · ${formatAreaUnits(polygonAreaHectares(polygon))}`}
-          ) — se dibujará como polígono en el mapa.
+          )
         </p>
       ) : hasValidCoords ? (
         <p className="text-xs text-emerald-700">✓ Ubicación marcada — aparecerá como pin en el mapa.</p>

@@ -285,8 +285,10 @@ model PropertyParcel {
   propertyId      String
   name            String?  // ej. "Predio norte", "Lote 2"
   cadastralNumber String?  // nº de catastro RIC, ej. "18-03-06-00001"
-  mapPolygon      Json?    // array de vértices [lat, lon]
-  areaHectares    Float?   // área calculada o ingresada
+  mapPolygon      Json?    // contorno LEGAL (del plano/RIC) — array [lat, lon]
+  areaHectares    Float?   // área legal calculada
+  realPolygon     Json?    // contorno REAL (medido en campo) — array [lat, lon]
+  realAreaHectares Float?  // área real calculada
   notes           String?
   orderIndex      Int      @default(0)
   createdAt       DateTime @default(now())

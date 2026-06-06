@@ -5,7 +5,8 @@ import type { LatLng } from "@/lib/geo"
 export interface FincaMapParcel {
   id: string
   label: string
-  polygon: LatLng[]
+  polygon: LatLng[]          // contorno legal
+  realPolygon?: LatLng[] | null  // contorno real (opcional)
 }
 
 const Inner = dynamic(() => import("./_finca-map-inner").then(m => m.FincaMapInner), {

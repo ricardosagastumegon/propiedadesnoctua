@@ -17,8 +17,10 @@ export interface ParcelRow {
   name: string | null
   cadastralNumber: string | null
   areaHectares: number | null
+  realAreaHectares: number | null
   notes: string | null
   mapPolygon: unknown
+  realPolygon: unknown
 }
 
 interface Props {
@@ -35,17 +37,19 @@ export function ParcelsManager({ propertyId, propertyName, propertyPolygon, parc
 
   const totalHa = parcels.reduce((s, p) => s + (p.areaHectares ?? 0), 0)
 
-  // Mapa: predios con contorno + (si la finca tiene su propio contorno) el de la finca
+  // Mapa: predios con contorno legal y/o real
   const mapParcels: FincaMapParcel[] = parcels
     .map(p => ({
       id: p.id,
       label: p.name || p.cadastralNumber || "Predio",
       polygon: isValidPolygon(p.mapPolygon) ? (p.mapPolygon as LatLng[]) : null,
+      realPolygon: isValidPolygon(p.realPolygon) ? (p.realPolygon as LatLng[]) : null,
     }))
-    .filter((p): p is FincaMapParcel => p.polygon !== null)
+    .filter(p => p.polygon !== null || p.realPolygon !== null)
+    .map(p => ({ ...p, polygon: p.polygon ?? [] })) as FincaMapParcel[]
 
   if (isValidPolygon(propertyPolygon)) {
-    mapParcels.unshift({ id: "__finca__", label: propertyName || "Finca", polygon: propertyPolygon as LatLng[] })
+    mapParcels.unshift({ id: "__finca__", label: propertyName || "Finca", polygon: propertyPolygon as LatLng[], realPolygon: null })
   }
 
   return (
@@ -96,16 +100,9 @@ export function ParcelsManager({ propertyId, propertyName, propertyPolygon, parc
                     {p.cadastralNumber && p.name && (
                       <span className="text-xs text-muted-foreground font-mono">{p.cadastralNumber}</span>
                     )}
-                    {p.mapPolygon ? (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">con contorno</span>
-                    ) : (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">sin contorno</span>
-                    )}
                   </div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {p.areaHectares != null && p.areaHectares > 0 ? formatAreaUnits(p.areaHectares) : "área sin calcular"}
-                    {p.notes && <> · {p.notes}</>}
-                  </div>
+                  <AreaSummary legalHa={p.areaHectares} realHa={p.realAreaHectares} />
+                  {p.notes && <div className="text-xs text-muted-foreground mt-0.5">{p.notes}</div>}
                 </div>
                 {canEdit && (
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -179,9 +176,21 @@ function ParcelForm({
         <Textarea id="pnotes" name="notes" rows={2} defaultValue={parcel?.notes ?? ""} placeholder="Opcional" />
       </div>
 
-      <div className="pt-2 border-t">
-        <Label className="text-sm flex items-center gap-1.5 mb-2"><MapPin className="size-3.5" /> Contorno del predio</Label>
-        <CoordPicker initialPolygon={parcel?.mapPolygon} />
+      <div className="pt-3 border-t space-y-4">
+        <div>
+          <Label className="text-sm flex items-center gap-1.5 mb-1">
+            <MapPin className="size-3.5 text-blue-600" /> Contorno LEGAL (del plano / RIC)
+          </Label>
+          <p className="text-xs text-muted-foreground mb-2">El que dice el documento de la Municipalidad / RIC.</p>
+          <CoordPicker fieldName="mapPolygon" polygonOnly initialPolygon={parcel?.mapPolygon} />
+        </div>
+        <div className="pt-3 border-t">
+          <Label className="text-sm flex items-center gap-1.5 mb-1">
+            <MapPin className="size-3.5 text-emerald-600" /> Contorno REAL (medido en campo)
+          </Label>
+          <p className="text-xs text-muted-foreground mb-2">El medido con GPS/topógrafo. Opcional — si difiere del legal, te mostramos la diferencia.</p>
+          <CoordPicker fieldName="realPolygon" polygonOnly initialPolygon={parcel?.realPolygon} />
+        </div>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -192,6 +201,43 @@ function ParcelForm({
         </Button>
       </div>
     </form>
+  )
+}
+
+// Muestra área legal, real y la diferencia. Si |Δ| > 5% lo marca en rojo.
+function AreaSummary({ legalHa, realHa }: { legalHa: number | null; realHa: number | null }) {
+  const hasLegal = legalHa != null && legalHa > 0
+  const hasReal = realHa != null && realHa > 0
+
+  if (!hasLegal && !hasReal) {
+    return <div className="text-xs text-amber-700 mt-0.5">área sin calcular — agregá el contorno</div>
+  }
+
+  let diffNode: React.ReactNode = null
+  if (hasLegal && hasReal) {
+    const diff = realHa! - legalHa!
+    const pct = (diff / legalHa!) * 100
+    const alert = Math.abs(pct) > 5
+    const sign = diff >= 0 ? "+" : "−"
+    diffNode = (
+      <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${alert ? "bg-rose-100 text-rose-700" : "bg-muted text-muted-foreground"}`}>
+        Δ {sign}{Math.abs(diff).toFixed(2)} ha ({sign}{Math.abs(pct).toFixed(1)}%)
+        {alert && " ⚠"}
+      </span>
+    )
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mt-1">
+      {hasLegal && (
+        <span className="text-blue-700">Legal: {formatAreaUnits(legalHa!)}</span>
+      )}
+      {hasReal && (
+        <span className="text-emerald-700">Real: {formatAreaUnits(realHa!)}</span>
+      )}
+      {diffNode}
+      {hasLegal && !hasReal && <span className="text-muted-foreground">(sin contorno real)</span>}
+    </div>
   )
 }
 

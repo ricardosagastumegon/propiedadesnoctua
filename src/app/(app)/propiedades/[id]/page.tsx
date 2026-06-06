@@ -47,8 +47,10 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
     name: p.name,
     cadastralNumber: p.cadastralNumber,
     areaHectares: p.areaHectares,
+    realAreaHectares: p.realAreaHectares,
     notes: p.notes,
     mapPolygon: p.mapPolygon,
+    realPolygon: p.realPolygon,
   }))
 
   return (

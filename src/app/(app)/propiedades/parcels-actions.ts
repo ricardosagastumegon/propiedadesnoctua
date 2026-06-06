@@ -39,6 +39,7 @@ export async function createParcel(propertyId: string, formData: FormData) {
   const cadastralNumber = (formData.get("cadastralNumber") as string)?.trim() || null
   const notes = (formData.get("notes") as string)?.trim() || null
   const polygonRaw = formData.get("mapPolygon") as string | undefined
+  const realRaw = formData.get("realPolygon") as string | undefined
 
   const maxOrder = await prisma.propertyParcel.aggregate({
     _max: { orderIndex: true }, where: { propertyId },
@@ -52,6 +53,8 @@ export async function createParcel(propertyId: string, formData: FormData) {
       notes,
       mapPolygon: parsePolygon(polygonRaw),
       areaHectares: areaFrom(polygonRaw),
+      realPolygon: parsePolygon(realRaw),
+      realAreaHectares: areaFrom(realRaw),
       orderIndex: (maxOrder._max.orderIndex ?? -1) + 1,
     },
   })
@@ -76,6 +79,7 @@ export async function updateParcel(parcelId: string, formData: FormData) {
   const cadastralNumber = (formData.get("cadastralNumber") as string)?.trim() || null
   const notes = (formData.get("notes") as string)?.trim() || null
   const polygonRaw = formData.get("mapPolygon") as string | undefined
+  const realRaw = formData.get("realPolygon") as string | undefined
 
   await prisma.propertyParcel.update({
     where: { id: parcelId },
@@ -85,6 +89,8 @@ export async function updateParcel(parcelId: string, formData: FormData) {
       notes,
       mapPolygon: parsePolygon(polygonRaw),
       areaHectares: areaFrom(polygonRaw),
+      realPolygon: parsePolygon(realRaw),
+      realAreaHectares: areaFrom(realRaw),
     },
   })
   revalidatePath(`/propiedades/${parcel.propertyId}`)
