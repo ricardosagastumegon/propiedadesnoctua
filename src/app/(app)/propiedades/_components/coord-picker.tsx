@@ -1,12 +1,12 @@
 "use client"
 import dynamic from "next/dynamic"
-import { useRef, useState } from "react"
+import { useRef, useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { parseGeoFile, geoJsonToPolygon, centroid, isValidPolygon, polygonAreaHectares, formatAreaUnits, gtmTraverseToPolygon, parseTraverseTable, type LatLng } from "@/lib/geo"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Pencil, Upload, Trash2, Check, FileText } from "lucide-react"
+import { MapPin, Pencil, Upload, Trash2, Check, FileText, Move, Copy } from "lucide-react"
 
 const MapPicker = dynamic(() => import("./coord-map").then(m => m.CoordMap), {
   ssr: false,
@@ -25,9 +25,14 @@ interface Props {
   fieldName?: string
   /** Si true, oculta los campos de lat/lon y pegar (solo contorno + mapa). */
   polygonOnly?: boolean
+  /** Avisa al padre cuando cambia el polígono (para copiar legal→real). */
+  onChange?: (polygon: LatLng[] | null) => void
+  /** Polígono de origen para el botón "Copiar contorno" (ej. el legal). */
+  copyFromPolygon?: LatLng[] | null
+  copyFromLabel?: string
 }
 
-export function CoordPicker({ initialLat, initialLon, initialPolygon, fieldName = "mapPolygon", polygonOnly = false }: Props) {
+export function CoordPicker({ initialLat, initialLon, initialPolygon, fieldName = "mapPolygon", polygonOnly = false, onChange, copyFromPolygon, copyFromLabel = "contorno" }: Props) {
   const [lat, setLat] = useState<string>(initialLat != null ? String(initialLat) : "")
   const [lon, setLon] = useState<string>(initialLon != null ? String(initialLon) : "")
   const [pasteValue, setPasteValue] = useState("")
@@ -35,8 +40,12 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon, fieldName 
     isValidPolygon(initialPolygon) ? initialPolygon : null,
   )
   const [drawing, setDrawing] = useState(false)
+  const [editing, setEditing] = useState(false)
   const [fileError, setFileError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Avisar al padre cuando cambia el polígono (para copiar legal→real)
+  useEffect(() => { onChange?.(polygon) }, [polygon, onChange])
 
   // GTM (plano catastral Guatemala)
   const [showGtm, setShowGtm] = useState(false)
@@ -82,6 +91,27 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon, fieldName 
 
   function clearPolygon() {
     setPolygon(null)
+    setDrawing(false)
+    setEditing(false)
+  }
+
+  // Mover un vértice (arrastre en el mapa)
+  function handleMoveVertex(index: number, vlat: number, vlon: number) {
+    setPolygon(prev => {
+      if (!prev) return prev
+      const next = prev.map((p, i) => (i === index ? [vlat, vlon] as LatLng : p))
+      syncCentroid(next)
+      return next
+    })
+  }
+
+  // Copiar el contorno de origen (ej. el legal) como punto de partida
+  function copyFrom() {
+    if (!copyFromPolygon || copyFromPolygon.length < 3) return
+    const copy = copyFromPolygon.map(p => [p[0], p[1]] as LatLng)
+    setPolygon(copy)
+    syncCentroid(copy)
+    setEditing(true)   // entra directo a modo edición para ajustar 1-2 puntos
     setDrawing(false)
   }
 
@@ -147,18 +177,41 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon, fieldName 
       {!polygonOnly && <input type="hidden" name="longitude" value={lon} />}
       <input type="hidden" name={fieldName} value={polygon ? JSON.stringify(polygon) : ""} />
 
+      {/* Copiar contorno de origen (ej. legal → real) */}
+      {copyFromPolygon && copyFromPolygon.length >= 3 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-md p-2.5 flex items-center justify-between gap-3">
+          <span className="text-xs text-blue-900">
+            ¿Casi igual al {copyFromLabel}? Copialo y ajustá solo los puntos que cambian.
+          </span>
+          <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={copyFrom}>
+            <Copy className="size-3.5 mr-1" /> Copiar {copyFromLabel}
+          </Button>
+        </div>
+      )}
+
       {/* Acciones de contorno */}
       <div className="flex flex-wrap gap-2">
         {!drawing ? (
-          <Button type="button" size="sm" variant="outline" onClick={() => setDrawing(true)}>
+          <Button type="button" size="sm" variant="outline" onClick={() => { setDrawing(true); setEditing(false) }}>
             <Pencil className="size-3.5 mr-1" />
-            {polygon ? "Editar contorno" : "Dibujar contorno"}
+            {polygon ? "Agregar puntos" : "Dibujar contorno"}
           </Button>
         ) : (
           <Button type="button" size="sm" onClick={finishDrawing}>
             <Check className="size-3.5 mr-1" />
             Terminar ({polygon?.length ?? 0} puntos)
           </Button>
+        )}
+        {polygon && polygon.length >= 3 && (
+          editing ? (
+            <Button type="button" size="sm" onClick={() => setEditing(false)}>
+              <Check className="size-3.5 mr-1" /> Terminar edición
+            </Button>
+          ) : (
+            <Button type="button" size="sm" variant="outline" onClick={() => { setEditing(true); setDrawing(false) }}>
+              <Move className="size-3.5 mr-1" /> Mover puntos
+            </Button>
+          )
         )}
         <Button type="button" size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
           <Upload className="size-3.5 mr-1" />
@@ -224,6 +277,11 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon, fieldName 
           Modo dibujo: hacé click en cada esquina del lote sobre el mapa. Cuando termines, click en "Terminar".
         </p>
       )}
+      {editing && (
+        <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-md p-2">
+          Modo edición: arrastrá los puntos naranjas para mover esquinas. Ideal para ajustes chicos (1-2 puntos).
+        </p>
+      )}
       {fileError && <p className="text-xs text-destructive">{fileError}</p>}
 
       {/* Mapa */}
@@ -232,7 +290,9 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon, fieldName 
         lon={hasValidCoords ? lonNum! : null}
         polygon={polygon}
         drawing={drawing}
+        editing={editing}
         onPick={handleMapClick}
+        onMoveVertex={handleMoveVertex}
       />
 
       {!polygonOnly && (

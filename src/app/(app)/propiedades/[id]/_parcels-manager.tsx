@@ -144,6 +144,10 @@ function ParcelForm({
   const ref = useRef<HTMLFormElement>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Contorno legal en vivo, para poder copiarlo al real
+  const [legalPoly, setLegalPoly] = useState<LatLng[] | null>(
+    isValidPolygon(parcel?.mapPolygon) ? (parcel!.mapPolygon as LatLng[]) : null,
+  )
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -182,14 +186,14 @@ function ParcelForm({
             <MapPin className="size-3.5 text-blue-600" /> Contorno LEGAL (del plano / RIC)
           </Label>
           <p className="text-xs text-muted-foreground mb-2">El que dice el documento de la Municipalidad / RIC.</p>
-          <CoordPicker fieldName="mapPolygon" polygonOnly initialPolygon={parcel?.mapPolygon} />
+          <CoordPicker fieldName="mapPolygon" polygonOnly initialPolygon={parcel?.mapPolygon} onChange={setLegalPoly} />
         </div>
         <div className="pt-3 border-t">
           <Label className="text-sm flex items-center gap-1.5 mb-1">
             <MapPin className="size-3.5 text-emerald-600" /> Contorno REAL (medido en campo)
           </Label>
-          <p className="text-xs text-muted-foreground mb-2">El medido con GPS/topógrafo. Opcional — si difiere del legal, te mostramos la diferencia.</p>
-          <CoordPicker fieldName="realPolygon" polygonOnly initialPolygon={parcel?.realPolygon} />
+          <p className="text-xs text-muted-foreground mb-2">El medido con GPS/topógrafo. Opcional — si difiere del legal, te mostramos la diferencia. Tip: copialo del legal y movés solo los puntos que cambian.</p>
+          <CoordPicker fieldName="realPolygon" polygonOnly initialPolygon={parcel?.realPolygon} copyFromPolygon={legalPoly} copyFromLabel="contorno legal" />
         </div>
       </div>
 
