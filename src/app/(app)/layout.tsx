@@ -41,7 +41,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <AppShell
-      brand="Inmobiliaria Pro"
+      brand="Noctua"
       brandSubtitle={user.organizationName}
       userName={user.name ?? "Usuario"}
       userEmail={user.email ?? ""}

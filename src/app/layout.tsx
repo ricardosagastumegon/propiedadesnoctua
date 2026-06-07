@@ -8,8 +8,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", display: "swap" })
 
 export const metadata: Metadata = {
-  title: "Inmobiliaria Pro",
-  description: "Gestion profesional de propiedades en renta",
+  title: "Noctua · Tu Propiedad",
+  description: "Gestión profesional de propiedades y patrimonio",
 }
 
 export const viewport = {

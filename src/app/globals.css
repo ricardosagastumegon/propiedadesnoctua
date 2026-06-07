@@ -4,34 +4,40 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.985 0.005 95);
-  --foreground: oklch(0.18 0.015 250);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.015 250);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.015 250);
-  --primary: oklch(0.22 0.025 250);
-  --primary-foreground: oklch(0.985 0.005 95);
-  --secondary: oklch(0.96 0.01 95);
-  --secondary-foreground: oklch(0.22 0.025 250);
-  --muted: oklch(0.96 0.01 95);
-  --muted-foreground: oklch(0.5 0.015 250);
-  --accent: oklch(0.45 0.06 165);
-  --accent-foreground: oklch(0.985 0.005 95);
-  --destructive: oklch(0.45 0.15 20);
-  --destructive-foreground: oklch(0.985 0.005 95);
-  --border: oklch(0.91 0.008 95);
-  --input: oklch(0.91 0.008 95);
-  --ring: oklch(0.45 0.06 165);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.97 0.005 95);
-  --sidebar-foreground: oklch(0.22 0.025 250);
-  --sidebar-primary: oklch(0.22 0.025 250);
-  --sidebar-primary-foreground: oklch(0.985 0.005 95);
-  --sidebar-accent: oklch(0.93 0.01 95);
-  --sidebar-accent-foreground: oklch(0.22 0.025 250);
-  --sidebar-border: oklch(0.91 0.008 95);
-  --sidebar-ring: oklch(0.45 0.06 165);
+  /* === NOCTUA · Medianoche sobre blanco === */
+  --background: #F6F7F9;          /* gris muy claro, elegante */
+  --foreground: #12182A;          /* azul medianoche = texto/títulos */
+  --card: #FFFFFF;
+  --card-foreground: #12182A;
+  --popover: #FFFFFF;
+  --popover-foreground: #12182A;
+  --primary: #12182A;             /* botones / acción principal = medianoche */
+  --primary-foreground: #F4EFE6;  /* marfil sobre botón */
+  --secondary: #EEF0F4;
+  --secondary-foreground: #12182A;
+  --muted: #EEF0F4;
+  --muted-foreground: #6B7280;
+  --accent: #EAECF1;              /* fondo de hover sutil (NO oro) */
+  --accent-foreground: #12182A;
+  --destructive: #A8423F;         /* borgoña */
+  --destructive-foreground: #F4EFE6;
+  --border: #E7E9EE;
+  --input: #E7E9EE;
+  --ring: #B68A3E;                /* foco en oro, elegante */
+  --radius: 0.75rem;              /* radios generosos = calidez */
+  /* Oro de marca (acentos deliberados) */
+  --gold: #B68A3E;
+  --gold-foreground: #12182A;
+  --gold-text: #8A6A2E;           /* único oro legible como texto sobre blanco (AA) */
+  /* Sidebar Medianoche (oscuro) */
+  --sidebar: #0D1322;
+  --sidebar-foreground: #C9C6BC;  /* plata/marfil */
+  --sidebar-primary: #B68A3E;
+  --sidebar-primary-foreground: #12182A;
+  --sidebar-accent: #1B2942;      /* activo/hover en sidebar */
+  --sidebar-accent-foreground: #F4EFE6;
+  --sidebar-border: #1B2942;
+  --sidebar-ring: #B68A3E;
 }
 
 .dark {
@@ -79,6 +85,9 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-gold: var(--gold);
+  --color-gold-foreground: var(--gold-foreground);
+  --color-gold-text: var(--gold-text);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);

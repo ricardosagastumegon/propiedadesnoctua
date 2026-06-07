@@ -147,7 +147,7 @@ ${acceptance.photos.length > 0 ? `
 </div>
 
 <div class="footer">
-  Generado ${escapeHtml(formatDate(new Date()))} · Inmobiliaria Pro
+  Generado ${escapeHtml(formatDate(new Date()))} · Noctua · Tu Propiedad
 </div>
 </body></html>`
 

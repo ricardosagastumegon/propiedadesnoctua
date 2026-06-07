@@ -57,7 +57,7 @@ export function SidebarNav({ pendingApprovals, pendingAcceptances = 0, user, ena
               : "text-sidebar-foreground hover:bg-sidebar-accent"
           }`}
         >
-          <Shield className={`size-4 ${pathname.startsWith("/admin") ? "text-foreground" : "text-muted-foreground"}`} />
+          <Shield className={`size-4 ${pathname.startsWith("/admin") ? "text-[#C9A24B]" : "text-sidebar-foreground/60"}`} />
           <span className="flex-1">Admin (tenants)</span>
         </Link>
       )}
@@ -75,7 +75,7 @@ export function SidebarNav({ pendingApprovals, pendingAcceptances = 0, user, ena
                 : "text-sidebar-foreground hover:bg-sidebar-accent"
             }`}
           >
-            <Icon className={`size-4 ${isActive ? "text-foreground" : "text-muted-foreground"}`} />
+            <Icon className={`size-4 ${isActive ? "text-[#C9A24B]" : "text-sidebar-foreground/60"}`} />
             <span className="flex-1">{label}</span>
             {href === "/autorizaciones" && pendingApprovals > 0 && (
               <span className="bg-amber-500 text-white text-xs rounded-full size-4 flex items-center justify-center font-medium">

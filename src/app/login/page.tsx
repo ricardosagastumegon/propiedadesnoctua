@@ -41,7 +41,7 @@ export default function LoginPage() {
     <div className="min-h-screen grid lg:grid-cols-2">
       <div className="hidden lg:flex flex-col justify-between p-12 bg-primary text-primary-foreground">
         <div>
-          <div className="font-display text-3xl tracking-tight">Inmobiliaria Pro</div>
+          <div className="font-display text-3xl tracking-[0.12em]">NOCTUA</div>
           <div className="text-sm text-primary-foreground/60 mt-1">Gestion integral de propiedades</div>
         </div>
         <div>
@@ -50,7 +50,7 @@ export default function LoginPage() {
           </p>
           <p className="text-sm text-primary-foreground/60 mt-3">- Cliente piloto, ciudad de Guatemala</p>
         </div>
-        <div className="text-xs text-primary-foreground/40">(c) 2026 Inmobiliaria Pro</div>
+        <div className="text-xs text-primary-foreground/40">© 2026 Noctua · Tu Propiedad</div>
       </div>
 
       <div className="flex items-center justify-center p-8">
