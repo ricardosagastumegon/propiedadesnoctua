@@ -44,5 +44,6 @@ next-env.d.ts
 prisma/dev.db
 prisma/*.db-journal
 
-# Materiales de ventas (HTML) — no versionar
+# Materiales de ventas / mockups (HTML) — no versionar
 docs/*.html
+docs/**/*.html
