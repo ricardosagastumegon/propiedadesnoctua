@@ -7,8 +7,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { TOGGLEABLE_MODULES } from "@/lib/permissions"
-import { adminCreateTenant, adminSetModules, adminResetUserPassword, adminToggleUserActive } from "./actions"
-import { Plus, Building2, Users, ChevronDown, ChevronRight, KeyRound, Power, PowerOff } from "lucide-react"
+import { adminCreateTenant, adminSetModules, adminResetUserPassword, adminToggleUserActive, adminSetUserPassword } from "./actions"
+import { Plus, Building2, Users, ChevronDown, ChevronRight, KeyRound, Power, PowerOff, Clock, Lock } from "lucide-react"
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return "Nunca ingresó"
+  const d = new Date(iso)
+  return d.toLocaleString("es-GT", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+}
 
 export interface TenantUser {
   id: string
@@ -102,6 +108,18 @@ function TenantItem({ tenant, onCreds }: { tenant: TenantRow; onCreds: (c: { ema
     if ("error" in res) { alert(res.error); return }
     router.refresh()
   }
+
+  async function setPwd(userId: string) {
+    const pwd = prompt("Escribí la nueva contraseña para este usuario (mínimo 8 caracteres). Vos la elegís, así la conocés:")
+    if (pwd == null) return
+    if (pwd.length < 8) { alert("Mínimo 8 caracteres"); return }
+    setBusyUser(userId)
+    const res = await adminSetUserPassword(userId, pwd)
+    setBusyUser(null)
+    if ("error" in res) { alert(res.error); return }
+    onCreds({ email: res.email, password: pwd })
+    router.refresh()
+  }
   // null = todos habilitados → marcamos todos
   const [selected, setSelected] = useState<Set<string>>(
     new Set(tenant.enabledModules ?? TOGGLEABLE_MODULES),
@@ -179,10 +197,16 @@ function TenantItem({ tenant, onCreds }: { tenant: TenantRow; onCreds: (c: { ema
                       {!u.isActive && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700">Inactivo</span>}
                     </div>
                     <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <Clock className="size-3" /> Último ingreso: {fmtDate(u.lastLoginAt)}
+                    </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busyUser === u.id} onClick={() => resetPwd(u.id)}>
-                      <KeyRound className="size-3 mr-1" />Reset clave
+                    <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busyUser === u.id} onClick={() => setPwd(u.id)} title="Definir una clave que vos elegís">
+                      <Lock className="size-3 mr-1" />Definir clave
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busyUser === u.id} onClick={() => resetPwd(u.id)} title="Generar una clave aleatoria">
+                      <KeyRound className="size-3 mr-1" />Reset
                     </Button>
                     <Button
                       size="sm"

@@ -38,6 +38,23 @@ export async function adminResetUserPassword(userId: string): Promise<{ ok: true
   return { ok: true, email: user.email, name: user.name, password }
 }
 
+/**
+ * Define una contraseña ESPECÍFICA (elegida por el admin) para un usuario.
+ * El admin la conoce porque la escribe. No fuerza cambio. Solo platform admin.
+ */
+export async function adminSetUserPassword(userId: string, password: string): Promise<{ ok: true; email: string; name: string } | { error: string }> {
+  try { await requirePlatformAdmin() } catch { return { error: "No autorizado" } }
+  if (!password || password.length < 8) return { error: "La contraseña debe tener al menos 8 caracteres" }
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } })
+  if (!user) return { error: "Usuario no encontrado" }
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash: await bcrypt.hash(password, 12), mustChangePassword: false, isActive: true },
+  })
+  revalidatePath("/admin")
+  return { ok: true, email: user.email, name: user.name }
+}
+
 /** Activa/desactiva un usuario de cualquier tenant. Solo platform admin. */
 export async function adminToggleUserActive(userId: string, isActive: boolean): Promise<{ ok: true } | { error: string }> {
   try { await requirePlatformAdmin() } catch { return { error: "No autorizado" } }
