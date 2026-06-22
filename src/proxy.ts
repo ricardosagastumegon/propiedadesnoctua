@@ -25,6 +25,7 @@ export const proxy = auth(req => {
 
   if (
     nextUrl.pathname.startsWith("/api/auth") ||
+    nextUrl.pathname === "/api/keepalive" || // cron de keep-alive (se protege con CRON_SECRET)
     nextUrl.pathname.startsWith("/_next") ||
     nextUrl.pathname.startsWith("/static") ||
     nextUrl.pathname.includes(".")
