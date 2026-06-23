@@ -1,5 +1,5 @@
 "use client"
-import { MapContainer, TileLayer, CircleMarker, Polygon, Marker, useMapEvents, useMap } from "react-leaflet"
+import { MapContainer, TileLayer, WMSTileLayer, CircleMarker, Polygon, Marker, LayersControl, useMapEvents, useMap } from "react-leaflet"
 import { useEffect, useMemo } from "react"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
@@ -13,6 +13,9 @@ interface Props {
   editing?: boolean
   onPick: (lat: number, lon: number) => void
   onMoveVertex?: (index: number, lat: number, lon: number) => void
+  height?: number
+  /** Cambiar este número fuerza un re-encuadre. NO cambia al dibujar/arrastrar. */
+  fitKey?: number
 }
 
 function ClickHandler({ onPick, enabled }: { onPick: (lat: number, lon: number) => void; enabled: boolean }) {
@@ -22,42 +25,76 @@ function ClickHandler({ onPick, enabled }: { onPick: (lat: number, lon: number) 
   return null
 }
 
-function Recenter({ lat, lon }: { lat: number | null; lon: number | null }) {
+// Encuadra SOLO cuando cambia fitKey (carga inicial, subir archivo, GTM, copiar, pegar).
+// Nunca al arrastrar vértices → el mapa no se mueve mientras editás.
+function FitView({ polygon, lat, lon, fitKey }: { polygon: LatLng[] | null; lat: number | null; lon: number | null; fitKey: number }) {
   const map = useMap()
   useEffect(() => {
-    if (lat != null && lon != null) {
+    if (polygon && polygon.length >= 2) {
+      const lats = polygon.map(p => p[0]), lons = polygon.map(p => p[1])
+      map.fitBounds([[Math.min(...lats), Math.min(...lons)], [Math.max(...lats), Math.max(...lons)]], { padding: [30, 30] })
+    } else if (lat != null && lon != null) {
       map.setView([lat, lon], Math.max(map.getZoom(), 16))
     }
-  }, [lat, lon, map])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitKey])
   return null
 }
 
-// Punto arrastrable (divIcon, sin imagen) para editar vértices
+// Cuando cambia el alto (agrandar/reducir), Leaflet necesita recalcular su tamaño.
+function InvalidateOnResize({ height }: { height: number }) {
+  const map = useMap()
+  useEffect(() => {
+    const t = setTimeout(() => map.invalidateSize(), 80)
+    return () => clearTimeout(t)
+  }, [height, map])
+  return null
+}
+
 function makeHandle(): L.DivIcon {
   return L.divIcon({
     className: "",
-    html: '<div style="width:14px;height:14px;border-radius:50%;background:#C77816;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.3)"></div>',
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
+    html: '<div style="width:16px;height:16px;border-radius:50%;background:#C77816;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35)"></div>',
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
   })
 }
 
-export function CoordMap({ lat, lon, polygon, drawing, editing = false, onPick, onMoveVertex }: Props) {
+export function CoordMap({ lat, lon, polygon, drawing, editing = false, onPick, onMoveVertex, height = 480, fitKey = 0 }: Props) {
   const center: [number, number] = lat != null && lon != null ? [lat, lon] : [14.6349, -90.5069]
   const handle = useMemo(() => makeHandle(), [])
 
   return (
     <div className={`rounded-md overflow-hidden border ${drawing ? "ring-2 ring-amber-400" : editing ? "ring-2 ring-orange-400" : ""}`}>
-      <MapContainer center={center} zoom={lat != null ? 16 : 12} style={{ height: 340, width: "100%" }}>
-        <TileLayer
-          attribution='&copy; <a href="https://www.esri.com/">Esri</a> World Imagery'
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          maxZoom={19}
-        />
+      <MapContainer center={center} zoom={lat != null ? 16 : 12} style={{ height, width: "100%" }} scrollWheelZoom>
+        <LayersControl position="topright">
+          <LayersControl.BaseLayer checked name="Satélite">
+            <TileLayer
+              attribution='&copy; <a href="https://www.esri.com/">Esri</a> World Imagery'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={19}
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="Calles">
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+          </LayersControl.BaseLayer>
+          {/* Catastro oficial del RIC — para dibujar/ajustar contra los predios reales */}
+          <LayersControl.Overlay name="Catastro RIC (Guatemala)">
+            <WMSTileLayer
+              url="https://portal.ric.gob.gt/geoserver/wms"
+              params={{ layers: "GEO_RIC:PREDIO", format: "image/png", transparent: true, version: "1.1.1" }}
+              opacity={0.6}
+              attribution='Catastro &copy; <a href="https://portal.ric.gob.gt/">RIC Guatemala</a>'
+            />
+          </LayersControl.Overlay>
+        </LayersControl>
         <ClickHandler onPick={onPick} enabled={drawing} />
-        <Recenter lat={lat} lon={lon} />
+        <FitView polygon={polygon} lat={lat} lon={lon} fitKey={fitKey} />
+        <InvalidateOnResize height={height} />
 
-        {/* Polígono dibujado/cargado */}
         {polygon && polygon.length >= 2 && (
           <Polygon
             positions={polygon}
@@ -65,13 +102,11 @@ export function CoordMap({ lat, lon, polygon, drawing, editing = false, onPick, 
           />
         )}
 
-        {/* Vértices mientras se dibuja (no arrastrables) */}
         {drawing && !editing && polygon?.map((p, i) => (
           <CircleMarker key={i} center={p} radius={4}
             pathOptions={{ fillColor: "#C77816", fillOpacity: 1, color: "white", weight: 1 }} />
         ))}
 
-        {/* Vértices ARRASTRABLES en modo edición */}
         {editing && polygon?.map((p, i) => (
           <Marker
             key={i}
@@ -87,7 +122,6 @@ export function CoordMap({ lat, lon, polygon, drawing, editing = false, onPick, 
           />
         ))}
 
-        {/* Pin (solo si no hay polígono) */}
         {!polygon && lat != null && lon != null && (
           <CircleMarker center={[lat, lon]} radius={11}
             pathOptions={{ fillColor: "#3F8E5C", fillOpacity: 0.9, color: "#2C6B43", weight: 2 }} />

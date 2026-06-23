@@ -1,5 +1,5 @@
 "use client"
-import { MapContainer, TileLayer, Polygon, Tooltip, LayersControl, useMap } from "react-leaflet"
+import { MapContainer, TileLayer, WMSTileLayer, Polygon, Tooltip, LayersControl, useMap } from "react-leaflet"
 import { useEffect } from "react"
 import "leaflet/dist/leaflet.css"
 import type { FincaMapParcel } from "./_finca-map"
@@ -22,7 +22,7 @@ export function FincaMapInner({ parcels }: { parcels: FincaMapParcel[] }) {
 
   return (
     <div className="rounded-md overflow-hidden border">
-      <MapContainer center={first} zoom={15} style={{ height: 360, width: "100%" }}>
+      <MapContainer center={first} zoom={15} style={{ height: 480, width: "100%" }} scrollWheelZoom>
         <TileLayer
           attribution='&copy; <a href="https://www.esri.com/">Esri</a> World Imagery'
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
@@ -30,6 +30,15 @@ export function FincaMapInner({ parcels }: { parcels: FincaMapParcel[] }) {
         />
         <FitBounds parcels={parcels} />
         <LayersControl position="topright">
+          {/* Catastro oficial del RIC Guatemala */}
+          <LayersControl.Overlay name="Catastro RIC (Guatemala)">
+            <WMSTileLayer
+              url="https://portal.ric.gob.gt/geoserver/wms"
+              params={{ layers: "GEO_RIC:PREDIO", format: "image/png", transparent: true, version: "1.1.1" }}
+              opacity={0.6}
+              attribution='Catastro &copy; <a href="https://portal.ric.gob.gt/">RIC Guatemala</a>'
+            />
+          </LayersControl.Overlay>
           {/* Capa LEGAL (del plano/RIC) — línea punteada azul */}
           <LayersControl.Overlay checked name="Contorno legal (plano/RIC)">
             <LegalLayer parcels={parcels} />

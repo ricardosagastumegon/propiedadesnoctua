@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { parseGeoFile, geoJsonToPolygon, centroid, isValidPolygon, polygonAreaHectares, formatAreaUnits, gtmTraverseToPolygon, parseTraverseTable, type LatLng } from "@/lib/geo"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Pencil, Upload, Trash2, Check, FileText, Move, Copy } from "lucide-react"
+import { MapPin, Pencil, Upload, Trash2, Check, FileText, Move, Copy, Maximize2, X } from "lucide-react"
 
 const MapPicker = dynamic(() => import("./coord-map").then(m => m.CoordMap), {
   ssr: false,
@@ -47,6 +47,22 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon, fieldName 
   // Avisar al padre cuando cambia el polígono (para copiar legal→real)
   useEffect(() => { onChange?.(polygon) }, [polygon, onChange])
 
+  // Re-encuadre: solo al cargar/pegar/copiar (NO al arrastrar) → el mapa no salta.
+  const [fitKey, setFitKey] = useState(0)
+  const refit = () => setFitKey(k => k + 1)
+
+  // Pantalla completa (estilo Maps)
+  const [fullscreen, setFullscreen] = useState(false)
+  const [fsHeight, setFsHeight] = useState(600)
+  useEffect(() => {
+    if (!fullscreen) return
+    const update = () => setFsHeight(Math.max(360, window.innerHeight - 210))
+    update()
+    window.addEventListener("resize", update)
+    document.body.style.overflow = "hidden"
+    return () => { window.removeEventListener("resize", update); document.body.style.overflow = "" }
+  }, [fullscreen])
+
   // GTM (plano catastral Guatemala)
   const [showGtm, setShowGtm] = useState(false)
   const [gtmEste, setGtmEste] = useState("")
@@ -68,7 +84,7 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon, fieldName 
   function handlePaste(value: string) {
     setPasteValue(value)
     const m = value.match(/(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)/)
-    if (m) { setLat(m[1]); setLon(m[2]) }
+    if (m) { setLat(m[1]); setLon(m[2]); refit() }
   }
 
   function handleMapClick(clickedLat: number, clickedLon: number) {
@@ -113,6 +129,7 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon, fieldName 
     syncCentroid(copy)
     setEditing(true)   // entra directo a modo edición para ajustar 1-2 puntos
     setDrawing(false)
+    refit()
   }
 
   function computeGtm() {
@@ -132,6 +149,7 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon, fieldName 
       const poly = gtmTraverseToPolygon(este, norte, legs)
       setPolygon(poly)
       syncCentroid(poly)
+      refit()
       setShowGtm(false)
     } catch {
       setGtmError("Error al calcular el polígono. Verificá los datos.")
@@ -168,11 +186,20 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon, fieldName 
     }
     setPolygon(poly)
     syncCentroid(poly)
+    refit()
     if (fileRef.current) fileRef.current.value = ""
   }
 
   return (
-    <div className="space-y-4">
+    <div className={fullscreen ? "fixed inset-0 z-[60] bg-background overflow-auto p-4 space-y-3" : "space-y-4"}>
+      {fullscreen && (
+        <div className="flex items-center justify-between sticky top-0 bg-background py-1 z-10">
+          <span className="font-medium text-sm flex items-center gap-2"><MapPin className="size-4" /> Editar contorno — pantalla completa</span>
+          <Button type="button" size="sm" variant="outline" onClick={() => setFullscreen(false)}>
+            <X className="size-3.5 mr-1" /> Cerrar
+          </Button>
+        </div>
+      )}
       {!polygonOnly && <input type="hidden" name="latitude" value={lat} />}
       {!polygonOnly && <input type="hidden" name="longitude" value={lon} />}
       <input type="hidden" name={fieldName} value={polygon ? JSON.stringify(polygon) : ""} />
@@ -213,6 +240,9 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon, fieldName 
             </Button>
           )
         )}
+        <Button type="button" size="sm" variant={fullscreen ? "default" : "outline"} onClick={() => { setFullscreen(v => !v); refit() }}>
+          <Maximize2 className="size-3.5 mr-1" /> {fullscreen ? "Salir" : "Pantalla completa"}
+        </Button>
         <Button type="button" size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
           <Upload className="size-3.5 mr-1" />
           Subir KML / GeoJSON / Shapefile
@@ -293,6 +323,8 @@ export function CoordPicker({ initialLat, initialLon, initialPolygon, fieldName 
         editing={editing}
         onPick={handleMapClick}
         onMoveVertex={handleMoveVertex}
+        height={fullscreen ? fsHeight : 500}
+        fitKey={fitKey}
       />
 
       {!polygonOnly && (
