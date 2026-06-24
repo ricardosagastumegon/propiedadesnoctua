@@ -1,5 +1,6 @@
 "use server"
 import { prisma } from "@/lib/prisma"
+import { Prisma } from "@prisma/client"
 import { contractSchema } from "@/lib/schemas/contract"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
@@ -19,29 +20,37 @@ export async function createContract(formData: FormData) {
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
   const d = parsed.data
-  const contract = await prisma.contract.create({
-    data: {
-      organizationId: orgId,
-      contractNumber: d.contractNumber,
-      propertyId: d.propertyId,
-      unitId: d.unitId || null,
-      parcelId: d.parcelId || null,
-      tenantId: d.tenantId,
-      startDate: new Date(d.startDate),
-      endDate: new Date(d.endDate),
-      monthlyRent: d.monthlyRent,
-      currency: d.currency,
-      deposit: d.deposit ?? null,
-      paymentDueDay: d.paymentDueDay,
-      paymentFrequency: d.paymentFrequency,
-      includesUtilities: d.includesUtilities,
-      utilitiesNotes: d.utilitiesNotes || null,
-      lateFeePercent: d.lateFeePercent ?? null,
-      annualIncrease: d.annualIncrease ?? null,
-      status: d.status,
-      notes: d.notes || null,
-    },
-  })
+  let contract
+  try {
+    contract = await prisma.contract.create({
+      data: {
+        organizationId: orgId,
+        contractNumber: d.contractNumber,
+        propertyId: d.propertyId,
+        unitId: d.unitId || null,
+        parcelId: d.parcelId || null,
+        tenantId: d.tenantId,
+        startDate: new Date(d.startDate),
+        endDate: new Date(d.endDate),
+        monthlyRent: d.monthlyRent,
+        currency: d.currency,
+        deposit: d.deposit ?? null,
+        paymentDueDay: d.paymentDueDay,
+        paymentFrequency: d.paymentFrequency,
+        includesUtilities: d.includesUtilities,
+        utilitiesNotes: d.utilitiesNotes || null,
+        lateFeePercent: d.lateFeePercent ?? null,
+        annualIncrease: d.annualIncrease ?? null,
+        status: d.status,
+        notes: d.notes || null,
+      },
+    })
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      return { error: { contractNumber: ["Ya existe un contrato con ese número. Cambialo."] } }
+    }
+    return { error: { _form: ["No se pudo guardar el contrato. Intentá de nuevo."] } }
+  }
   revalidatePath("/contratos")
   return { redirectTo: `/contratos/${contract.id}` }
 }

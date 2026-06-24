@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
 import { CoordPicker } from "../_components/coord-picker"
 import { createParcel, updateParcel, deleteParcel } from "../parcels-actions"
+import { updateFincaPolygon } from "../actions"
 import { FincaMap, type FincaMapParcel } from "./_finca-map"
 import { formatAreaUnits, isValidPolygon, type LatLng } from "@/lib/geo"
 import { Plus, MapPin, Pencil, Trash2, Layers } from "lucide-react"
@@ -32,8 +33,24 @@ interface Props {
 }
 
 export function ParcelsManager({ propertyId, propertyName, propertyPolygon, parcels, canEdit }: Props) {
+  const router = useRouter()
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+
+  // Editar el contorno de la finca (nivel propiedad) desde el detalle
+  const [editingFinca, setEditingFinca] = useState(false)
+  const [fincaPoly, setFincaPoly] = useState<LatLng[] | null>(
+    isValidPolygon(propertyPolygon) ? (propertyPolygon as LatLng[]) : null,
+  )
+  const [savingFinca, setSavingFinca] = useState(false)
+  async function saveFinca() {
+    setSavingFinca(true)
+    const res = await updateFincaPolygon(propertyId, fincaPoly ? JSON.stringify(fincaPoly) : "")
+    setSavingFinca(false)
+    if (res && "error" in res) { alert(res.error); return }
+    setEditingFinca(false)
+    router.refresh()
+  }
 
   const totalHa = parcels.reduce((s, p) => s + (p.areaHectares ?? 0), 0)
 
@@ -71,9 +88,33 @@ export function ParcelsManager({ propertyId, propertyName, propertyPolygon, parc
       </p>
 
       {/* Mapa de vista previa de la finca */}
-      {mapParcels.length > 0 && (
+      {mapParcels.length > 0 && !editingFinca && (
         <div className="mb-4">
           <FincaMap parcels={mapParcels} />
+          {canEdit && (
+            <div className="mt-2 flex justify-end">
+              <Button size="sm" variant="outline" onClick={() => setEditingFinca(true)}>
+                <Pencil className="size-3.5 mr-1" /> Editar contorno de la finca
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Editor del contorno de la finca (reúsa el picker: pantalla completa, mover puntos, catastro RIC) */}
+      {editingFinca && (
+        <div className="mb-4 border rounded-md p-3 bg-muted/10">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium flex items-center gap-1.5"><MapPin className="size-4" /> Contorno de la finca</span>
+          </div>
+          <p className="text-xs text-muted-foreground mb-2">
+            Dibujá o ajustá el contorno. Usá <strong>Pantalla completa</strong> para más espacio y activá <strong>Catastro RIC</strong> arriba a la derecha.
+          </p>
+          <CoordPicker fieldName="__fincaPolygon" polygonOnly initialPolygon={propertyPolygon} onChange={setFincaPoly} />
+          <div className="flex justify-end gap-2 mt-3">
+            <Button size="sm" variant="outline" onClick={() => { setEditingFinca(false); router.refresh() }}>Cancelar</Button>
+            <Button size="sm" onClick={saveFinca} disabled={savingFinca}>{savingFinca ? "Guardando…" : "Guardar contorno"}</Button>
+          </div>
         </div>
       )}
 

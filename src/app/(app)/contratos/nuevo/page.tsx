@@ -19,7 +19,7 @@ export default async function NuevoContratoPage({
   const sp = await searchParams
 
   const [properties, tenants, parcels] = await Promise.all([
-    prisma.property.findMany({ where: { organizationId: orgId, status: "ACTIVE" }, orderBy: { name: "asc" } }),
+    prisma.property.findMany({ where: { organizationId: orgId, status: { notIn: ["INACTIVE", "SOLD"] } }, orderBy: { name: "asc" } }),
     prisma.tenant.findMany({ where: { organizationId: orgId }, orderBy: { fullName: "asc" } }),
     prisma.propertyParcel.findMany({
       where: { property: { organizationId: orgId } },
@@ -39,7 +39,7 @@ export default async function NuevoContratoPage({
 
   return (
     <div className="p-8 max-w-3xl mx-auto">
-      <PageHeader title="Nuevo contrato" description="Registra un contrato de arrendamiento." />
+      <PageHeader title="Detalles del contrato" description="Registrá los términos del contrato (renta, depósito, fechas) para el seguimiento financiero." />
       <ContractForm
         properties={properties}
         tenants={tenants}

@@ -38,6 +38,19 @@ function parsePolygon(value: string | undefined): Prisma.InputJsonValue | typeof
   return Prisma.JsonNull
 }
 
+/** Guarda SOLO el contorno (polígono) de la finca — para editar desde el detalle. */
+export async function updateFincaPolygon(id: string, polygonJson: string): Promise<{ ok: true } | { error: string }> {
+  const g = await tryGuard({ module: "propiedades", action: "edit", propertyId: id })
+  if ("error" in g) return { error: typeof g.error === "string" ? g.error : "Sin permiso" }
+  await prisma.property.updateMany({
+    where: { id, organizationId: g.user.organizationId },
+    data: { mapPolygon: parsePolygon(polygonJson) },
+  })
+  revalidatePath(`/propiedades/${id}`)
+  revalidatePath("/mapa")
+  return { ok: true }
+}
+
 export async function createProperty(formData: FormData) {
   const g = await tryGuard({ module: "propiedades", action: "create" })
   if ("error" in g) return { error: g.error }

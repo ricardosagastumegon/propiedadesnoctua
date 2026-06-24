@@ -32,11 +32,20 @@ export function ContractForm({ properties, tenants, parcelsByProperty = {}, defa
   const [parcelId, setParcelId] = useState("")
   const [frequency, setFrequency] = useState("MONTHLY")
   const [status, setStatus] = useState("DRAFT")
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({})
 
   const availableParcels = parcelsByProperty[propertyId] ?? []
+  const FIELD_LABELS: Record<string, string> = {
+    contractNumber: "N. de contrato", propertyId: "Finca/Propiedad", tenantId: "Inquilino",
+    startDate: "Fecha de inicio", endDate: "Fecha de fin", monthlyRent: "Renta mensual",
+    paymentDueDay: "Día de pago",
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setFieldErrors({})
+    if (!propertyId) { toast.error("Seleccioná la finca/propiedad."); return }
+    if (!tenantId) { toast.error("Seleccioná el inquilino."); return }
     const fd = new FormData(formRef.current!)
     fd.set("propertyId", propertyId)
     fd.set("tenantId", tenantId)
@@ -45,19 +54,36 @@ export function ContractForm({ properties, tenants, parcelsByProperty = {}, defa
     fd.set("status", status)
     startTransition(async () => {
       const res = await action(fd)
-      if (res?.error) toast.error("Verifica los campos requeridos.")
-      else if (res?.redirectTo) router.push(res.redirectTo)
+      if (res?.error) {
+        const errs = (typeof res.error === "object" && res.error !== null) ? res.error as Record<string, string[]> : {}
+        setFieldErrors(errs)
+        if (errs._form) {
+          toast.error(errs._form.join(" "))
+        } else {
+          const list = Object.keys(errs).map(k => FIELD_LABELS[k] ?? k).join(", ")
+          toast.error(list ? `Revisá: ${list}` : "Verifica los campos requeridos.")
+        }
+      } else if (res?.redirectTo) router.push(res.redirectTo)
     })
   }
 
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
+      {(properties.length === 0 || tenants.length === 0) && (
+        <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-sm text-amber-900">
+          Antes de registrar el contrato necesitás:
+          {properties.length === 0 && <> una <strong>propiedad</strong>;</>}
+          {tenants.length === 0 && <> un <strong>inquilino</strong> (módulo Inquilinos);</>}
+          {" "}sin eso no se puede guardar.
+        </div>
+      )}
       <Card className="p-5 space-y-4">
         <h3 className="font-display text-base">Partes</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="contractNumber">N. de contrato *</Label>
             <Input id="contractNumber" name="contractNumber" defaultValue={suggestedNumber} required />
+            {fieldErrors.contractNumber && <p className="text-xs text-destructive">{fieldErrors.contractNumber.join(", ")}</p>}
           </div>
           <div className="space-y-2">
             <Label>Estado</Label>
@@ -161,7 +187,7 @@ export function ContractForm({ properties, tenants, parcelsByProperty = {}, defa
 
       <div className="flex items-center justify-end gap-3">
         <Button type="button" variant="outline" onClick={() => router.back()}>Cancelar</Button>
-        <Button type="submit" disabled={pending}>{pending ? "Guardando..." : "Crear contrato"}</Button>
+        <Button type="submit" disabled={pending}>{pending ? "Guardando..." : "Guardar contrato"}</Button>
       </div>
     </form>
   )

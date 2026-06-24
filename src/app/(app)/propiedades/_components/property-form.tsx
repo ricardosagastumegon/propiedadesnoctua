@@ -41,6 +41,7 @@ export function PropertyForm({ property, action, submitLabel = "Guardar" }: Prop
     const res = await fetch("/api/upload", { method: "POST", body: fd })
     const json = await res.json()
     if (json.url) setCoverUrl(json.url)
+    else toast.error(json.error || "No se pudo subir la imagen.")
     setUploading(false)
   }
 
@@ -56,8 +57,9 @@ export function PropertyForm({ property, action, submitLabel = "Guardar" }: Prop
       const res = await fetch("/api/upload", { method: "POST", body: fd })
       const json = await res.json()
       if (json.url) urls.push(json.url)
+      else { toast.error(json.error || "No se pudo subir una foto."); break }
     }
-    setGallery(prev => [...prev, ...urls])
+    if (urls.length) setGallery(prev => [...prev, ...urls])
     setGalleryUploading(false)
     e.target.value = ""
   }
