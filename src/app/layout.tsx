@@ -6,7 +6,9 @@ import { InstallPrompt } from "@/components/shared/install-prompt"
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" })
-const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", display: "swap" })
+// Fraunces es la fuente de títulos (display). No la precargamos: el LCP es texto de
+// cuerpo (Inter). Así evitamos el warning "preloaded but not used" y ahorramos ancho de banda.
+const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", display: "swap", preload: false })
 
 export const metadata: Metadata = {
   title: "Noctua · Tu Propiedad",
