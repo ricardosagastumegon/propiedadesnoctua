@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation"
 import {
   Building2, LayoutDashboard, Users, FileText, Wrench, Boxes,
   FolderKanban, Receipt, Briefcase, BarChart3, Settings,
-  FileCheck, UserRound, ShieldCheck, Wallet, BadgeCheck, Map, Shield,
+  FileCheck, UserRound, ShieldCheck, Wallet, BadgeCheck, Map, Shield, ShoppingBag,
 } from "lucide-react"
 import { can, isModuleEnabled, type Module, type UserForPermissions } from "@/lib/permissions"
 
@@ -31,6 +31,7 @@ const NAV: NavItem[] = [
   { href: "/empleados", label: "Empleados", icon: UserRound, module: "empleados" },
   { href: "/autorizaciones", label: "Autorizaciones", icon: ShieldCheck, module: "autorizaciones" },
   { href: "/aceptaciones", label: "Aceptaciones", icon: BadgeCheck, module: "aceptaciones" },
+  { href: "/adquisiciones", label: "Adquisiciones", icon: ShoppingBag, module: "adquisiciones" },
   { href: "/reportes", label: "Reportes", icon: BarChart3, module: "reportes" },
   { href: "/configuracion", label: "Configuracion", icon: Settings, module: "configuracion" },
 ]

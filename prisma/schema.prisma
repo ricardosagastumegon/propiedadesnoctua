@@ -39,6 +39,7 @@ model Organization {
   assetRecordTypes AssetRecordType[]
   vendorInvoices   VendorInvoice[]
   pettyCashes      PettyCash[]
+  acquisitionCandidates AcquisitionCandidate[]
   activityLogs     ActivityLog[]
   settings         OrganizationSettings?
   serviceAcceptances ServiceAcceptance[]
@@ -50,10 +51,48 @@ model OrganizationSettings {
   // Módulos habilitados para esta organización (array de claves de Module).
   // null = todos habilitados. Permite tenants "modo inmobiliario" con menos módulos.
   enabledModules          Json?
+  // Token del link público para que agentes externos envíen propiedades (módulo Adquisiciones).
+  acquisitionToken        String?  @unique
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// Propiedad candidata a compra, enviada por un agente externo vía link público.
+model AcquisitionCandidate {
+  id             String   @id @default(cuid())
+  organizationId String
+  stage          String   @default("NEW") // NEW | OFFERED | ACCEPTED | DISCARDED
+  // Datos de la propiedad
+  title          String
+  propertyType   String?
+  department     String?
+  city           String?
+  zone           String?
+  addressLine    String?
+  price          Float?
+  currency       String   @default("GTQ")
+  bedrooms       Int?
+  bathrooms      Int?
+  area           Float?
+  description    String?
+  galleryUrls    String[] @default([])
+  // Contacto del agente que la envió
+  agentName      String?
+  agentPhone     String?
+  agentEmail     String?
+  // Análisis del cliente
+  analysisNotes  String?
+  estimatedValue Float?
+  offerAmount    Float?
+  source         String   @default("PUBLIC_FORM")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, stage])
 }
 
 // role: OWNER | ADMIN | MANAGER | ACCOUNTANT | SUPERVISOR | ASSISTANT | TECHNICIAN | VIEWER

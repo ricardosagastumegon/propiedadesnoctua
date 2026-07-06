@@ -33,6 +33,7 @@ const MODULE_LABELS: Record<Module, string> = {
   empleados: "Empleados",
   autorizaciones: "Autorizaciones",
   aceptaciones: "Aceptaciones",
+  adquisiciones: "Adquisiciones",
   reportes: "Reportes",
   configuracion: "Configuración",
 }

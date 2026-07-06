@@ -26,6 +26,7 @@ export const proxy = auth(req => {
   if (
     nextUrl.pathname.startsWith("/api/auth") ||
     nextUrl.pathname === "/api/keepalive" || // cron de keep-alive (se protege con CRON_SECRET)
+    nextUrl.pathname === "/api/upload-public" || // subida pública scoped a token de Adquisiciones
     nextUrl.pathname.startsWith("/_next") ||
     nextUrl.pathname.startsWith("/static") ||
     nextUrl.pathname.includes(".")
@@ -34,8 +35,8 @@ export const proxy = auth(req => {
   }
 
   if (!session?.user) {
-    // /p/<token> = fichas públicas de propiedades (solo lectura, sin login)
-    if (PUBLIC_PATHS.has(nextUrl.pathname) || nextUrl.pathname.startsWith("/p/")) {
+    // /p/<token> = fichas públicas · /enviar/<token> = formulario público de Adquisiciones
+    if (PUBLIC_PATHS.has(nextUrl.pathname) || nextUrl.pathname.startsWith("/p/") || nextUrl.pathname.startsWith("/enviar/")) {
       return NextResponse.next()
     }
     return NextResponse.redirect(new URL("/login", nextUrl.origin))

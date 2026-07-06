@@ -33,7 +33,7 @@ const ROLE_LABELS: Record<string, string> = {
 const MODULE_LABELS: Record<string, string> = {
   propiedades: "Propiedades + Mapa", inquilinos: "Inquilinos", contratos: "Contratos",
   pagos: "Pagos y Facturas", cajaChica: "Caja Chica", mantenimiento: "Mantenimiento",
-  activos: "Activos", proyectos: "Proyectos", proveedores: "Proveedores",
+  activos: "Activos", proyectos: "Proyectos", proveedores: "Proveedores", adquisiciones: "Adquisiciones (compra)",
   cotizaciones: "Cotizaciones", empleados: "Empleados", autorizaciones: "Autorizaciones",
   aceptaciones: "Aceptaciones", reportes: "Reportes",
 }

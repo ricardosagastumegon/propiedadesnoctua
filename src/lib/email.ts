@@ -94,6 +94,16 @@ export async function sendInviteEmail(to: string, tempPassword: string, orgName:
   return send({ to, subject: `Invitación a ${orgName} — Noctua`, html })
 }
 
+export async function sendAcquisitionEmail(to: string, candidateTitle: string, agentName: string | null, link: string) {
+  const html = template("Nueva propiedad recibida", `
+    <p>Un agente${agentName ? ` (<strong>${agentName}</strong>)` : ""} te envió una propiedad para analizar:</p>
+    <p style="font-size: 16px;"><strong>${candidateTitle}</strong></p>
+    <p><a class="btn" href="${link}">Ver en Adquisiciones</a></p>
+    <p class="muted">Podés analizarla y moverla por las etapas desde tu panel.</p>
+  `)
+  return send({ to, subject: `Nueva propiedad recibida — ${candidateTitle}`, html })
+}
+
 export function isEmailConfigured(): boolean {
   return !!API_KEY
 }
