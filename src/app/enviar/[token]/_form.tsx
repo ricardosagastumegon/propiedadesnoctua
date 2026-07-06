@@ -3,6 +3,7 @@ import { useState, useRef, useTransition } from "react"
 import { PROPERTY_TYPES, DEPARTMENTS } from "@/lib/schemas/property"
 import { submitAcquisition } from "@/app/(app)/adquisiciones/actions"
 import { CoordPicker } from "@/app/(app)/propiedades/_components/coord-picker"
+import { compressImage } from "@/lib/compress-image"
 
 export function SubmitForm({ token, orgName }: { token: string; orgName: string }) {
   const formRef = useRef<HTMLFormElement>(null)
@@ -13,21 +14,36 @@ export function SubmitForm({ token, orgName }: { token: string; orgName: string 
   const [uploading, setUploading] = useState(false)
 
   async function uploadPhotos(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? [])
+    const inputEl = e.currentTarget
+    const files = Array.from(inputEl.files ?? [])
     if (!files.length) return
     setUploading(true)
+    setError(null)
     const urls: string[] = []
-    for (const file of files) {
-      const fd = new FormData()
-      fd.append("file", file)
-      fd.append("token", token)
-      const res = await fetch("/api/upload-public", { method: "POST", body: fd })
-      const json = await res.json()
-      if (json.url) urls.push(json.url)
+    try {
+      for (const file of files) {
+        const compressed = await compressImage(file)
+        const fd = new FormData()
+        fd.append("file", compressed)
+        fd.append("token", token)
+        const res = await fetch("/api/upload-public", { method: "POST", body: fd })
+        if (!res.ok) {
+          let msg = "No se pudo subir una foto (probá con una más liviana)."
+          try { const j = await res.json(); if (j?.error) msg = j.error } catch { /* respuesta no-JSON */ }
+          setError(msg)
+          break
+        }
+        const json = await res.json().catch(() => ({}))
+        if (json.url) urls.push(json.url)
+      }
+    } catch {
+      setError("No se pudieron subir las fotos. Podés enviar la propiedad sin fotos y agregarlas después.")
+    } finally {
+      // SIEMPRE liberar, pase lo que pase — así el botón nunca queda trabado.
+      if (urls.length) setGallery(prev => [...prev, ...urls].slice(0, 12))
+      setUploading(false)
+      inputEl.value = ""
     }
-    setGallery(prev => [...prev, ...urls].slice(0, 12))
-    setUploading(false)
-    e.target.value = ""
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -181,9 +197,9 @@ export function SubmitForm({ token, orgName }: { token: string; orgName: string 
           </div>
 
           {error && <p className="text-sm text-[#A8423F] text-center">{error}</p>}
-          <button type="submit" disabled={pending || uploading}
+          <button type="submit" disabled={pending}
             className="w-full bg-[#12182A] text-[#F4EFE6] font-semibold py-3 rounded-lg hover:bg-[#1B2942] disabled:opacity-60">
-            {pending ? "Enviando…" : "Enviar propiedad"}
+            {pending ? "Enviando…" : uploading ? "Enviar propiedad (las fotos siguen subiendo…)" : "Enviar propiedad"}
           </button>
           <p className="text-center text-xs text-[#6B7280]">Al enviar, la propiedad le llega a {orgName}. Noctua · Tu Propiedad</p>
         </form>

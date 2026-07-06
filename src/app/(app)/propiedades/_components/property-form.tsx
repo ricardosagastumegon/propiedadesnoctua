@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card"
 import { MoneyInput } from "@/components/ui/money-input"
 import { PROPERTY_TYPES, PROPERTY_STATUSES, DEPARTMENTS } from "@/lib/schemas/property"
 import { CoordPicker } from "./coord-picker"
+import { compressImage } from "@/lib/compress-image"
 import type { Property } from "@prisma/client"
 
 interface Props {
@@ -32,36 +33,53 @@ export function PropertyForm({ property, action, submitLabel = "Guardar" }: Prop
   const [galleryUploading, setGalleryUploading] = useState(false)
 
   async function uploadImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
+    const inputEl = e.currentTarget
+    const file = inputEl.files?.[0]
     if (!file) return
     setUploading(true)
-    const fd = new FormData()
-    fd.append("file", file)
-    fd.append("type", "properties")
-    const res = await fetch("/api/upload", { method: "POST", body: fd })
-    const json = await res.json()
-    if (json.url) setCoverUrl(json.url)
-    else toast.error(json.error || "No se pudo subir la imagen.")
-    setUploading(false)
+    try {
+      const fd = new FormData()
+      fd.append("file", await compressImage(file))
+      fd.append("type", "properties")
+      const res = await fetch("/api/upload", { method: "POST", body: fd })
+      const json = await res.json().catch(() => ({}))
+      if (json.url) setCoverUrl(json.url)
+      else toast.error(json.error || "No se pudo subir la imagen (probá con una más liviana).")
+    } catch {
+      toast.error("No se pudo subir la imagen.")
+    } finally {
+      setUploading(false)
+      inputEl.value = ""
+    }
   }
 
   async function uploadGallery(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? [])
+    const inputEl = e.currentTarget
+    const files = Array.from(inputEl.files ?? [])
     if (files.length === 0) return
     setGalleryUploading(true)
     const urls: string[] = []
-    for (const file of files) {
-      const fd = new FormData()
-      fd.append("file", file)
-      fd.append("type", "properties")
-      const res = await fetch("/api/upload", { method: "POST", body: fd })
-      const json = await res.json()
-      if (json.url) urls.push(json.url)
-      else { toast.error(json.error || "No se pudo subir una foto."); break }
+    try {
+      for (const file of files) {
+        const fd = new FormData()
+        fd.append("file", await compressImage(file))
+        fd.append("type", "properties")
+        const res = await fetch("/api/upload", { method: "POST", body: fd })
+        if (!res.ok) {
+          let msg = "No se pudo subir una foto (probá con una más liviana)."
+          try { const j = await res.json(); if (j?.error) msg = j.error } catch { /* no-JSON */ }
+          toast.error(msg); break
+        }
+        const json = await res.json().catch(() => ({}))
+        if (json.url) urls.push(json.url)
+      }
+    } catch {
+      toast.error("No se pudieron subir las fotos.")
+    } finally {
+      if (urls.length) setGallery(prev => [...prev, ...urls])
+      setGalleryUploading(false)
+      inputEl.value = ""
     }
-    if (urls.length) setGallery(prev => [...prev, ...urls])
-    setGalleryUploading(false)
-    e.target.value = ""
   }
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({})
