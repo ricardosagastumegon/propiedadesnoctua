@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { can } from "@/lib/permissions"
 import { PageHeader } from "@/components/ui/page-header"
 import { Card } from "@/components/ui/card"
+import { Map as MapIcon } from "lucide-react"
 import { LinkCard } from "./_link-card"
 
 export const dynamic = "force-dynamic"
@@ -36,7 +37,12 @@ export default async function AdquisicionesPage() {
 
   return (
     <div className="p-6 md:p-8 space-y-6">
-      <PageHeader title="Adquisiciones" description="Propiedades que te envían los agentes para analizar y comprar." />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <PageHeader title="Adquisiciones" description="Propiedades que te envían los agentes para analizar y comprar." />
+        <Link href="/adquisiciones/mapa" className="text-sm inline-flex items-center gap-1 rounded-lg border px-3 py-2 hover:bg-muted/50">
+          <MapIcon className="size-4" /> Ver mapa
+        </Link>
+      </div>
 
       <LinkCard initialToken={settings?.acquisitionToken ?? null} canEdit={canEdit} />
 

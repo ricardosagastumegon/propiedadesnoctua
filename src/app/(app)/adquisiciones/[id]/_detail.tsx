@@ -13,6 +13,7 @@ import { updateCandidateStage, updateCandidateAnalysis, deleteCandidate } from "
 interface C {
   id: string; stage: string; title: string; propertyType: string | null
   department: string | null; city: string | null; zone: string | null; addressLine: string | null
+  cadastralNumber: string | null; hasLocation: boolean
   price: number | null; currency: string; bedrooms: number | null; bathrooms: number | null
   area: number | null; description: string | null; galleryUrls: string[]
   agentName: string | null; agentPhone: string | null; agentEmail: string | null
@@ -116,10 +117,12 @@ export function CandidateDetail({ candidate, canEdit, canDelete }: { candidate: 
           <h3 className="font-medium text-sm">Datos de la propiedad</h3>
           <dl className="text-sm space-y-1.5">
             {candidate.propertyType && <Row k="Tipo" v={candidate.propertyType} />}
+            {candidate.cadastralNumber && <Row k="Catastro" v={<span className="font-mono">{candidate.cadastralNumber}</span>} />}
             <Row k="Habitaciones" v={candidate.bedrooms ?? "—"} />
             <Row k="Baños" v={candidate.bathrooms ?? "—"} />
             <Row k="Área" v={candidate.area ? `${candidate.area} m²` : "—"} />
             {candidate.addressLine && <Row k="Dirección" v={candidate.addressLine} />}
+            {candidate.hasLocation && <Row k="Ubicación" v={<Link href="/adquisiciones/mapa" className="text-blue-600 underline">Ver en el mapa →</Link>} />}
           </dl>
           {candidate.description && (
             <div className="pt-2 border-t">

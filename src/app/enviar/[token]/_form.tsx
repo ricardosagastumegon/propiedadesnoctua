@@ -2,6 +2,7 @@
 import { useState, useRef, useTransition } from "react"
 import { PROPERTY_TYPES, DEPARTMENTS } from "@/lib/schemas/property"
 import { submitAcquisition } from "@/app/(app)/adquisiciones/actions"
+import { CoordPicker } from "@/app/(app)/propiedades/_components/coord-picker"
 
 export function SubmitForm({ token, orgName }: { token: string; orgName: string }) {
   const formRef = useRef<HTMLFormElement>(null)
@@ -126,6 +127,27 @@ export function SubmitForm({ token, orgName }: { token: string; orgName: string 
             <div>
               <label className={label}>Descripción</label>
               <textarea name="description" rows={3} placeholder="Detalles, estado, extras…" className={input} />
+            </div>
+          </div>
+
+          {/* Ubicación: catastro O dibujo (obligatorio uno) */}
+          <div className="bg-white rounded-2xl border border-[#E7E9EE] p-5 shadow-sm space-y-4">
+            <div>
+              <h2 className="font-display text-lg text-[#12182A]">Ubicación <span className="text-[#A8423F]">*</span></h2>
+              <p className="text-xs text-[#6B7280] mt-1">
+                Obligatorio: poné el <strong>número de catastro</strong> <em>o</em> marcá la ubicación y el tamaño en el mapa (o las dos).
+              </p>
+            </div>
+            <div>
+              <label className={label}>Número de catastro (RIC)</label>
+              <input name="cadastralNumber" placeholder="Ej: 18-03-06-00001" className={input} />
+            </div>
+            <div>
+              <label className={label}>O marcá / dibujá la propiedad en el mapa</label>
+              <p className="text-xs text-[#6B7280] mb-2">
+                Pegá coordenadas de Google Maps, o dibujá el contorno. Podés activar el <strong>Catastro RIC</strong> arriba a la derecha del mapa.
+              </p>
+              <CoordPicker />
             </div>
           </div>
 

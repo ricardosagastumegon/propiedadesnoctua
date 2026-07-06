@@ -71,6 +71,10 @@ model AcquisitionCandidate {
   city           String?
   zone           String?
   addressLine    String?
+  cadastralNumber String? // nº de catastro (RIC) — obligatorio o su alternativa (polígono)
+  mapPolygon     Json?    // contorno/ubicación dibujada [lat,lon]
+  latitude       Float?   // centroide o pin (para el mapa general)
+  longitude      Float?
   price          Float?
   currency       String   @default("GTQ")
   bedrooms       Int?

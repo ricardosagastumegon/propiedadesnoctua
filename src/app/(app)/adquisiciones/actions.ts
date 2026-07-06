@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { tryGuard } from "@/lib/action-guard"
 import { sendAcquisitionEmail, isEmailConfigured } from "@/lib/email"
+import { isValidPolygon, centroid, type LatLng } from "@/lib/geo"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.noctuapo.com"
 const STAGES = ["NEW", "OFFERED", "ACCEPTED", "DISCARDED"] as const
@@ -74,6 +75,24 @@ export async function submitAcquisition(token: string, formData: FormData): Prom
   const title = str(formData.get("title"))
   if (!title) return { error: "Escribí al menos el título/nombre de la propiedad." }
 
+  // Catastro O ubicación en el mapa (al menos uno)
+  const cadastralNumber = str(formData.get("cadastralNumber"))
+  let polygon: LatLng[] | null = null
+  try {
+    const raw = str(formData.get("mapPolygon"))
+    if (raw) { const arr = JSON.parse(raw); if (isValidPolygon(arr)) polygon = arr as LatLng[] }
+  } catch { /* ignore */ }
+  let latitude = num(formData.get("latitude"))
+  let longitude = num(formData.get("longitude"))
+  if (polygon && (latitude == null || longitude == null)) {
+    const c = centroid(polygon)
+    if (c) { latitude = c[0]; longitude = c[1] }
+  }
+  const hasLocation = polygon != null || (latitude != null && longitude != null)
+  if (!cadastralNumber && !hasLocation) {
+    return { error: "Agregá el número de catastro o marcá la ubicación en el mapa (al menos uno)." }
+  }
+
   let gallery: string[] = []
   try {
     const raw = str(formData.get("galleryUrls"))
@@ -89,6 +108,10 @@ export async function submitAcquisition(token: string, formData: FormData): Prom
       city: str(formData.get("city")),
       zone: str(formData.get("zone")),
       addressLine: str(formData.get("addressLine")),
+      cadastralNumber,
+      mapPolygon: polygon ?? undefined,
+      latitude,
+      longitude,
       price: num(formData.get("price")),
       currency: str(formData.get("currency")) || "GTQ",
       bedrooms: int(formData.get("bedrooms")),

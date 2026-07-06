@@ -22,6 +22,7 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
       candidate={{
         id: c.id, stage: c.stage, title: c.title, propertyType: c.propertyType,
         department: c.department, city: c.city, zone: c.zone, addressLine: c.addressLine,
+        cadastralNumber: c.cadastralNumber, hasLocation: c.latitude != null && c.longitude != null,
         price: c.price, currency: c.currency, bedrooms: c.bedrooms, bathrooms: c.bathrooms,
         area: c.area, description: c.description, galleryUrls: c.galleryUrls,
         agentName: c.agentName, agentPhone: c.agentPhone, agentEmail: c.agentEmail,
