@@ -7,7 +7,7 @@ export default async function EnviarPropiedadPage({ params }: { params: Promise<
   const { token } = await params
   const settings = await prisma.organizationSettings.findUnique({
     where: { acquisitionToken: token },
-    select: { organization: { select: { name: true } } },
+    select: { acquisitionBrief: true, organization: { select: { name: true } } },
   })
 
   if (!settings) {
@@ -21,5 +21,5 @@ export default async function EnviarPropiedadPage({ params }: { params: Promise<
     )
   }
 
-  return <SubmitForm token={token} orgName={settings.organization.name} />
+  return <SubmitForm token={token} orgName={settings.organization.name} brief={settings.acquisitionBrief} />
 }

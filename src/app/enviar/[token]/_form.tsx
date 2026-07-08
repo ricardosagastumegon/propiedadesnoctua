@@ -5,7 +5,7 @@ import { submitAcquisition } from "@/app/(app)/adquisiciones/actions"
 import { CoordPicker } from "@/app/(app)/propiedades/_components/coord-picker"
 import { compressImage } from "@/lib/compress-image"
 
-export function SubmitForm({ token, orgName }: { token: string; orgName: string }) {
+export function SubmitForm({ token, orgName, brief }: { token: string; orgName: string; brief?: string | null }) {
   const formRef = useRef<HTMLFormElement>(null)
   const [pending, startTransition] = useTransition()
   const [done, setDone] = useState(false)
@@ -84,6 +84,13 @@ export function SubmitForm({ token, orgName }: { token: string; orgName: string 
           <h1 className="font-display text-3xl text-[#12182A] mt-1">{orgName}</h1>
           <p className="text-sm text-[#475065] mt-2">Completá los datos de la propiedad. Le llega directo para que la analicen.</p>
         </div>
+
+        {brief && brief.trim() && (
+          <div className="bg-[#0D1322] text-[#F4EFE6] rounded-2xl p-5 mb-6">
+            <div className="text-[10px] uppercase tracking-widest text-[#C9A24B] font-semibold mb-1">Qué están buscando ahora</div>
+            <p className="text-sm whitespace-pre-wrap leading-relaxed">{brief}</p>
+          </div>
+        )}
 
         <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
           {/* Honeypot anti-spam (oculto) */}

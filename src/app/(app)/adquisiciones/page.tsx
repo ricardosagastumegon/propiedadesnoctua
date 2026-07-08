@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header"
 import { Card } from "@/components/ui/card"
 import { Map as MapIcon } from "lucide-react"
 import { LinkCard } from "./_link-card"
+import { BriefCard } from "./_brief-card"
 
 export const dynamic = "force-dynamic"
 
@@ -32,7 +33,7 @@ export default async function AdquisicionesPage() {
 
   const [candidates, settings] = await Promise.all([
     prisma.acquisitionCandidate.findMany({ where: { organizationId: orgId }, orderBy: { createdAt: "desc" } }),
-    prisma.organizationSettings.findUnique({ where: { organizationId: orgId }, select: { acquisitionToken: true } }),
+    prisma.organizationSettings.findUnique({ where: { organizationId: orgId }, select: { acquisitionToken: true, acquisitionBrief: true } }),
   ])
 
   return (
@@ -44,7 +45,10 @@ export default async function AdquisicionesPage() {
         </Link>
       </div>
 
-      <LinkCard initialToken={settings?.acquisitionToken ?? null} canEdit={canEdit} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <LinkCard initialToken={settings?.acquisitionToken ?? null} canEdit={canEdit} />
+        <BriefCard initialBrief={settings?.acquisitionBrief ?? null} canEdit={canEdit} />
+      </div>
 
       {candidates.length === 0 ? (
         <Card className="p-10 text-center text-sm text-muted-foreground">

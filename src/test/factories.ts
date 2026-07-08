@@ -242,6 +242,7 @@ export function makeOrgSettings(over: Partial<OrganizationSettings> = {}): Organ
     prepaymentCapPercentage: 80,
     enabledModules: null,
     acquisitionToken: null,
+    acquisitionBrief: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...over,

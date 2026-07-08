@@ -53,6 +53,8 @@ model OrganizationSettings {
   enabledModules          Json?
   // Token del link público para que agentes externos envíen propiedades (módulo Adquisiciones).
   acquisitionToken        String?  @unique
+  // Requerimiento actual que se muestra a los agentes en el link (ej. "Busco gasolineras").
+  acquisitionBrief        String?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 

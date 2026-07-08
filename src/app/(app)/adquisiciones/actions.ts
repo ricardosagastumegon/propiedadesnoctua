@@ -42,6 +42,20 @@ export async function getOrCreateAcquisitionToken(): Promise<{ token: string } |
   return { token }
 }
 
+/** Guarda el "requerimiento" que ven los agentes en el link (ej. "Busco gasolineras"). */
+export async function updateAcquisitionBrief(brief: string): Promise<{ ok: true } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const text = brief.trim().slice(0, 1000) || null
+  await prisma.organizationSettings.upsert({
+    where: { organizationId: g.user.organizationId },
+    update: { acquisitionBrief: text },
+    create: { organizationId: g.user.organizationId, acquisitionBrief: text },
+  })
+  revalidatePath("/adquisiciones")
+  return { ok: true }
+}
+
 /** Regenera el token (invalida el link viejo). */
 export async function regenerateAcquisitionToken(): Promise<{ token: string } | { error: string }> {
   const g = await tryGuard({ module: "adquisiciones", action: "edit" })
