@@ -30,7 +30,7 @@ export default async function AdquisicionesPage() {
   if (!can(user, "adquisiciones", "view")) redirect("/dashboard")
   const canEdit = can(user, "adquisiciones", "edit")
 
-  const [candidates, links] = await Promise.all([
+  const [candidates, links, settings] = await Promise.all([
     prisma.acquisitionCandidate.findMany({
       where: { OR: [{ organizationId: me }, { link: { intermediaryOrgId: me } }] },
       orderBy: { createdAt: "desc" },
@@ -41,6 +41,7 @@ export default async function AdquisicionesPage() {
       orderBy: { createdAt: "asc" },
       include: { intermediary: { select: { name: true } } },
     }),
+    prisma.organizationSettings.findUnique({ where: { organizationId: me }, select: { intermediaryCode: true } }),
   ])
 
   const linkRows: LinkRow[] = links.map(l => ({
@@ -57,7 +58,7 @@ export default async function AdquisicionesPage() {
         </Link>
       </div>
 
-      <LinksManager links={linkRows} canEdit={canEdit} />
+      <LinksManager links={linkRows} canEdit={canEdit} myCode={settings?.intermediaryCode ?? null} />
 
       {candidates.length === 0 ? (
         <Card className="p-10 text-center text-sm text-muted-foreground">

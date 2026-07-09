@@ -243,6 +243,7 @@ export function makeOrgSettings(over: Partial<OrganizationSettings> = {}): Organ
     enabledModules: null,
     acquisitionToken: null,
     acquisitionBrief: null,
+    intermediaryCode: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...over,

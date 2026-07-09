@@ -74,6 +74,72 @@ export async function deleteAcquisitionLink(id: string): Promise<{ ok: true } | 
   return { ok: true }
 }
 
+function genCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // sin O/0/I/1 ambiguos
+  const b = crypto.randomBytes(8)
+  let s = ""
+  for (let i = 0; i < 8; i++) s += alphabet[b[i] % alphabet.length]
+  return s
+}
+
+/** Devuelve (creando si falta) el código de intermediario de MI tenant, para compartir. */
+export async function getMyIntermediaryCode(): Promise<{ code: string } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "view" })
+  if ("error" in g) return { error: g.error }
+  const orgId = g.user.organizationId
+  const existing = await prisma.organizationSettings.findUnique({
+    where: { organizationId: orgId }, select: { intermediaryCode: true },
+  })
+  if (existing?.intermediaryCode) return { code: existing.intermediaryCode }
+  // generar único con reintentos
+  for (let i = 0; i < 6; i++) {
+    const code = genCode()
+    try {
+      await prisma.organizationSettings.upsert({
+        where: { organizationId: orgId },
+        update: { intermediaryCode: code },
+        create: { organizationId: orgId, intermediaryCode: code },
+      })
+      revalidatePath("/adquisiciones")
+      return { code }
+    } catch { /* colisión, reintentar */ }
+  }
+  return { error: "No se pudo generar el código, intentá de nuevo." }
+}
+
+/** El dueño A asigna un intermediario a SU link, pegando el código que le pasó B. */
+export async function setLinkIntermediaryByCode(linkId: string, code: string): Promise<{ ok: true; name: string } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const clean = code.trim().toUpperCase()
+  if (!clean) return { error: "Pegá el código del intermediario." }
+  const target = await prisma.organizationSettings.findUnique({
+    where: { intermediaryCode: clean },
+    select: { organizationId: true, organization: { select: { name: true } } },
+  })
+  if (!target) return { error: "Código no válido. Pedile a tu intermediario que te pase su código actual." }
+  if (target.organizationId === g.user.organizationId) return { error: "Ese es tu propio código." }
+  const res = await prisma.acquisitionLink.updateMany({
+    where: { id: linkId, organizationId: g.user.organizationId },
+    data: { intermediaryOrgId: target.organizationId },
+  })
+  if (res.count === 0) return { error: "Link no encontrado" }
+  revalidatePath("/adquisiciones")
+  return { ok: true, name: target.organization.name }
+}
+
+/** Quita el intermediario de un link propio. */
+export async function removeLinkIntermediary(linkId: string): Promise<{ ok: true } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  await prisma.acquisitionLink.updateMany({
+    where: { id: linkId, organizationId: g.user.organizationId },
+    data: { intermediaryOrgId: null },
+  })
+  revalidatePath("/adquisiciones")
+  return { ok: true }
+}
+
 /**
  * PÚBLICA (sin login): un agente externo envía una propiedad vía el token del tenant.
  * Valida el token, crea la candidata, notifica (campana + email) al tenant.

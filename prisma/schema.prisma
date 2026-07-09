@@ -57,6 +57,8 @@ model OrganizationSettings {
   acquisitionToken        String?  @unique
   // Requerimiento actual que se muestra a los agentes en el link (ej. "Busco gasolineras").
   acquisitionBrief        String?
+  // Código que este tenant comparte para que otro lo asigne como intermediario.
+  intermediaryCode        String?  @unique
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
