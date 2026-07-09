@@ -20,17 +20,17 @@ export async function POST(req: NextRequest) {
   if (!token) return NextResponse.json({ error: "Sin token" }, { status: 400 })
   if (!file) return NextResponse.json({ error: "Sin archivo" }, { status: 400 })
 
-  const settings = await prisma.organizationSettings.findUnique({
-    where: { acquisitionToken: token },
-    select: { organizationId: true },
+  const link = await prisma.acquisitionLink.findUnique({
+    where: { token },
+    select: { organizationId: true, isActive: true },
   })
-  if (!settings) return NextResponse.json({ error: "Link inválido" }, { status: 403 })
+  if (!link || !link.isActive) return NextResponse.json({ error: "Link inválido" }, { status: 403 })
 
   try {
-    const result = await uploadFile(file, "acquisitions", settings.organizationId)
+    const result = await uploadFile(file, "acquisitions", link.organizationId)
     return NextResponse.json({ url: result.url, path: result.path })
   } catch (e) {
-    logError(e, { area: "upload-public", orgId: settings.organizationId, extra: { fileName: file.name } })
+    logError(e, { area: "upload-public", orgId: link.organizationId, extra: { fileName: file.name } })
     return NextResponse.json({ error: (e as Error).message }, { status: 400 })
   }
 }

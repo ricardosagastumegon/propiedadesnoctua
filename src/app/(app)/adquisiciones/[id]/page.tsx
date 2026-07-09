@@ -10,12 +10,15 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
   const { id } = await params
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = session.user.organizationId
-  const user = { id: session.user.id, role: session.user.role, organizationId: orgId }
+  const me = session.user.organizationId
+  const user = { id: session.user.id, role: session.user.role, organizationId: me }
   if (!can(user, "adquisiciones", "view")) redirect("/dashboard")
 
-  const c = await prisma.acquisitionCandidate.findFirst({ where: { id, organizationId: orgId } })
+  const c = await prisma.acquisitionCandidate.findFirst({
+    where: { id, OR: [{ organizationId: me }, { link: { intermediaryOrgId: me } }] },
+  })
   if (!c) notFound()
+  const isOwner = c.organizationId === me
 
   return (
     <CandidateDetail
@@ -29,8 +32,8 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
         analysisNotes: c.analysisNotes, estimatedValue: c.estimatedValue, offerAmount: c.offerAmount,
         createdAt: c.createdAt.toISOString(),
       }}
-      canEdit={can(user, "adquisiciones", "edit")}
-      canDelete={can(user, "adquisiciones", "delete")}
+      canEdit={isOwner && can(user, "adquisiciones", "edit")}
+      canDelete={isOwner && can(user, "adquisiciones", "delete")}
     />
   )
 }

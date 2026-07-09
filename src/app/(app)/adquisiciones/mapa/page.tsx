@@ -14,12 +14,12 @@ export const dynamic = "force-dynamic"
 export default async function AdquisicionesMapaPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = session.user.organizationId
-  const user = { id: session.user.id, role: session.user.role, organizationId: orgId }
+  const me = session.user.organizationId
+  const user = { id: session.user.id, role: session.user.role, organizationId: me }
   if (!can(user, "adquisiciones", "view")) redirect("/dashboard")
 
   const rows = await prisma.acquisitionCandidate.findMany({
-    where: { organizationId: orgId },
+    where: { OR: [{ organizationId: me }, { link: { intermediaryOrgId: me } }] },
     orderBy: { createdAt: "desc" },
   })
 

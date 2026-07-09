@@ -40,6 +40,8 @@ model Organization {
   vendorInvoices   VendorInvoice[]
   pettyCashes      PettyCash[]
   acquisitionCandidates AcquisitionCandidate[]
+  acquisitionLinksOwned        AcquisitionLink[] @relation("AcqLinkOwner")
+  acquisitionLinksIntermediary AcquisitionLink[] @relation("AcqLinkIntermediary")
   activityLogs     ActivityLog[]
   settings         OrganizationSettings?
   serviceAcceptances ServiceAcceptance[]
@@ -61,10 +63,32 @@ model OrganizationSettings {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
+// Link público de Adquisiciones. Un tenant puede tener varios: cada uno con su
+// nombre, su requerimiento (brief) y, opcional, un tenant INTERMEDIARIO que ve
+// (solo lectura) lo que entra por ese link.
+model AcquisitionLink {
+  id                String   @id @default(cuid())
+  organizationId    String   // dueño (A)
+  token             String   @unique
+  name              String   @default("Link")
+  brief             String?  // requerimiento que ven los agentes
+  intermediaryOrgId String?  // tenant intermediario (B), opcional — lo asigna el super-admin
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+
+  organization Organization  @relation("AcqLinkOwner", fields: [organizationId], references: [id], onDelete: Cascade)
+  intermediary Organization? @relation("AcqLinkIntermediary", fields: [intermediaryOrgId], references: [id], onDelete: SetNull)
+  candidates   AcquisitionCandidate[]
+
+  @@index([organizationId])
+  @@index([intermediaryOrgId])
+}
+
 // Propiedad candidata a compra, enviada por un agente externo vía link público.
 model AcquisitionCandidate {
   id             String   @id @default(cuid())
   organizationId String
+  linkId         String?  // por qué link entró (para dueño + intermediario)
   stage          String   @default("NEW") // NEW | OFFERED | ACCEPTED | DISCARDED
   // Datos de la propiedad
   title          String
@@ -96,9 +120,11 @@ model AcquisitionCandidate {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  link         AcquisitionLink? @relation(fields: [linkId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, stage])
+  @@index([linkId])
 }
 
 // role: OWNER | ADMIN | MANAGER | ACCOUNTANT | SUPERVISOR | ASSISTANT | TECHNICIAN | VIEWER

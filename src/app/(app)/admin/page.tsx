@@ -20,8 +20,11 @@ export default async function AdminPage() {
         orderBy: { role: "asc" },
         select: { id: true, name: true, email: true, role: true, isActive: true, lastLoginAt: true },
       },
+      acquisitionLinksOwned: { select: { id: true, name: true, intermediaryOrgId: true } },
     },
   })
+
+  const allOrgs = orgs.map(o => ({ id: o.id, name: o.name }))
 
   const rows: TenantRow[] = orgs.map(o => ({
     id: o.id,
@@ -35,6 +38,7 @@ export default async function AdminPage() {
       id: u.id, name: u.name, email: u.email, role: u.role,
       isActive: u.isActive, lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
     })),
+    acqLinks: o.acquisitionLinksOwned.map(l => ({ id: l.id, name: l.name, intermediaryOrgId: l.intermediaryOrgId })),
   }))
 
   return (
@@ -43,7 +47,7 @@ export default async function AdminPage() {
         title="Administración de Tenants"
         description={`${rows.length} organizaciones en la plataforma. Solo visible para super-admin de Noctua.`}
       />
-      <AdminTenants tenants={rows} />
+      <AdminTenants tenants={rows} allOrgs={allOrgs} />
     </div>
   )
 }

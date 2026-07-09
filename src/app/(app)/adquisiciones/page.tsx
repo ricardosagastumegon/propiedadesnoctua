@@ -6,8 +6,7 @@ import { can } from "@/lib/permissions"
 import { PageHeader } from "@/components/ui/page-header"
 import { Card } from "@/components/ui/card"
 import { Map as MapIcon } from "lucide-react"
-import { LinkCard } from "./_link-card"
-import { BriefCard } from "./_brief-card"
+import { LinksManager, type LinkRow } from "./_links-manager"
 
 export const dynamic = "force-dynamic"
 
@@ -26,15 +25,28 @@ function money(n: number | null, c: string) {
 export default async function AdquisicionesPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  const orgId = session.user.organizationId
-  const user = { id: session.user.id, role: session.user.role, organizationId: orgId }
+  const me = session.user.organizationId
+  const user = { id: session.user.id, role: session.user.role, organizationId: me }
   if (!can(user, "adquisiciones", "view")) redirect("/dashboard")
   const canEdit = can(user, "adquisiciones", "edit")
 
-  const [candidates, settings] = await Promise.all([
-    prisma.acquisitionCandidate.findMany({ where: { organizationId: orgId }, orderBy: { createdAt: "desc" } }),
-    prisma.organizationSettings.findUnique({ where: { organizationId: orgId }, select: { acquisitionToken: true, acquisitionBrief: true } }),
+  const [candidates, links] = await Promise.all([
+    prisma.acquisitionCandidate.findMany({
+      where: { OR: [{ organizationId: me }, { link: { intermediaryOrgId: me } }] },
+      orderBy: { createdAt: "desc" },
+      include: { link: { select: { name: true } } },
+    }),
+    prisma.acquisitionLink.findMany({
+      where: { organizationId: me },
+      orderBy: { createdAt: "asc" },
+      include: { intermediary: { select: { name: true } } },
+    }),
   ])
+
+  const linkRows: LinkRow[] = links.map(l => ({
+    id: l.id, name: l.name, token: l.token, brief: l.brief,
+    isActive: l.isActive, intermediaryName: l.intermediary?.name ?? null,
+  }))
 
   return (
     <div className="p-6 md:p-8 space-y-6">
@@ -45,14 +57,11 @@ export default async function AdquisicionesPage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <LinkCard initialToken={settings?.acquisitionToken ?? null} canEdit={canEdit} />
-        <BriefCard initialBrief={settings?.acquisitionBrief ?? null} canEdit={canEdit} />
-      </div>
+      <LinksManager links={linkRows} canEdit={canEdit} />
 
       {candidates.length === 0 ? (
         <Card className="p-10 text-center text-sm text-muted-foreground">
-          Todavía no recibiste propiedades. Compartí tu link con los agentes para empezar.
+          Todavía no recibiste propiedades. Compartí un link con los agentes para empezar.
         </Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -64,23 +73,28 @@ export default async function AdquisicionesPage() {
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${stage.cls}`}>{stage.label}</span>
                   <span className="text-xs text-muted-foreground">{items.length}</span>
                 </div>
-                {items.map(c => (
-                  <Link key={c.id} href={`/adquisiciones/${c.id}`}>
-                    <Card className="p-3 hover:shadow-md transition-shadow cursor-pointer overflow-hidden">
-                      {c.galleryUrls[0] && (
-                        <img src={c.galleryUrls[0]} alt="" className="w-full h-24 object-cover rounded-md mb-2" />
-                      )}
-                      <div className="font-medium text-sm line-clamp-2">{c.title}</div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {[c.zone, c.city, c.department].filter(Boolean).join(", ") || "Sin ubicación"}
-                      </div>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-sm font-semibold text-[#12182A]">{money(c.price, c.currency) ?? "—"}</span>
-                        {c.agentName && <span className="text-[10px] text-muted-foreground truncate max-w-[90px]">{c.agentName}</span>}
-                      </div>
-                    </Card>
-                  </Link>
-                ))}
+                {items.map(c => {
+                  const mirrored = c.organizationId !== me
+                  return (
+                    <Link key={c.id} href={`/adquisiciones/${c.id}`}>
+                      <Card className="p-3 hover:shadow-md transition-shadow cursor-pointer overflow-hidden">
+                        {c.galleryUrls[0] && (
+                          <img src={c.galleryUrls[0]} alt="" className="w-full h-24 object-cover rounded-md mb-2" />
+                        )}
+                        <div className="font-medium text-sm line-clamp-2">{c.title}</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {[c.zone, c.city, c.department].filter(Boolean).join(", ") || "Sin ubicación"}
+                        </div>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-sm font-semibold text-[#12182A]">{money(c.price, c.currency) ?? "—"}</span>
+                          {mirrored
+                            ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600">solo lectura</span>
+                            : c.link && <span className="text-[10px] text-muted-foreground truncate max-w-[90px]">{c.link.name}</span>}
+                        </div>
+                      </Card>
+                    </Link>
+                  )
+                })}
                 {items.length === 0 && <div className="text-xs text-muted-foreground/60 px-1 py-3">—</div>}
               </div>
             )

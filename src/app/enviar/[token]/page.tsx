@@ -5,12 +5,12 @@ export const dynamic = "force-dynamic"
 
 export default async function EnviarPropiedadPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
-  const settings = await prisma.organizationSettings.findUnique({
-    where: { acquisitionToken: token },
-    select: { acquisitionBrief: true, organization: { select: { name: true } } },
+  const link = await prisma.acquisitionLink.findUnique({
+    where: { token },
+    select: { isActive: true, brief: true, organization: { select: { name: true } } },
   })
 
-  if (!settings) {
+  if (!link || !link.isActive) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F6F7F9] p-6">
         <div className="max-w-md text-center">
@@ -21,5 +21,5 @@ export default async function EnviarPropiedadPage({ params }: { params: Promise<
     )
   }
 
-  return <SubmitForm token={token} orgName={settings.organization.name} brief={settings.acquisitionBrief} />
+  return <SubmitForm token={token} orgName={link.organization.name} brief={link.brief} />
 }

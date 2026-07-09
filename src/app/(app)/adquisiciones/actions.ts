@@ -23,51 +23,55 @@ function str(v: FormDataEntryValue | null): string | null {
   return s === "" ? null : s
 }
 
-/** Genera (o devuelve) el token del link público de la org. Solo con permiso de edición. */
-export async function getOrCreateAcquisitionToken(): Promise<{ token: string } | { error: string }> {
-  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
-  if ("error" in g) return { error: g.error }
-  const orgId = g.user.organizationId
-  const existing = await prisma.organizationSettings.findUnique({
-    where: { organizationId: orgId }, select: { acquisitionToken: true },
-  })
-  if (existing?.acquisitionToken) return { token: existing.acquisitionToken }
-  const token = crypto.randomBytes(12).toString("base64url")
-  await prisma.organizationSettings.upsert({
-    where: { organizationId: orgId },
-    update: { acquisitionToken: token },
-    create: { organizationId: orgId, acquisitionToken: token },
-  })
-  revalidatePath("/adquisiciones")
-  return { token }
-}
+function newToken() { return crypto.randomBytes(12).toString("base64url") }
 
-/** Guarda el "requerimiento" que ven los agentes en el link (ej. "Busco gasolineras"). */
-export async function updateAcquisitionBrief(brief: string): Promise<{ ok: true } | { error: string }> {
+/** Crea un link nuevo (con su token) para la org. Solo el dueño (con permiso edit). */
+export async function createAcquisitionLink(name: string): Promise<{ ok: true } | { error: string }> {
   const g = await tryGuard({ module: "adquisiciones", action: "edit" })
   if ("error" in g) return { error: g.error }
-  const text = brief.trim().slice(0, 1000) || null
-  await prisma.organizationSettings.upsert({
-    where: { organizationId: g.user.organizationId },
-    update: { acquisitionBrief: text },
-    create: { organizationId: g.user.organizationId, acquisitionBrief: text },
+  await prisma.acquisitionLink.create({
+    data: { organizationId: g.user.organizationId, token: newToken(), name: name.trim().slice(0, 60) || "Link" },
   })
   revalidatePath("/adquisiciones")
   return { ok: true }
 }
 
-/** Regenera el token (invalida el link viejo). */
-export async function regenerateAcquisitionToken(): Promise<{ token: string } | { error: string }> {
+/** Edita nombre y/o requerimiento (brief) de un link propio. */
+export async function updateAcquisitionLink(id: string, data: { name?: string; brief?: string }): Promise<{ ok: true } | { error: string }> {
   const g = await tryGuard({ module: "adquisiciones", action: "edit" })
   if ("error" in g) return { error: g.error }
-  const token = crypto.randomBytes(12).toString("base64url")
-  await prisma.organizationSettings.upsert({
-    where: { organizationId: g.user.organizationId },
-    update: { acquisitionToken: token },
-    create: { organizationId: g.user.organizationId, acquisitionToken: token },
+  const res = await prisma.acquisitionLink.updateMany({
+    where: { id, organizationId: g.user.organizationId },
+    data: {
+      ...(data.name != null ? { name: data.name.trim().slice(0, 60) || "Link" } : {}),
+      ...(data.brief != null ? { brief: data.brief.trim().slice(0, 1000) || null } : {}),
+    },
   })
+  if (res.count === 0) return { error: "Link no encontrado" }
   revalidatePath("/adquisiciones")
-  return { token }
+  return { ok: true }
+}
+
+/** Regenera el token de un link (invalida el anterior). */
+export async function regenerateLinkToken(id: string): Promise<{ ok: true } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const res = await prisma.acquisitionLink.updateMany({
+    where: { id, organizationId: g.user.organizationId },
+    data: { token: newToken() },
+  })
+  if (res.count === 0) return { error: "Link no encontrado" }
+  revalidatePath("/adquisiciones")
+  return { ok: true }
+}
+
+/** Elimina un link (las propiedades quedan, sin link). */
+export async function deleteAcquisitionLink(id: string): Promise<{ ok: true } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  await prisma.acquisitionLink.deleteMany({ where: { id, organizationId: g.user.organizationId } })
+  revalidatePath("/adquisiciones")
+  return { ok: true }
 }
 
 /**
@@ -79,12 +83,12 @@ export async function submitAcquisition(token: string, formData: FormData): Prom
   if (str(formData.get("website"))) return { ok: true }
 
   if (!token) return { error: "Link inválido" }
-  const settings = await prisma.organizationSettings.findUnique({
-    where: { acquisitionToken: token },
-    select: { organizationId: true },
+  const link = await prisma.acquisitionLink.findUnique({
+    where: { token },
+    select: { id: true, organizationId: true, isActive: true },
   })
-  if (!settings) return { error: "Este link no es válido o fue desactivado." }
-  const orgId = settings.organizationId
+  if (!link || !link.isActive) return { error: "Este link no es válido o fue desactivado." }
+  const orgId = link.organizationId
 
   const title = str(formData.get("title"))
   if (!title) return { error: "Escribí al menos el título/nombre de la propiedad." }
@@ -116,6 +120,7 @@ export async function submitAcquisition(token: string, formData: FormData): Prom
   const candidate = await prisma.acquisitionCandidate.create({
     data: {
       organizationId: orgId,
+      linkId: link.id,
       title,
       propertyType: str(formData.get("propertyType")),
       department: str(formData.get("department")),

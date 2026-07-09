@@ -55,6 +55,19 @@ export async function adminSetUserPassword(userId: string, password: string): Pr
   return { ok: true, email: user.email, name: user.name }
 }
 
+/** Asigna (o quita) el tenant intermediario de un link de Adquisiciones. Solo platform admin. */
+export async function adminSetLinkIntermediary(linkId: string, intermediaryOrgId: string | null): Promise<{ ok: true } | { error: string }> {
+  try { await requirePlatformAdmin() } catch { return { error: "No autorizado" } }
+  const link = await prisma.acquisitionLink.findUnique({ where: { id: linkId }, select: { organizationId: true } })
+  if (!link) return { error: "Link no encontrado" }
+  // No permitir que el intermediario sea el mismo dueño
+  const value = intermediaryOrgId && intermediaryOrgId !== link.organizationId ? intermediaryOrgId : null
+  await prisma.acquisitionLink.update({ where: { id: linkId }, data: { intermediaryOrgId: value } })
+  revalidatePath("/admin")
+  revalidatePath("/adquisiciones")
+  return { ok: true }
+}
+
 /** Activa/desactiva un usuario de cualquier tenant. Solo platform admin. */
 export async function adminToggleUserActive(userId: string, isActive: boolean): Promise<{ ok: true } | { error: string }> {
   try { await requirePlatformAdmin() } catch { return { error: "No autorizado" } }

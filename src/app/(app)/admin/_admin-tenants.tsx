@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { TOGGLEABLE_MODULES } from "@/lib/permissions"
-import { adminCreateTenant, adminSetModules, adminResetUserPassword, adminToggleUserActive, adminSetUserPassword } from "./actions"
+import { adminCreateTenant, adminSetModules, adminResetUserPassword, adminToggleUserActive, adminSetUserPassword, adminSetLinkIntermediary } from "./actions"
 import { Plus, Building2, Users, ChevronDown, ChevronRight, KeyRound, Power, PowerOff, Clock, Lock } from "lucide-react"
 
 function fmtDate(iso: string | null): string {
@@ -38,6 +38,9 @@ const MODULE_LABELS: Record<string, string> = {
   aceptaciones: "Aceptaciones", reportes: "Reportes",
 }
 
+export interface AcqLink { id: string; name: string; intermediaryOrgId: string | null }
+export interface OrgOption { id: string; name: string }
+
 export interface TenantRow {
   id: string
   name: string
@@ -47,9 +50,10 @@ export interface TenantRow {
   properties: number
   enabledModules: string[] | null
   userList: TenantUser[]
+  acqLinks: AcqLink[]
 }
 
-export function AdminTenants({ tenants }: { tenants: TenantRow[] }) {
+export function AdminTenants({ tenants, allOrgs }: { tenants: TenantRow[]; allOrgs: OrgOption[] }) {
   const [showCreate, setShowCreate] = useState(false)
   const [creds, setCreds] = useState<{ email: string; password: string } | null>(null)
 
@@ -62,7 +66,7 @@ export function AdminTenants({ tenants }: { tenants: TenantRow[] }) {
       </div>
 
       <div className="space-y-2">
-        {tenants.map(t => <TenantItem key={t.id} tenant={t} onCreds={setCreds} />)}
+        {tenants.map(t => <TenantItem key={t.id} tenant={t} allOrgs={allOrgs} onCreds={setCreds} />)}
       </div>
 
       <CreateTenantDialog
@@ -85,10 +89,16 @@ export function AdminTenants({ tenants }: { tenants: TenantRow[] }) {
   )
 }
 
-function TenantItem({ tenant, onCreds }: { tenant: TenantRow; onCreds: (c: { email: string; password: string }) => void }) {
+function TenantItem({ tenant, allOrgs, onCreds }: { tenant: TenantRow; allOrgs: OrgOption[]; onCreds: (c: { email: string; password: string }) => void }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  async function setIntermediary(linkId: string, orgId: string) {
+    const res = await adminSetLinkIntermediary(linkId, orgId || null)
+    if (res && "error" in res) { alert(res.error); return }
+    router.refresh()
+  }
   const [busyUser, setBusyUser] = useState<string | null>(null)
 
   async function resetPwd(userId: string) {
@@ -222,6 +232,35 @@ function TenantItem({ tenant, onCreds }: { tenant: TenantRow; onCreds: (c: { ema
               ))}
             </div>
           </div>
+
+          {/* Links de Adquisiciones + intermediario */}
+          {tenant.acqLinks.length > 0 && (
+            <div className="pt-3 border-t">
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+                Links de Adquisiciones ({tenant.acqLinks.length}) — asignar tenant intermediario (ve solo lectura)
+              </div>
+              <div className="space-y-1.5">
+                {tenant.acqLinks.map(l => (
+                  <div key={l.id} className="flex items-center justify-between gap-2 bg-background rounded-md px-3 py-2">
+                    <span className="text-sm font-medium truncate">{l.name}</span>
+                    <label className="flex items-center gap-1.5 text-xs shrink-0">
+                      Intermediario:
+                      <select
+                        className="border rounded-md px-2 py-1 text-xs max-w-[170px]"
+                        value={l.intermediaryOrgId ?? ""}
+                        onChange={e => setIntermediary(l.id, e.target.value)}
+                      >
+                        <option value="">— ninguno (privado) —</option>
+                        {allOrgs.filter(o => o.id !== tenant.id).map(o => (
+                          <option key={o.id} value={o.id}>{o.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </Card>
