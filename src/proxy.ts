@@ -26,6 +26,7 @@ export const proxy = auth(req => {
   if (
     nextUrl.pathname.startsWith("/api/auth") ||
     nextUrl.pathname === "/api/keepalive" || // cron de keep-alive (se protege con CRON_SECRET)
+    nextUrl.pathname === "/api/version" ||   // chequeo de versión (público, sin datos)
     nextUrl.pathname === "/api/upload-public" || // subida pública scoped a token de Adquisiciones
     nextUrl.pathname.startsWith("/_next") ||
     nextUrl.pathname.startsWith("/static") ||

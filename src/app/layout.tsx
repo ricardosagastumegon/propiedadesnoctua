@@ -3,6 +3,7 @@ import { Inter, Fraunces } from "next/font/google"
 import { Toaster } from "@/components/ui/sonner"
 import { Providers } from "./providers"
 import { InstallPrompt } from "@/components/shared/install-prompt"
+import { VersionWatcher } from "@/components/shared/version-watcher"
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" })
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>{children}</Providers>
         <Toaster richColors position="top-right" />
         <InstallPrompt />
+        <VersionWatcher />
       </body>
     </html>
   )
