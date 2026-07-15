@@ -3,7 +3,8 @@ import { useState, useMemo } from "react"
 import Link from "next/link"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Search, MapPin } from "lucide-react"
+import { Search, MapPin, TrendingUp } from "lucide-react"
+import { scoreColor, scoreLabel } from "@/lib/deal-score"
 
 export interface BoardItem {
   id: string
@@ -17,6 +18,7 @@ export interface BoardItem {
   cover: string | null
   linkName: string | null
   mirrored: boolean
+  score: number | null
 }
 
 const STAGES = [
@@ -34,6 +36,7 @@ function money(n: number | null, c: string) {
 export function Board({ items }: { items: BoardItem[] }) {
   const [dept, setDept] = useState<string>("")
   const [q, setQ] = useState("")
+  const [byScore, setByScore] = useState(false)
 
   const departments = useMemo(
     () => Array.from(new Set(items.map(i => i.department).filter(Boolean))).sort() as string[],
@@ -42,11 +45,13 @@ export function Board({ items }: { items: BoardItem[] }) {
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase()
-    return items.filter(i =>
+    const list = items.filter(i =>
       (!dept || i.department === dept) &&
       (!query || i.title.toLowerCase().includes(query) || (i.zone ?? "").toLowerCase().includes(query) || (i.city ?? "").toLowerCase().includes(query)),
     )
-  }, [items, dept, q])
+    if (byScore) list.sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+    return list
+  }, [items, dept, q, byScore])
 
   return (
     <div className="space-y-4">
@@ -66,9 +71,15 @@ export function Board({ items }: { items: BoardItem[] }) {
             )
           })}
         </div>
-        <div className="relative max-w-xs">
-          <Search className="size-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por título, zona…" className="pl-8 h-9" />
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative max-w-xs flex-1">
+            <Search className="size-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por título, zona…" className="pl-8 h-9" />
+          </div>
+          <button onClick={() => setByScore(v => !v)}
+            className={`text-xs px-3 py-2 rounded-lg border inline-flex items-center gap-1.5 ${byScore ? "bg-[#12182A] text-[#F4EFE6] border-[#12182A]" : "hover:bg-muted/50"}`}>
+            <TrendingUp className="size-3.5" /> Ordenar por oportunidad
+          </button>
         </div>
       </div>
 
@@ -84,9 +95,15 @@ export function Board({ items }: { items: BoardItem[] }) {
               </div>
               {col.map(c => (
                 <Link key={c.id} href={`/adquisiciones/${c.id}`}>
-                  <Card className="p-3 hover:shadow-md transition-shadow cursor-pointer overflow-hidden">
+                  <Card className="p-3 hover:shadow-md transition-shadow cursor-pointer overflow-hidden relative">
+                    {c.score != null && (
+                      <span className="absolute top-2 right-2 z-10 text-[10px] font-bold text-white rounded-full px-1.5 py-0.5 shadow"
+                        style={{ background: scoreColor(c.score) }} title={`Deal score: ${scoreLabel(c.score)}`}>
+                        {c.score}
+                      </span>
+                    )}
                     {c.cover && <img src={c.cover} alt="" className="w-full h-24 object-cover rounded-md mb-2" />}
-                    <div className="font-medium text-sm line-clamp-2">{c.title}</div>
+                    <div className="font-medium text-sm line-clamp-2 pr-8">{c.title}</div>
                     <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                       <MapPin className="size-3 shrink-0" />
                       {[c.zone, c.city, c.department].filter(Boolean).join(", ") || "Sin ubicación"}

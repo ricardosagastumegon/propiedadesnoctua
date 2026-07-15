@@ -10,6 +10,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { ArrowLeft, Phone, Mail, Trash2, MapPin, Calculator, FileText } from "lucide-react"
 import { updateCandidateStage, updateCandidateAnalysis, deleteCandidate } from "../actions"
 import { toVaras2, AREA_UNITS, CUERDA_SIZES, formatV2, type AreaUnit } from "@/lib/varas"
+import { dealScore, scoreColor, scoreLabel } from "@/lib/deal-score"
+
+interface AutoRef { count: number; avg: number; min: number; max: number; dept: string }
 
 interface C {
   id: string; stage: string; title: string; propertyType: string | null
@@ -37,7 +40,7 @@ function money(n: number | null, c: string) {
   return `${c === "USD" ? "$" : "Q"} ${n.toLocaleString("es-GT", { minimumFractionDigits: 2 })}`
 }
 
-export function CandidateDetail({ candidate, canEdit, canDelete }: { candidate: C; canEdit: boolean; canDelete: boolean }) {
+export function CandidateDetail({ candidate, canEdit, canDelete, autoRef }: { candidate: C; canEdit: boolean; canDelete: boolean; autoRef: AutoRef | null }) {
   const router = useRouter()
   const [stage, setStage] = useState(candidate.stage)
   const [saving, setSaving] = useState(false)
@@ -56,8 +59,10 @@ export function CandidateDetail({ candidate, canEdit, canDelete }: { candidate: 
   const areaV2 = toVaras2(parseFloat(areaVal), areaUnit, parseInt(cuerdaVaras))
   const pricePerV2 = candidate.price != null && areaV2 ? candidate.price / areaV2 : null
   const refMinN = parseFloat(refMin), refMaxN = parseFloat(refMax)
-  const refAvg = !isNaN(refMinN) && !isNaN(refMaxN) ? (refMinN + refMaxN) / 2 : null
+  const refAvgManual = !isNaN(refMinN) && !isNaN(refMaxN) ? (refMinN + refMaxN) / 2 : null
+  const refAvg = refAvgManual ?? autoRef?.avg ?? null // efectiva: manual o automática
   const deviation = pricePerV2 != null && refAvg ? ((pricePerV2 - refAvg) / refAvg) * 100 : null
+  const score = dealScore(pricePerV2, refAvg, { isCommercial: commercial, hasLocation: candidate.hasLocation, photos: candidate.galleryUrls.length })
   const suggested = commercial ? (isNaN(refMaxN) ? null : refMaxN) : refAvg
   const offerV2N = parseFloat(offerV2)
   const offerTotal = !isNaN(offerV2N) && areaV2 ? offerV2N * areaV2 : null
@@ -113,7 +118,13 @@ export function CandidateDetail({ candidate, canEdit, canDelete }: { candidate: 
         </div>
         <div className="text-right">
           <div className="font-display text-2xl text-[#12182A]">{money(candidate.price, candidate.currency)}</div>
-          <div className="text-xs text-muted-foreground">recibida {new Date(candidate.createdAt).toLocaleDateString("es-GT")}</div>
+          {score != null && (
+            <div className="inline-flex items-center gap-1 text-xs font-bold text-white px-2 py-0.5 rounded-full mt-1" style={{ background: scoreColor(score) }}
+              title="Deal score (0–100) según precio vs mercado, ubicación y datos">
+              Score {score} · {scoreLabel(score)}
+            </div>
+          )}
+          <div className="text-xs text-muted-foreground mt-1">recibida {new Date(candidate.createdAt).toLocaleDateString("es-GT")}</div>
         </div>
       </div>
 
@@ -222,6 +233,22 @@ export function CandidateDetail({ candidate, canEdit, canDelete }: { candidate: 
             <Input type="number" step="any" value={refMax} onChange={e => setRefMax(e.target.value)} disabled={!canEdit} placeholder="1000" />
           </div>
         </div>
+
+        {/* Referencia automática de tu propia data */}
+        {autoRef && (
+          <div className="text-xs bg-amber-50 border border-amber-200 rounded-md p-2.5 flex items-center justify-between gap-3">
+            <span className="text-amber-900">
+              📊 Tu inventario en <strong>{autoRef.dept}</strong>: promedio <strong>{fmt(autoRef.avg)}/v²</strong>{" "}
+              ({autoRef.count} prop., rango {fmt(autoRef.min)}–{fmt(autoRef.max)})
+            </span>
+            {canEdit && (
+              <Button type="button" size="sm" variant="outline" className="shrink-0"
+                onClick={() => { setRefMin(Math.round(autoRef.min).toString()); setRefMax(Math.round(autoRef.max).toString()) }}>
+                Usar
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* Resultados */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">

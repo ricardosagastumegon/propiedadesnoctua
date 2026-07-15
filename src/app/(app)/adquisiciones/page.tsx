@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card"
 import { Map as MapIcon } from "lucide-react"
 import { LinksManager, type LinkRow } from "./_links-manager"
 import { Board, type BoardItem } from "./_board"
+import { pricePerV2, dealScore } from "@/lib/deal-score"
 
 export const dynamic = "force-dynamic"
 
@@ -38,12 +39,28 @@ export default async function AdquisicionesPage() {
     isActive: l.isActive, intermediaryName: l.intermediary?.name ?? null,
   }))
 
-  const items: BoardItem[] = candidates.map(c => ({
-    id: c.id, title: c.title, stage: c.stage, price: c.price, currency: c.currency,
-    department: c.department, city: c.city, zone: c.zone,
-    cover: c.galleryUrls[0] ?? null, linkName: c.link?.name ?? null,
-    mirrored: c.organizationId !== me,
-  }))
+  // Referencia automática: precio/v² promedio por departamento (de tu propia data)
+  const deptSum = new Map<string, { sum: number; n: number }>()
+  for (const c of candidates) {
+    const ppv = pricePerV2(c)
+    if (ppv != null && c.department) {
+      const e = deptSum.get(c.department) ?? { sum: 0, n: 0 }
+      e.sum += ppv; e.n++; deptSum.set(c.department, e)
+    }
+  }
+  const deptAvg = (d: string | null) => { const e = d ? deptSum.get(d) : null; return e && e.n ? e.sum / e.n : null }
+
+  const items: BoardItem[] = candidates.map(c => {
+    const ppv = pricePerV2(c)
+    const refAvg = (c.refPriceMinV2 != null && c.refPriceMaxV2 != null) ? (c.refPriceMinV2 + c.refPriceMaxV2) / 2 : deptAvg(c.department)
+    const score = dealScore(ppv, refAvg, { isCommercial: c.isCommercial, hasLocation: c.latitude != null, photos: c.galleryUrls.length })
+    return {
+      id: c.id, title: c.title, stage: c.stage, price: c.price, currency: c.currency,
+      department: c.department, city: c.city, zone: c.zone,
+      cover: c.galleryUrls[0] ?? null, linkName: c.link?.name ?? null,
+      mirrored: c.organizationId !== me, score,
+    }
+  })
 
   return (
     <div className="p-6 md:p-8 space-y-6">
