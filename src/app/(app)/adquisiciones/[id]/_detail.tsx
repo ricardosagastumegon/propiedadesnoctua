@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, Phone, Mail, Trash2, MapPin, Calculator } from "lucide-react"
+import { ArrowLeft, Phone, Mail, Trash2, MapPin, Calculator, FileText } from "lucide-react"
 import { updateCandidateStage, updateCandidateAnalysis, deleteCandidate } from "../actions"
 import { toVaras2, AREA_UNITS, CUERDA_SIZES, formatV2, type AreaUnit } from "@/lib/varas"
 
@@ -96,9 +96,15 @@ export function CandidateDetail({ candidate, canEdit, canDelete }: { candidate: 
 
   return (
     <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-5">
-      <Link href="/adquisiciones" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
-        <ArrowLeft className="size-4" /> Volver a Adquisiciones
-      </Link>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <Link href="/adquisiciones" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+          <ArrowLeft className="size-4" /> Volver a Adquisiciones
+        </Link>
+        <a href={`/ficha-adquisicion/${candidate.id}`} target="_blank" rel="noopener noreferrer"
+          className="text-sm inline-flex items-center gap-1.5 rounded-lg bg-[#12182A] text-[#F4EFE6] px-3 py-2 hover:bg-[#1B2942]">
+          <FileText className="size-4" /> Ver ficha / Presentar
+        </a>
+      </div>
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
