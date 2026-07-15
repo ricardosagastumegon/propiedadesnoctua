@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, Phone, Mail, Trash2, MapPin } from "lucide-react"
+import { ArrowLeft, Phone, Mail, Trash2, MapPin, Calculator } from "lucide-react"
 import { updateCandidateStage, updateCandidateAnalysis, deleteCandidate } from "../actions"
+import { toVaras2, AREA_UNITS, CUERDA_SIZES, formatV2, type AreaUnit } from "@/lib/varas"
 
 interface C {
   id: string; stage: string; title: string; propertyType: string | null
@@ -17,7 +18,10 @@ interface C {
   price: number | null; currency: string; bedrooms: number | null; bathrooms: number | null
   area: number | null; description: string | null; galleryUrls: string[]
   agentName: string | null; agentPhone: string | null; agentEmail: string | null
-  analysisNotes: string | null; estimatedValue: number | null; offerAmount: number | null
+  analysisNotes: string | null
+  areaUnit: string | null; cuerdaVaras: number | null
+  refPriceMinV2: number | null; refPriceMaxV2: number | null
+  isCommercial: boolean; offerPerV2: number | null
   createdAt: string
 }
 
@@ -39,8 +43,25 @@ export function CandidateDetail({ candidate, canEdit, canDelete }: { candidate: 
   const [saving, setSaving] = useState(false)
   const [savingAnalysis, setSavingAnalysis] = useState(false)
   const [notes, setNotes] = useState(candidate.analysisNotes ?? "")
-  const [estimated, setEstimated] = useState(candidate.estimatedValue?.toString() ?? "")
-  const [offer, setOffer] = useState(candidate.offerAmount?.toString() ?? "")
+  const [areaVal, setAreaVal] = useState(candidate.area?.toString() ?? "")
+  const [areaUnit, setAreaUnit] = useState<AreaUnit>((candidate.areaUnit as AreaUnit) ?? "V2")
+  const [cuerdaVaras, setCuerdaVaras] = useState(candidate.cuerdaVaras?.toString() ?? "25")
+  const [refMin, setRefMin] = useState(candidate.refPriceMinV2?.toString() ?? "")
+  const [refMax, setRefMax] = useState(candidate.refPriceMaxV2?.toString() ?? "")
+  const [commercial, setCommercial] = useState(candidate.isCommercial)
+  const [offerV2, setOfferV2] = useState(candidate.offerPerV2?.toString() ?? "")
+
+  // Cálculos del motor de análisis
+  const sym = candidate.currency === "USD" ? "$" : "Q"
+  const areaV2 = toVaras2(parseFloat(areaVal), areaUnit, parseInt(cuerdaVaras))
+  const pricePerV2 = candidate.price != null && areaV2 ? candidate.price / areaV2 : null
+  const refMinN = parseFloat(refMin), refMaxN = parseFloat(refMax)
+  const refAvg = !isNaN(refMinN) && !isNaN(refMaxN) ? (refMinN + refMaxN) / 2 : null
+  const deviation = pricePerV2 != null && refAvg ? ((pricePerV2 - refAvg) / refAvg) * 100 : null
+  const suggested = commercial ? (isNaN(refMaxN) ? null : refMaxN) : refAvg
+  const offerV2N = parseFloat(offerV2)
+  const offerTotal = !isNaN(offerV2N) && areaV2 ? offerV2N * areaV2 : null
+  const fmt = (n: number | null, d = 0) => n == null ? "—" : `${sym}${n.toLocaleString("es-GT", { maximumFractionDigits: d })}`
 
   async function changeStage(s: string) {
     setStage(s); setSaving(true)
@@ -53,7 +74,10 @@ export function CandidateDetail({ candidate, canEdit, canDelete }: { candidate: 
   async function saveAnalysis() {
     setSavingAnalysis(true)
     const fd = new FormData()
-    fd.set("analysisNotes", notes); fd.set("estimatedValue", estimated); fd.set("offerAmount", offer)
+    fd.set("analysisNotes", notes)
+    fd.set("area", areaVal); fd.set("areaUnit", areaUnit); fd.set("cuerdaVaras", cuerdaVaras)
+    fd.set("refPriceMinV2", refMin); fd.set("refPriceMaxV2", refMax)
+    fd.set("isCommercial", String(commercial)); fd.set("offerPerV2", offerV2)
     const res = await updateCandidateAnalysis(candidate.id, fd)
     setSavingAnalysis(false)
     if ("error" in res) { alert(res.error); return }
@@ -120,7 +144,7 @@ export function CandidateDetail({ candidate, canEdit, canDelete }: { candidate: 
             {candidate.cadastralNumber && <Row k="Catastro" v={<span className="font-mono">{candidate.cadastralNumber}</span>} />}
             <Row k="Habitaciones" v={candidate.bedrooms ?? "—"} />
             <Row k="Baños" v={candidate.bathrooms ?? "—"} />
-            <Row k="Área" v={candidate.area ? `${candidate.area} m²` : "—"} />
+            <Row k="Área" v={areaV2 ? formatV2(areaV2) : (candidate.area ?? "—")} />
             {candidate.addressLine && <Row k="Dirección" v={candidate.addressLine} />}
             {candidate.hasLocation && <Row k="Ubicación" v={<Link href="/adquisiciones/mapa" className="text-blue-600 underline">Ver en el mapa →</Link>} />}
           </dl>
@@ -153,23 +177,97 @@ export function CandidateDetail({ candidate, canEdit, canDelete }: { candidate: 
         </Card>
       </div>
 
-      {/* Análisis */}
+      {/* Análisis por vara² */}
       <Card className="p-5 space-y-4">
-        <h3 className="font-medium text-sm">Análisis (interno)</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <h3 className="font-medium text-sm flex items-center gap-2"><Calculator className="size-4 text-[#8A6A2E]" /> Análisis por vara² (v²)</h3>
+
+        {/* Área + unidad */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div className="space-y-1.5">
-            <Label className="text-sm">Valor estimado ({candidate.currency})</Label>
-            <Input type="number" step="0.01" value={estimated} onChange={e => setEstimated(e.target.value)} disabled={!canEdit} placeholder="Tu estimación" />
+            <Label className="text-sm">Área</Label>
+            <Input type="number" step="any" value={areaVal} onChange={e => setAreaVal(e.target.value)} disabled={!canEdit} placeholder="0" />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm">Monto ofertado ({candidate.currency})</Label>
-            <Input type="number" step="0.01" value={offer} onChange={e => setOffer(e.target.value)} disabled={!canEdit} placeholder="Lo que ofreciste" />
+            <Label className="text-sm">Unidad</Label>
+            <select value={areaUnit} onChange={e => setAreaUnit(e.target.value as AreaUnit)} disabled={!canEdit}
+              className="w-full h-9 border rounded-md px-2 text-sm bg-background disabled:opacity-60">
+              {AREA_UNITS.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+            </select>
+          </div>
+          {areaUnit === "CUERDA" && (
+            <div className="space-y-1.5">
+              <Label className="text-sm">Tamaño cuerda</Label>
+              <select value={cuerdaVaras} onChange={e => setCuerdaVaras(e.target.value)} disabled={!canEdit}
+                className="w-full h-9 border rounded-md px-2 text-sm bg-background disabled:opacity-60">
+                {CUERDA_SIZES.map(cz => <option key={cz.varas} value={cz.varas}>{cz.label}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Referencia de mercado */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-sm">Ref. mercado mín /v² ({candidate.currency})</Label>
+            <Input type="number" step="any" value={refMin} onChange={e => setRefMin(e.target.value)} disabled={!canEdit} placeholder="800" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">Ref. mercado máx /v² ({candidate.currency})</Label>
+            <Input type="number" step="any" value={refMax} onChange={e => setRefMax(e.target.value)} disabled={!canEdit} placeholder="1000" />
           </div>
         </div>
+
+        {/* Resultados */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <Stat label="Área en v²" value={formatV2(areaV2)} />
+          <Stat label="Precio pedido /v²" value={fmt(pricePerV2)} />
+          <Stat label="Ref. promedio /v²" value={fmt(refAvg)} />
+          <Stat label="Desviación" value={deviation != null ? `${deviation >= 0 ? "+" : ""}${deviation.toFixed(0)}%` : "—"}
+            tone={deviation == null ? undefined : deviation > 5 ? "bad" : deviation < -5 ? "good" : "neutral"} />
+        </div>
+        {deviation != null && (
+          <p className="text-xs text-muted-foreground">
+            {deviation > 5
+              ? `Piden ${Math.abs(deviation).toFixed(0)}% por ENCIMA del promedio de mercado.`
+              : deviation < -5
+                ? `Está ${Math.abs(deviation).toFixed(0)}% por DEBAJO del promedio — posible oportunidad.`
+                : "En línea con el promedio de mercado."}
+          </p>
+        )}
+
+        {/* Comercial + oferta */}
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={commercial} onChange={e => setCommercial(e.target.checked)} disabled={!canEdit} className="size-4" />
+          Área comercial (frente a carretera / centro → vale más)
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+          <div className="space-y-1.5">
+            <Label className="text-sm">Oferta por v² ({candidate.currency})</Label>
+            <div className="flex gap-2">
+              <Input type="number" step="any" value={offerV2} onChange={e => setOfferV2(e.target.value)} disabled={!canEdit} placeholder="900" />
+              {canEdit && suggested != null && (
+                <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setOfferV2(suggested.toFixed(0))}>
+                  Sugerir ({fmt(suggested)})
+                </Button>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground">Sugerido: {commercial ? "techo de mercado (comercial)" : "promedio de mercado"}.</p>
+          </div>
+          <div className="text-right bg-[#0D1322] text-[#F4EFE6] rounded-lg p-3">
+            <div className="text-[10px] uppercase tracking-widest text-[#C9A24B]">Oferta total sugerida</div>
+            <div className="font-display text-2xl">{offerTotal != null ? fmt(offerTotal) : "—"}</div>
+            {candidate.price != null && offerTotal != null && (
+              <div className="text-[11px] opacity-75">vs pedido {fmt(candidate.price)} · {(((offerTotal - candidate.price) / candidate.price) * 100).toFixed(0)}%</div>
+            )}
+          </div>
+        </div>
+
+        {/* Notas */}
         <div className="space-y-1.5">
           <Label className="text-sm">Notas de análisis</Label>
-          <Textarea rows={4} value={notes} onChange={e => setNotes(e.target.value)} disabled={!canEdit} placeholder="Observaciones, due diligence, decisión…" />
+          <Textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} disabled={!canEdit} placeholder="Observaciones, due diligence, decisión…" />
         </div>
+
         {canEdit && (
           <div className="flex justify-between items-center">
             {canDelete
@@ -179,6 +277,16 @@ export function CandidateDetail({ candidate, canEdit, canDelete }: { candidate: 
           </div>
         )}
       </Card>
+    </div>
+  )
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" | "neutral" }) {
+  const cls = tone === "bad" ? "text-rose-600" : tone === "good" ? "text-emerald-600" : "text-[#12182A]"
+  return (
+    <div className="border rounded-lg p-2.5 text-center bg-muted/20">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`font-semibold text-sm mt-0.5 ${cls}`}>{value}</div>
     </div>
   )
 }

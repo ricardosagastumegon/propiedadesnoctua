@@ -118,6 +118,13 @@ model AcquisitionCandidate {
   analysisNotes  String?
   estimatedValue Float?
   offerAmount    Float?
+  // Motor de análisis por vara² (v²)
+  areaUnit       String?  // V2 | M2 | CUERDA | MANZANA | HECTAREA | CABALLERIA
+  cuerdaVaras    Int?     // tamaño de cuerda (varas por lado) si areaUnit = CUERDA
+  refPriceMinV2  Float?   // referencia de mercado: precio mín por v²
+  refPriceMaxV2  Float?   // referencia de mercado: precio máx por v²
+  isCommercial   Boolean  @default(false)
+  offerPerV2     Float?   // oferta elegida por v² (sugerida + editable)
   source         String   @default("PUBLIC_FORM")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

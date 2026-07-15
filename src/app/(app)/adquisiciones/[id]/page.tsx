@@ -29,7 +29,10 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
         price: c.price, currency: c.currency, bedrooms: c.bedrooms, bathrooms: c.bathrooms,
         area: c.area, description: c.description, galleryUrls: c.galleryUrls,
         agentName: c.agentName, agentPhone: c.agentPhone, agentEmail: c.agentEmail,
-        analysisNotes: c.analysisNotes, estimatedValue: c.estimatedValue, offerAmount: c.offerAmount,
+        analysisNotes: c.analysisNotes,
+        areaUnit: c.areaUnit, cuerdaVaras: c.cuerdaVaras,
+        refPriceMinV2: c.refPriceMinV2, refPriceMaxV2: c.refPriceMaxV2,
+        isCommercial: c.isCommercial, offerPerV2: c.offerPerV2,
         createdAt: c.createdAt.toISOString(),
       }}
       canEdit={isOwner && can(user, "adquisiciones", "edit")}

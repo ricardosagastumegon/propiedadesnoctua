@@ -260,8 +260,14 @@ export async function updateCandidateAnalysis(id: string, formData: FormData): P
     where: { id, organizationId: g.user.organizationId },
     data: {
       analysisNotes: str(formData.get("analysisNotes")),
-      estimatedValue: num(formData.get("estimatedValue")),
-      offerAmount: num(formData.get("offerAmount")),
+      // Motor de análisis por v²
+      area: num(formData.get("area")),
+      areaUnit: str(formData.get("areaUnit")),
+      cuerdaVaras: int(formData.get("cuerdaVaras")),
+      refPriceMinV2: num(formData.get("refPriceMinV2")),
+      refPriceMaxV2: num(formData.get("refPriceMaxV2")),
+      isCommercial: str(formData.get("isCommercial")) === "true",
+      offerPerV2: num(formData.get("offerPerV2")),
     },
   })
   revalidatePath(`/adquisiciones/${id}`)
