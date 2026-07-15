@@ -1,8 +1,9 @@
 "use client"
 import { MapContainer, TileLayer, WMSTileLayer, Polygon, Marker, Popup, LayersControl, useMap } from "react-leaflet"
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
+import { Maximize2, X } from "lucide-react"
 import type { AcqMapItem } from "./_map"
 
 const STAGE = {
@@ -36,6 +37,15 @@ function priceIcon(item: AcqMapItem): L.DivIcon {
   })
 }
 
+function InvalidateOnResize({ height }: { height: number }) {
+  const map = useMap()
+  useEffect(() => {
+    const t = setTimeout(() => map.invalidateSize(), 90)
+    return () => clearTimeout(t)
+  }, [height, map])
+  return null
+}
+
 function FitAll({ items }: { items: AcqMapItem[] }) {
   const map = useMap()
   useEffect(() => {
@@ -57,9 +67,28 @@ export function AcqMapInner({ items }: { items: AcqMapItem[] }) {
   const center: [number, number] = first ? [first.lat!, first.lng!] : [14.6349, -90.5069]
   const icons = useMemo(() => new Map(items.map(i => [i.id, priceIcon(i)])), [items])
 
+  const [fullscreen, setFullscreen] = useState(false)
+  const [fsHeight, setFsHeight] = useState(640)
+  useEffect(() => {
+    if (!fullscreen) return
+    const update = () => setFsHeight(Math.max(360, window.innerHeight - 90))
+    update()
+    window.addEventListener("resize", update)
+    document.body.style.overflow = "hidden"
+    return () => { window.removeEventListener("resize", update); document.body.style.overflow = "" }
+  }, [fullscreen])
+  const height = fullscreen ? fsHeight : 640
+
   return (
-    <div className="rounded-lg overflow-hidden border">
-      <MapContainer center={center} zoom={13} style={{ height: 560, width: "100%" }} scrollWheelZoom>
+    <div className={fullscreen ? "fixed inset-0 z-[60] bg-background p-2 flex flex-col" : "rounded-lg overflow-hidden border relative"}>
+      <button
+        onClick={() => setFullscreen(v => !v)}
+        className="absolute top-2 left-2 z-[500] bg-white/95 border rounded-lg px-2.5 py-1.5 text-xs font-medium shadow flex items-center gap-1 hover:bg-white"
+      >
+        {fullscreen ? <><X className="size-3.5" /> Cerrar</> : <><Maximize2 className="size-3.5" /> Pantalla completa</>}
+      </button>
+      <MapContainer center={center} zoom={13} style={{ height, width: "100%", flex: fullscreen ? 1 : undefined }} scrollWheelZoom>
+        <InvalidateOnResize height={height} />
         <LayersControl position="topright">
           <LayersControl.BaseLayer checked name="Satélite">
             <TileLayer attribution='&copy; Esri' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" maxZoom={19} />

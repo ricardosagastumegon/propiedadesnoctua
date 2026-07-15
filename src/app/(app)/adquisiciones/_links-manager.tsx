@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Link2, Copy, RefreshCw, Check, Plus, Trash2, Target, Users, KeyRound, X } from "lucide-react"
+import { Link2, Copy, RefreshCw, Check, Plus, Trash2, Target, Users, KeyRound, X, ChevronDown, ChevronRight } from "lucide-react"
 import { createAcquisitionLink, updateAcquisitionLink, regenerateLinkToken, deleteAcquisitionLink, getMyIntermediaryCode, setLinkIntermediaryByCode, removeLinkIntermediary } from "./actions"
 
 export interface LinkRow {
@@ -20,6 +20,7 @@ export interface LinkRow {
 export function LinksManager({ links, canEdit, myCode }: { links: LinkRow[]; canEdit: boolean; myCode: string | null }) {
   const router = useRouter()
   const [creating, setCreating] = useState(false)
+  const [open, setOpen] = useState(false)
 
   async function create() {
     const name = prompt("Nombre del link (ej. 'Gasolineras', 'Edificios zona 10'):")
@@ -28,29 +29,42 @@ export function LinksManager({ links, canEdit, myCode }: { links: LinkRow[]; can
     const res = await createAcquisitionLink(name || "Link")
     setCreating(false)
     if ("error" in res) { alert(res.error); return }
+    setOpen(true)
     router.refresh()
   }
 
   return (
-    <div className="space-y-3">
-      {canEdit && <MyCodeCard initialCode={myCode} />}
+    <div className="border rounded-xl overflow-hidden">
+      <button onClick={() => setOpen(v => !v)} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 text-left">
+        <span className="text-sm font-medium flex items-center gap-2">
+          <Link2 className="size-4 text-[#8A6A2E]" /> Links para agentes y configuración
+          <span className="text-xs text-muted-foreground">({links.length})</span>
+        </span>
+        {open ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
+      </button>
 
-      <div className="flex items-center justify-between">
-        <h3 className="font-medium text-sm flex items-center gap-2"><Link2 className="size-4 text-[#8A6A2E]" /> Links para agentes</h3>
-        {canEdit && (
-          <Button size="sm" variant="outline" onClick={create} disabled={creating}>
-            <Plus className="size-3.5 mr-1" /> Nuevo link
-          </Button>
-        )}
-      </div>
+      {open && (
+        <div className="p-4 pt-0 space-y-3 border-t">
+          {canEdit && <div className="pt-3"><MyCodeCard initialCode={myCode} /></div>}
 
-      {links.length === 0 ? (
-        <Card className="p-5 text-sm text-muted-foreground">
-          {canEdit ? 'No tenés links todavía. Creá uno con "Nuevo link" y compartilo con los agentes.' : "No hay links configurados."}
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {links.map(l => <LinkItem key={l.id} link={l} canEdit={canEdit} onChanged={() => router.refresh()} />)}
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Links</h3>
+            {canEdit && (
+              <Button size="sm" variant="outline" onClick={create} disabled={creating}>
+                <Plus className="size-3.5 mr-1" /> Nuevo link
+              </Button>
+            )}
+          </div>
+
+          {links.length === 0 ? (
+            <Card className="p-5 text-sm text-muted-foreground">
+              {canEdit ? 'No tenés links todavía. Creá uno con "Nuevo link" y compartilo con los agentes.' : "No hay links configurados."}
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {links.map(l => <LinkItem key={l.id} link={l} canEdit={canEdit} onChanged={() => router.refresh()} />)}
+            </div>
+          )}
         </div>
       )}
     </div>
