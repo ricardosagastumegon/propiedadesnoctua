@@ -43,6 +43,7 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
         cadastralNumber: c.cadastralNumber, hasLocation: c.latitude != null && c.longitude != null,
         price: c.price, currency: c.currency, bedrooms: c.bedrooms, bathrooms: c.bathrooms,
         area: c.area, description: c.description, galleryUrls: c.galleryUrls,
+        documentUrls: c.documentUrls, latitude: c.latitude, longitude: c.longitude,
         agentName: c.agentName, agentPhone: c.agentPhone, agentEmail: c.agentEmail,
         analysisNotes: c.analysisNotes,
         areaUnit: c.areaUnit, cuerdaVaras: c.cuerdaVaras,

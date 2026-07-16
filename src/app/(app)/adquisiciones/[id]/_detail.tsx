@@ -20,6 +20,7 @@ interface C {
   cadastralNumber: string | null; hasLocation: boolean
   price: number | null; currency: string; bedrooms: number | null; bathrooms: number | null
   area: number | null; description: string | null; galleryUrls: string[]
+  documentUrls: string[]; latitude: number | null; longitude: number | null
   agentName: string | null; agentPhone: string | null; agentEmail: string | null
   analysisNotes: string | null
   areaUnit: string | null; cuerdaVaras: number | null
@@ -163,8 +164,20 @@ export function CandidateDetail({ candidate, canEdit, canDelete, autoRef }: { ca
             <Row k="Baños" v={candidate.bathrooms ?? "—"} />
             <Row k="Área" v={areaV2 ? formatV2(areaV2) : (candidate.area ?? "—")} />
             {candidate.addressLine && <Row k="Dirección" v={candidate.addressLine} />}
-            {candidate.hasLocation && <Row k="Ubicación" v={<Link href="/adquisiciones/mapa" className="text-blue-600 underline">Ver en el mapa →</Link>} />}
+            {candidate.latitude != null && candidate.longitude != null && (
+              <Row k="Ubicación" v={<a href={`https://www.google.com/maps?q=${candidate.latitude},${candidate.longitude}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Ver en Google Maps →</a>} />
+            )}
           </dl>
+          {candidate.documentUrls.length > 0 && (
+            <div className="pt-2 border-t">
+              <div className="text-xs text-muted-foreground mb-1.5">Documentos de municipalidad</div>
+              <div className="flex flex-wrap gap-2">
+                {candidate.documentUrls.map((u, i) => (
+                  <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="text-xs bg-muted/40 border rounded-md px-2.5 py-1.5 hover:bg-muted">📄 Documento {i + 1}</a>
+                ))}
+              </div>
+            </div>
+          )}
           {candidate.description && (
             <div className="pt-2 border-t">
               <div className="text-xs text-muted-foreground mb-1">Descripción</div>

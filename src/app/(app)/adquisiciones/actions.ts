@@ -173,15 +173,24 @@ export async function submitAcquisition(token: string, formData: FormData): Prom
     if (c) { latitude = c[0]; longitude = c[1] }
   }
   const hasLocation = polygon != null || (latitude != null && longitude != null)
-  if (!cadastralNumber && !hasLocation) {
-    return { error: "Agregá el número de catastro o marcá la ubicación en el mapa (al menos uno)." }
-  }
 
   let gallery: string[] = []
   try {
     const raw = str(formData.get("galleryUrls"))
     if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr)) gallery = arr.filter((u): u is string => typeof u === "string").slice(0, 12) }
   } catch { /* ignore */ }
+
+  // Documentos de municipalidad (plano/escritura)
+  let documents: string[] = []
+  try {
+    const raw = str(formData.get("documentUrls"))
+    if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr)) documents = arr.filter((u): u is string => typeof u === "string").slice(0, 12) }
+  } catch { /* ignore */ }
+
+  // Ubicación obligatoria: catastro O polígono/coordenadas O documentos de municipalidad
+  if (!cadastralNumber && !hasLocation && documents.length === 0) {
+    return { error: "Falta la ubicación: poné el catastro, dibujá el polígono en el mapa, o subí los documentos de la municipalidad." }
+  }
 
   const candidate = await prisma.acquisitionCandidate.create({
     data: {
@@ -204,6 +213,7 @@ export async function submitAcquisition(token: string, formData: FormData): Prom
       area: num(formData.get("area")),
       description: str(formData.get("description")),
       galleryUrls: gallery,
+      documentUrls: documents,
       agentName: str(formData.get("agentName")),
       agentPhone: str(formData.get("agentPhone")),
       agentEmail: str(formData.get("agentEmail")),

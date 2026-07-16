@@ -110,6 +110,7 @@ model AcquisitionCandidate {
   area           Float?
   description    String?
   galleryUrls    String[] @default([])
+  documentUrls   String[] @default([]) // documentos de municipalidad (plano, escritura) — PDF/imagen
   // Contacto del agente que la envió
   agentName      String?
   agentPhone     String?

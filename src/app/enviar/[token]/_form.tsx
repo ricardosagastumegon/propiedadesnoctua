@@ -12,6 +12,8 @@ export function SubmitForm({ token, orgName, brief }: { token: string; orgName: 
   const [error, setError] = useState<string | null>(null)
   const [gallery, setGallery] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
+  const [documents, setDocuments] = useState<string[]>([])
+  const [docUploading, setDocUploading] = useState(false)
 
   async function uploadPhotos(e: React.ChangeEvent<HTMLInputElement>) {
     const inputEl = e.currentTarget
@@ -46,11 +48,43 @@ export function SubmitForm({ token, orgName, brief }: { token: string; orgName: 
     }
   }
 
+  async function uploadDocuments(e: React.ChangeEvent<HTMLInputElement>) {
+    const inputEl = e.currentTarget
+    const files = Array.from(inputEl.files ?? [])
+    if (!files.length) return
+    setDocUploading(true)
+    setError(null)
+    const urls: string[] = []
+    try {
+      for (const file of files) {
+        const prepared = await compressImage(file) // PDFs pasan sin cambios
+        const fd = new FormData()
+        fd.append("file", prepared)
+        fd.append("token", token)
+        const res = await fetch("/api/upload-public", { method: "POST", body: fd })
+        if (!res.ok) {
+          let msg = "No se pudo subir el documento (PDF o imagen, más liviano)."
+          try { const j = await res.json(); if (j?.error) msg = j.error } catch { /* no-JSON */ }
+          setError(msg); break
+        }
+        const json = await res.json().catch(() => ({}))
+        if (json.url) urls.push(json.url)
+      }
+    } catch {
+      setError("No se pudieron subir los documentos.")
+    } finally {
+      if (urls.length) setDocuments(prev => [...prev, ...urls].slice(0, 12))
+      setDocUploading(false)
+      inputEl.value = ""
+    }
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     const fd = new FormData(formRef.current!)
     fd.set("galleryUrls", JSON.stringify(gallery))
+    fd.set("documentUrls", JSON.stringify(documents))
     startTransition(async () => {
       const res = await submitAcquisition(token, fd)
       if ("error" in res) { setError(res.error); return }
@@ -66,7 +100,7 @@ export function SubmitForm({ token, orgName, brief }: { token: string; orgName: 
           <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto text-2xl">✓</div>
           <h1 className="font-display text-2xl text-[#12182A] mt-4">¡Enviada!</h1>
           <p className="text-sm text-[#475065] mt-2">Gracias. La propiedad le llegó a <strong>{orgName}</strong> para analizarla. Si les interesa, te contactan.</p>
-          <button onClick={() => { setDone(false); setGallery([]); formRef.current?.reset() }}
+          <button onClick={() => { setDone(false); setGallery([]); setDocuments([]); formRef.current?.reset() }}
             className="mt-6 text-sm font-semibold text-[#8A6A2E] hover:underline">Enviar otra propiedad</button>
         </div>
       </div>
@@ -158,7 +192,7 @@ export function SubmitForm({ token, orgName, brief }: { token: string; orgName: 
             <div>
               <h2 className="font-display text-lg text-[#12182A]">Ubicación <span className="text-[#A8423F]">*</span></h2>
               <p className="text-xs text-[#6B7280] mt-1">
-                Obligatorio: poné el <strong>número de catastro</strong> <em>o</em> marcá la ubicación y el tamaño en el mapa (o las dos).
+                <strong>Obligatorio (al menos una):</strong> el <strong>número de catastro</strong>, <em>o</em> dibujá el <strong>polígono</strong> en el mapa, <em>o</em> subí los <strong>documentos de la municipalidad</strong> (plano / escritura).
               </p>
             </div>
             <div>
@@ -166,11 +200,31 @@ export function SubmitForm({ token, orgName, brief }: { token: string; orgName: 
               <input name="cadastralNumber" placeholder="Ej: 18-03-06-00001" className={input} />
             </div>
             <div>
-              <label className={label}>O marcá / dibujá la propiedad en el mapa</label>
+              <label className={label}>Marcá / dibujá el polígono en el mapa</label>
               <p className="text-xs text-[#6B7280] mb-2">
-                Pegá coordenadas de Google Maps, o dibujá el contorno. Podés activar el <strong>Catastro RIC</strong> arriba a la derecha del mapa.
+                Pegá coordenadas de Google Maps, o dibujá el contorno (así sabemos dónde queda y el tamaño). Podés activar el <strong>Catastro RIC</strong> arriba a la derecha del mapa.
               </p>
               <CoordPicker />
+            </div>
+            <div>
+              <label className={label}>Documentos de la municipalidad (plano, escritura)</label>
+              <p className="text-xs text-[#6B7280] mb-2">PDF o foto. Sirve como ubicación si no tenés catastro ni polígono.</p>
+              <div className="flex flex-wrap gap-2">
+                {documents.map((url, i) => (
+                  <div key={i} className="relative">
+                    <a href={url} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 bg-[#F6F7F9] border rounded-lg px-3 py-2 text-xs text-[#12182A] hover:bg-white">
+                      📄 Documento {i + 1}
+                    </a>
+                    <button type="button" onClick={() => setDocuments(d => d.filter((_, idx) => idx !== i))}
+                      className="absolute -top-2 -right-2 bg-[#A8423F] text-white rounded-full w-5 h-5 text-xs">×</button>
+                  </div>
+                ))}
+                <label className="border border-dashed rounded-lg px-3 py-2 flex items-center text-xs text-[#6B7280] cursor-pointer hover:bg-[#F6F7F9]">
+                  {docUploading ? "Subiendo…" : "+ Subir documento"}
+                  <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={uploadDocuments} disabled={docUploading} />
+                </label>
+              </div>
             </div>
           </div>
 

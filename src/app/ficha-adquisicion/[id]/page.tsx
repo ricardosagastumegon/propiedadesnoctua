@@ -126,12 +126,34 @@ export default async function FichaPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          {/* Mapa */}
-          {mapItems.length > 0 && (
+          {/* Ubicación */}
+          {(c.latitude != null && c.longitude != null) && (
             <div style={{ marginTop: 20 }}>
-              <div style={{ fontWeight: 600, fontSize: 13, color: "#12182A", marginBottom: 8 }}>Ubicación</div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "#12182A", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Ubicación</span>
+                <a href={`https://www.google.com/maps?q=${c.latitude},${c.longitude}`} target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: 12, color: "#8A6A2E", fontWeight: 600 }}>Ver en Google Maps →</a>
+              </div>
               <AcqMap items={mapItems} />
             </div>
+          )}
+
+          {/* Documentos de municipalidad */}
+          {c.documentUrls.length > 0 && (
+            <div style={{ marginTop: 18 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "#12182A", marginBottom: 8 }}>Documentos de la municipalidad</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {c.documentUrls.map((u, i) => (
+                  <a key={i} href={u} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: 12.5, color: "#12182A", background: "#F6F7F9", border: "1px solid #E7E9EE", borderRadius: 8, padding: "8px 12px", textDecoration: "none" }}>
+                    📄 Documento {i + 1}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+          {c.cadastralNumber && (c.latitude == null || c.longitude == null) && (
+            <div style={{ marginTop: 14, fontSize: 12.5, color: "#475065" }}>Catastro: <strong>{c.cadastralNumber}</strong> (sin coordenadas para el mapa)</div>
           )}
 
           {/* Notas */}
