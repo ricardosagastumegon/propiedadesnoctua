@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Link2, Copy, RefreshCw, Check, Plus, Trash2, Target, Users, KeyRound, X, ChevronDown, ChevronRight } from "lucide-react"
-import { createAcquisitionLink, updateAcquisitionLink, regenerateLinkToken, deleteAcquisitionLink, getMyIntermediaryCode, setLinkIntermediaryByCode, removeLinkIntermediary } from "./actions"
+import { createAcquisitionLink, updateAcquisitionLink, regenerateLinkToken, deleteAcquisitionLink, getMyIntermediaryCode, setLinkIntermediaryByCode, removeLinkIntermediary, updateFx } from "./actions"
 
 export interface LinkRow {
   id: string
@@ -17,7 +17,7 @@ export interface LinkRow {
   intermediaryName: string | null
 }
 
-export function LinksManager({ links, canEdit, myCode }: { links: LinkRow[]; canEdit: boolean; myCode: string | null }) {
+export function LinksManager({ links, canEdit, myCode, fx }: { links: LinkRow[]; canEdit: boolean; myCode: string | null; fx: number }) {
   const router = useRouter()
   const [creating, setCreating] = useState(false)
   const [open, setOpen] = useState(false)
@@ -45,7 +45,8 @@ export function LinksManager({ links, canEdit, myCode }: { links: LinkRow[]; can
 
       {open && (
         <div className="p-4 pt-0 space-y-3 border-t">
-          {canEdit && <div className="pt-3"><MyCodeCard initialCode={myCode} /></div>}
+          {canEdit && <div className="pt-3"><FxCard initialFx={fx} /></div>}
+          {canEdit && <MyCodeCard initialCode={myCode} />}
 
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Links</h3>
@@ -68,6 +69,36 @@ export function LinksManager({ links, canEdit, myCode }: { links: LinkRow[]; can
         </div>
       )}
     </div>
+  )
+}
+
+function FxCard({ initialFx }: { initialFx: number }) {
+  const [fx, setFx] = useState(String(initialFx))
+  const [busy, setBusy] = useState(false)
+  const [saved, setSaved] = useState(String(initialFx))
+  const dirty = fx !== saved
+  async function save() {
+    const v = parseFloat(fx)
+    if (isNaN(v) || v <= 0) { alert("Poné un tipo de cambio válido."); return }
+    setBusy(true)
+    const res = await updateFx(v)
+    setBusy(false)
+    if ("error" in res) { alert(res.error); return }
+    setSaved(fx)
+  }
+  return (
+    <Card className="p-4">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-sm font-medium">Tipo de cambio (USD → GTQ)</span>
+      </div>
+      <p className="text-xs text-muted-foreground mb-2">Se usa para mostrar precios en Q y USD. Editable.</p>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">$1 =</span>
+        <Input type="number" step="0.01" value={fx} onChange={e => setFx(e.target.value)} className="w-28 h-9" />
+        <span className="text-sm text-muted-foreground">Q</span>
+        <Button size="sm" onClick={save} disabled={busy || !dirty}>{busy ? "…" : dirty ? "Guardar" : <><Check className="size-3.5" /></>}</Button>
+      </div>
+    </Card>
   )
 }
 

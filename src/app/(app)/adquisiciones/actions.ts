@@ -1,6 +1,7 @@
 "use server"
 import crypto from "crypto"
 import { prisma } from "@/lib/prisma"
+import { Prisma } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 import { tryGuard } from "@/lib/action-guard"
 import { sendAcquisitionEmail, isEmailConfigured } from "@/lib/email"
@@ -281,6 +282,116 @@ export async function updateCandidateAnalysis(id: string, formData: FormData): P
     },
   })
   revalidatePath(`/adquisiciones/${id}`)
+  return { ok: true }
+}
+
+/** Tipo de cambio USD→GTQ configurable del tenant. */
+export async function updateFx(fx: number): Promise<{ ok: true } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const v = fx > 0 && fx < 100 ? fx : 7.5
+  await prisma.organizationSettings.upsert({
+    where: { organizationId: g.user.organizationId },
+    update: { fxUsdGtq: v }, create: { organizationId: g.user.organizationId, fxUsdGtq: v },
+  })
+  revalidatePath("/adquisiciones")
+  return { ok: true }
+}
+
+// Parseo común de los campos de una propiedad (para agregar manual / editar).
+function parsePropertyData(formData: FormData) {
+  let polygon: LatLng[] | null = null
+  try { const raw = str(formData.get("mapPolygon")); if (raw) { const arr = JSON.parse(raw); if (isValidPolygon(arr)) polygon = arr as LatLng[] } } catch { /* */ }
+  let latitude = num(formData.get("latitude"))
+  let longitude = num(formData.get("longitude"))
+  if (polygon && (latitude == null || longitude == null)) { const c = centroid(polygon); if (c) { latitude = c[0]; longitude = c[1] } }
+  const arr = (key: string) => { try { const raw = str(formData.get(key)); if (raw) { const a = JSON.parse(raw); if (Array.isArray(a)) return a.filter((u): u is string => typeof u === "string").slice(0, 12) } } catch { /* */ } return [] as string[] }
+  return {
+    title: str(formData.get("title")),
+    propertyType: str(formData.get("propertyType")),
+    department: str(formData.get("department")),
+    city: str(formData.get("city")),
+    zone: str(formData.get("zone")),
+    addressLine: str(formData.get("addressLine")),
+    cadastralNumber: str(formData.get("cadastralNumber")),
+    price: num(formData.get("price")),
+    currency: str(formData.get("currency")) || "GTQ",
+    bedrooms: int(formData.get("bedrooms")),
+    bathrooms: int(formData.get("bathrooms")),
+    area: num(formData.get("area")),
+    areaUnit: str(formData.get("areaUnit")),
+    cuerdaVaras: int(formData.get("cuerdaVaras")),
+    description: str(formData.get("description")),
+    mapPolygon: polygon, latitude, longitude,
+    gallery: arr("galleryUrls"), documents: arr("documentUrls"),
+  }
+}
+
+/** El tenant agrega una propiedad manualmente a Adquisiciones. */
+export async function createCandidateManual(formData: FormData): Promise<{ redirectTo: string } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const d = parsePropertyData(formData)
+  if (!d.title) return { error: "Poné al menos el título/nombre de la propiedad." }
+  const c = await prisma.acquisitionCandidate.create({
+    data: {
+      organizationId: g.user.organizationId, source: "MANUAL", stage: "NEW",
+      title: d.title, propertyType: d.propertyType, department: d.department, city: d.city, zone: d.zone,
+      addressLine: d.addressLine, cadastralNumber: d.cadastralNumber, price: d.price, currency: d.currency,
+      bedrooms: d.bedrooms, bathrooms: d.bathrooms, area: d.area, areaUnit: d.areaUnit, cuerdaVaras: d.cuerdaVaras,
+      description: d.description, galleryUrls: d.gallery, documentUrls: d.documents,
+      mapPolygon: d.mapPolygon ?? undefined, latitude: d.latitude, longitude: d.longitude,
+    },
+  })
+  revalidatePath("/adquisiciones")
+  return { redirectTo: `/adquisiciones/${c.id}` }
+}
+
+/** Editar la información de una propiedad (dueño). */
+export async function updateCandidateInfo(id: string, formData: FormData): Promise<{ ok: true } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const d = parsePropertyData(formData)
+  if (!d.title) return { error: "Poné al menos el título/nombre." }
+  const res = await prisma.acquisitionCandidate.updateMany({
+    where: { id, organizationId: g.user.organizationId },
+    data: {
+      title: d.title, propertyType: d.propertyType, department: d.department, city: d.city, zone: d.zone,
+      addressLine: d.addressLine, cadastralNumber: d.cadastralNumber, price: d.price, currency: d.currency,
+      bedrooms: d.bedrooms, bathrooms: d.bathrooms, area: d.area, areaUnit: d.areaUnit, cuerdaVaras: d.cuerdaVaras,
+      description: d.description, galleryUrls: d.gallery, documentUrls: d.documents,
+      mapPolygon: d.mapPolygon ?? Prisma.JsonNull, latitude: d.latitude, longitude: d.longitude,
+    },
+  })
+  if (res.count === 0) return { error: "No encontrada" }
+  revalidatePath(`/adquisiciones/${id}`)
+  return { ok: true }
+}
+
+/** Agrega un movimiento de negociación (pidieron/ofrecí/reofertaron). */
+export async function addNegotiation(candidateId: string, formData: FormData): Promise<{ ok: true } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const own = await prisma.acquisitionCandidate.findFirst({ where: { id: candidateId, organizationId: g.user.organizationId }, select: { id: true } })
+  if (!own) return { error: "No encontrada" }
+  const amount = num(formData.get("amount"))
+  if (amount == null) return { error: "Poné el monto." }
+  await prisma.acquisitionNegotiation.create({
+    data: {
+      candidateId, organizationId: g.user.organizationId,
+      kind: str(formData.get("kind")) || "OTHER", amount,
+      currency: str(formData.get("currency")) || "GTQ", note: str(formData.get("note")),
+    },
+  })
+  revalidatePath(`/adquisiciones/${candidateId}`)
+  return { ok: true }
+}
+
+/** Elimina un movimiento de negociación. */
+export async function deleteNegotiation(id: string): Promise<{ ok: true } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  await prisma.acquisitionNegotiation.deleteMany({ where: { id, organizationId: g.user.organizationId } })
   return { ok: true }
 }
 

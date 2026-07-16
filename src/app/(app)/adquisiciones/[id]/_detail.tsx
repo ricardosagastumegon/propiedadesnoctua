@@ -7,12 +7,14 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, Phone, Mail, Trash2, MapPin, Calculator, FileText } from "lucide-react"
-import { updateCandidateStage, updateCandidateAnalysis, deleteCandidate } from "../actions"
-import { toVaras2, AREA_UNITS, CUERDA_SIZES, formatV2, type AreaUnit } from "@/lib/varas"
+import { ArrowLeft, Phone, Mail, Trash2, MapPin, Calculator, FileText, Pencil, Handshake } from "lucide-react"
+import { updateCandidateStage, updateCandidateAnalysis, deleteCandidate, addNegotiation, deleteNegotiation } from "../actions"
+import { toVaras2, v2ToM2, convertCurrency, AREA_UNITS, CUERDA_SIZES, formatV2, type AreaUnit } from "@/lib/varas"
 import { dealScore, scoreColor, scoreLabel } from "@/lib/deal-score"
 
 interface AutoRef { count: number; avg: number; min: number; max: number; dept: string }
+interface Negotiation { id: string; kind: string; amount: number; currency: string; note: string | null; createdAt: string }
+const KIND_LABEL: Record<string, string> = { ASKED: "Pidieron", OFFERED: "Ofrecí", COUNTER: "Reofertaron", OTHER: "Otro" }
 
 interface C {
   id: string; stage: string; title: string; propertyType: string | null
@@ -41,7 +43,7 @@ function money(n: number | null, c: string) {
   return `${c === "USD" ? "$" : "Q"} ${n.toLocaleString("es-GT", { minimumFractionDigits: 2 })}`
 }
 
-export function CandidateDetail({ candidate, canEdit, canDelete, autoRef }: { candidate: C; canEdit: boolean; canDelete: boolean; autoRef: AutoRef | null }) {
+export function CandidateDetail({ candidate, canEdit, canDelete, autoRef, fx, negotiations }: { candidate: C; canEdit: boolean; canDelete: boolean; autoRef: AutoRef | null; fx: number; negotiations: Negotiation[] }) {
   const router = useRouter()
   const [stage, setStage] = useState(candidate.stage)
   const [saving, setSaving] = useState(false)
@@ -68,6 +70,36 @@ export function CandidateDetail({ candidate, canEdit, canDelete, autoRef }: { ca
   const offerV2N = parseFloat(offerV2)
   const offerTotal = !isNaN(offerV2N) && areaV2 ? offerV2N * areaV2 : null
   const fmt = (n: number | null, d = 0) => n == null ? "—" : `${sym}${n.toLocaleString("es-GT", { maximumFractionDigits: d })}`
+
+  // Precios en ambas monedas (usa el tipo de cambio configurable)
+  const areaM2 = v2ToM2(areaV2)
+  const pricePerM2 = candidate.price != null && areaM2 ? candidate.price / areaM2 : null
+  const inQ = (n: number | null) => n == null ? null : convertCurrency(n, candidate.currency, "GTQ", fx)
+  const inUSD = (n: number | null) => n == null ? null : convertCurrency(n, candidate.currency, "USD", fx)
+  const fQ = (n: number | null) => n == null ? "—" : `Q ${n.toLocaleString("es-GT", { maximumFractionDigits: 0 })}`
+  const fUSD = (n: number | null) => n == null ? "—" : `$ ${n.toLocaleString("es-GT", { maximumFractionDigits: 0 })}`
+
+  // Negociación
+  const [negKind, setNegKind] = useState("ASKED")
+  const [negAmount, setNegAmount] = useState("")
+  const [negCur, setNegCur] = useState(candidate.currency)
+  const [negNote, setNegNote] = useState("")
+  const [negBusy, setNegBusy] = useState(false)
+  async function addNeg() {
+    if (!negAmount.trim()) return
+    setNegBusy(true)
+    const fd = new FormData()
+    fd.set("kind", negKind); fd.set("amount", negAmount); fd.set("currency", negCur); fd.set("note", negNote)
+    const res = await addNegotiation(candidate.id, fd)
+    setNegBusy(false)
+    if ("error" in res) { alert(res.error); return }
+    setNegAmount(""); setNegNote(""); router.refresh()
+  }
+  async function delNeg(negId: string) {
+    const res = await deleteNegotiation(negId)
+    if ("error" in res) { alert(res.error); return }
+    router.refresh()
+  }
 
   async function changeStage(s: string) {
     setStage(s); setSaving(true)
@@ -106,10 +138,18 @@ export function CandidateDetail({ candidate, canEdit, canDelete, autoRef }: { ca
         <Link href="/adquisiciones" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
           <ArrowLeft className="size-4" /> Volver a Adquisiciones
         </Link>
-        <a href={`/ficha-adquisicion/${candidate.id}`} target="_blank" rel="noopener noreferrer"
-          className="text-sm inline-flex items-center gap-1.5 rounded-lg bg-[#12182A] text-[#F4EFE6] px-3 py-2 hover:bg-[#1B2942]">
-          <FileText className="size-4" /> Ver ficha / Presentar
-        </a>
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <Link href={`/adquisiciones/${candidate.id}/editar`}
+              className="text-sm inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 hover:bg-muted/50">
+              <Pencil className="size-4" /> Editar
+            </Link>
+          )}
+          <a href={`/ficha-adquisicion/${candidate.id}`} target="_blank" rel="noopener noreferrer"
+            className="text-sm inline-flex items-center gap-1.5 rounded-lg bg-[#12182A] text-[#F4EFE6] px-3 py-2 hover:bg-[#1B2942]">
+            <FileText className="size-4" /> Ver ficha / Presentar
+          </a>
+        </div>
       </div>
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -264,12 +304,17 @@ export function CandidateDetail({ candidate, canEdit, canDelete, autoRef }: { ca
         )}
 
         {/* Resultados */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <Stat label="Área en v²" value={formatV2(areaV2)} />
-          <Stat label="Precio pedido /v²" value={fmt(pricePerV2)} />
+        <div className="grid grid-cols-3 gap-2">
+          <Stat label="Área" value={areaV2 ? `${formatV2(areaV2)} · ${Math.round(areaM2!).toLocaleString("es-GT")} m²` : "—"} />
           <Stat label="Ref. promedio /v²" value={fmt(refAvg)} />
           <Stat label="Desviación" value={deviation != null ? `${deviation >= 0 ? "+" : ""}${deviation.toFixed(0)}%` : "—"}
             tone={deviation == null ? undefined : deviation > 5 ? "bad" : deviation < -5 ? "good" : "neutral"} />
+        </div>
+
+        {/* Precio por v² y m², en Q y USD (tipo de cambio {fx}) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <PriceCell label="Precio pedido / v²" q={fQ(inQ(pricePerV2))} usd={fUSD(inUSD(pricePerV2))} />
+          <PriceCell label="Precio pedido / m²" q={fQ(inQ(pricePerM2))} usd={fUSD(inUSD(pricePerM2))} />
         </div>
         {deviation != null && (
           <p className="text-xs text-muted-foreground">
@@ -323,6 +368,48 @@ export function CandidateDetail({ candidate, canEdit, canDelete, autoRef }: { ca
           </div>
         )}
       </Card>
+
+      {/* Seguimiento de negociación */}
+      <Card className="p-5 space-y-3">
+        <h3 className="font-medium text-sm flex items-center gap-2"><Handshake className="size-4 text-[#8A6A2E]" /> Seguimiento de negociación</h3>
+        {negotiations.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Sin movimientos. Registrá lo que pidieron, lo que ofreciste, las contraofertas…</p>
+        ) : (
+          <div className="space-y-1.5">
+            {negotiations.map(n => (
+              <div key={n.id} className="flex items-center justify-between gap-2 text-sm border-l-2 pl-3 py-1"
+                style={{ borderColor: n.kind === "ASKED" ? "#A8423F" : n.kind === "OFFERED" ? "#2C6B43" : n.kind === "COUNTER" ? "#C77A1E" : "#6B7280" }}>
+                <div>
+                  <span className="font-medium">{KIND_LABEL[n.kind] ?? n.kind}:</span>{" "}
+                  {n.currency === "USD" ? "$" : "Q"} {n.amount.toLocaleString("es-GT")}
+                  {n.note && <span className="text-muted-foreground"> — {n.note}</span>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-muted-foreground">{new Date(n.createdAt).toLocaleDateString("es-GT")}</span>
+                  {canEdit && <button onClick={() => delNeg(n.id)} className="text-destructive text-xs">✕</button>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {canEdit && (
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end pt-2 border-t">
+            <div className="space-y-1">
+              <Label className="text-xs">Movimiento</Label>
+              <select value={negKind} onChange={e => setNegKind(e.target.value)} className="w-full h-9 border rounded-md px-2 text-sm bg-background">
+                <option value="ASKED">Pidieron</option><option value="OFFERED">Ofrecí</option><option value="COUNTER">Reofertaron</option><option value="OTHER">Otro</option>
+              </select>
+            </div>
+            <div className="space-y-1"><Label className="text-xs">Monto</Label><Input type="number" step="any" value={negAmount} onChange={e => setNegAmount(e.target.value)} /></div>
+            <div className="space-y-1">
+              <Label className="text-xs">Moneda</Label>
+              <select value={negCur} onChange={e => setNegCur(e.target.value)} className="w-full h-9 border rounded-md px-2 text-sm bg-background"><option value="GTQ">Q</option><option value="USD">$</option></select>
+            </div>
+            <div className="space-y-1"><Label className="text-xs">Nota</Label><Input value={negNote} onChange={e => setNegNote(e.target.value)} placeholder="opcional" /></div>
+            <Button size="sm" onClick={addNeg} disabled={negBusy || !negAmount.trim()}>Agregar</Button>
+          </div>
+        )}
+      </Card>
     </div>
   )
 }
@@ -333,6 +420,18 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "go
     <div className="border rounded-lg p-2.5 text-center bg-muted/20">
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className={`font-semibold text-sm mt-0.5 ${cls}`}>{value}</div>
+    </div>
+  )
+}
+
+function PriceCell({ label, q, usd }: { label: string; q: string; usd: string }) {
+  return (
+    <div className="border rounded-lg p-3 bg-muted/20">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="flex items-baseline gap-3 mt-1">
+        <span className="font-semibold text-[#12182A]">{q}</span>
+        <span className="text-sm text-muted-foreground">{usd}</span>
+      </div>
     </div>
   )
 }

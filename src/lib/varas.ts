@@ -43,3 +43,21 @@ export function formatV2(v2: number | null): string {
   if (v2 == null) return "—"
   return `${Math.round(v2).toLocaleString("es-GT")} v²`
 }
+
+/** v² → m² */
+export function v2ToM2(v2: number | null): number | null {
+  return v2 == null ? null : v2 * VARA2_M2
+}
+
+/** m² → v² */
+export function m2ToV2(m2: number | null): number | null {
+  return m2 == null ? null : m2 / VARA2_M2
+}
+
+/** Convierte un monto entre GTQ y USD usando el tipo de cambio (USD→GTQ). */
+export function convertCurrency(amount: number, from: string, to: string, fxUsdGtq: number): number {
+  if (from === to || fxUsdGtq <= 0) return amount
+  if (from === "USD" && to === "GTQ") return amount * fxUsdGtq
+  if (from === "GTQ" && to === "USD") return amount / fxUsdGtq
+  return amount
+}

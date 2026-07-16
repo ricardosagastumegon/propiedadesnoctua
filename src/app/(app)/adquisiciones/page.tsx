@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { can } from "@/lib/permissions"
 import { PageHeader } from "@/components/ui/page-header"
 import { Card } from "@/components/ui/card"
-import { Map as MapIcon } from "lucide-react"
+import { Map as MapIcon, Plus } from "lucide-react"
 import { LinksManager, type LinkRow } from "./_links-manager"
 import { Board, type BoardItem } from "./_board"
 import { pricePerV2, dealScore } from "@/lib/deal-score"
@@ -31,7 +31,7 @@ export default async function AdquisicionesPage() {
       orderBy: { createdAt: "asc" },
       include: { intermediary: { select: { name: true } } },
     }),
-    prisma.organizationSettings.findUnique({ where: { organizationId: me }, select: { intermediaryCode: true } }),
+    prisma.organizationSettings.findUnique({ where: { organizationId: me }, select: { intermediaryCode: true, fxUsdGtq: true } }),
   ])
 
   const linkRows: LinkRow[] = links.map(l => ({
@@ -66,12 +66,19 @@ export default async function AdquisicionesPage() {
     <div className="p-6 md:p-8 space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <PageHeader title="Adquisiciones" description="Propiedades que te envían los agentes para analizar y comprar." />
-        <Link href="/adquisiciones/mapa" className="text-sm inline-flex items-center gap-1 rounded-lg border px-3 py-2 hover:bg-muted/50">
-          <MapIcon className="size-4" /> Ver mapa
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/adquisiciones/mapa" className="text-sm inline-flex items-center gap-1 rounded-lg border px-3 py-2 hover:bg-muted/50">
+            <MapIcon className="size-4" /> Ver mapa
+          </Link>
+          {canEdit && (
+            <Link href="/adquisiciones/nueva" className="text-sm inline-flex items-center gap-1 rounded-lg bg-[#12182A] text-[#F4EFE6] px-3 py-2 hover:bg-[#1B2942]">
+              <Plus className="size-4" /> Agregar propiedad
+            </Link>
+          )}
+        </div>
       </div>
 
-      <LinksManager links={linkRows} canEdit={canEdit} myCode={settings?.intermediaryCode ?? null} />
+      <LinksManager links={linkRows} canEdit={canEdit} myCode={settings?.intermediaryCode ?? null} fx={settings?.fxUsdGtq ?? 7.5} />
 
       {candidates.length === 0 ? (
         <Card className="p-10 text-center text-sm text-muted-foreground">

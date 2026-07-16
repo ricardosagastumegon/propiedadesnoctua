@@ -59,6 +59,8 @@ model OrganizationSettings {
   acquisitionBrief        String?
   // Código que este tenant comparte para que otro lo asigne como intermediario.
   intermediaryCode        String?  @unique
+  // Tipo de cambio USD→GTQ para conversiones (configurable).
+  fxUsdGtq                Float    @default(7.5)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
@@ -132,9 +134,26 @@ model AcquisitionCandidate {
 
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   link         AcquisitionLink? @relation(fields: [linkId], references: [id], onDelete: SetNull)
+  negotiations AcquisitionNegotiation[]
 
   @@index([organizationId, stage])
   @@index([linkId])
+}
+
+// Registro de negociación de una candidata (pidieron/ofrecí/reofertaron…).
+model AcquisitionNegotiation {
+  id             String   @id @default(cuid())
+  candidateId    String
+  organizationId String
+  kind           String   // ASKED | OFFERED | COUNTER | OTHER
+  amount         Float
+  currency       String   @default("GTQ")
+  note           String?
+  createdAt      DateTime @default(now())
+
+  candidate AcquisitionCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
 }
 
 // role: OWNER | ADMIN | MANAGER | ACCOUNTANT | SUPERVISOR | ASSISTANT | TECHNICIAN | VIEWER

@@ -17,9 +17,14 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
 
   const c = await prisma.acquisitionCandidate.findFirst({
     where: { id, OR: [{ organizationId: me }, { link: { intermediaryOrgId: me } }] },
+    include: { negotiations: { orderBy: { createdAt: "asc" } } },
   })
   if (!c) notFound()
   const isOwner = c.organizationId === me
+
+  const settings = await prisma.organizationSettings.findUnique({ where: { organizationId: me }, select: { fxUsdGtq: true } })
+  const fx = settings?.fxUsdGtq ?? 7.5
+  const negotiations = c.negotiations.map(n => ({ id: n.id, kind: n.kind, amount: n.amount, currency: n.currency, note: n.note, createdAt: n.createdAt.toISOString() }))
 
   // Referencia automática: precio/v² de tus otras propiedades en el mismo departamento
   let autoRef: { count: number; avg: number; min: number; max: number; dept: string } | null = null
@@ -37,6 +42,8 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
   return (
     <CandidateDetail
       autoRef={autoRef}
+      fx={fx}
+      negotiations={negotiations}
       candidate={{
         id: c.id, stage: c.stage, title: c.title, propertyType: c.propertyType,
         department: c.department, city: c.city, zone: c.zone, addressLine: c.addressLine,
