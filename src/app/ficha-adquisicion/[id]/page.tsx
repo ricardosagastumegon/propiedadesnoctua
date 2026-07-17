@@ -2,7 +2,7 @@ import { redirect, notFound } from "next/navigation"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { can } from "@/lib/permissions"
-import { toVaras2, formatV2, type AreaUnit } from "@/lib/varas"
+import { toVaras2, v2ToM2, convertCurrency, type AreaUnit } from "@/lib/varas"
 import { isValidPolygon, type LatLng } from "@/lib/geo"
 import { AcqMap, type AcqMapItem } from "@/app/(app)/adquisiciones/mapa/_map"
 import { PrintButton } from "./_print-btn"
@@ -23,10 +23,17 @@ export default async function FichaPage({ params }: { params: Promise<{ id: stri
   })
   if (!c) notFound()
 
-  const sym = c.currency === "USD" ? "$" : "Q"
-  const fmt = (n: number | null, d = 0) => n == null ? "—" : `${sym}${n.toLocaleString("es-GT", { maximumFractionDigits: d })}`
+  const settings = await prisma.organizationSettings.findUnique({ where: { organizationId: me }, select: { fxUsdGtq: true } })
+  const fx = settings?.fxUsdGtq ?? 7.5
+  const inQ = (n: number | null) => n == null ? null : convertCurrency(n, c.currency, "GTQ", fx)
+  const inUSD = (n: number | null) => n == null ? null : convertCurrency(n, c.currency, "USD", fx)
+  const fQ = (n: number | null) => n == null ? "—" : `Q ${n.toLocaleString("es-GT", { maximumFractionDigits: 0 })}`
+  const fUSD = (n: number | null) => n == null ? "—" : `$ ${n.toLocaleString("es-GT", { maximumFractionDigits: 0 })}`
+
   const areaV2 = toVaras2(c.area, c.areaUnit as AreaUnit | null, c.cuerdaVaras)
+  const areaM2 = v2ToM2(areaV2)
   const pricePerV2 = c.price != null && areaV2 ? c.price / areaV2 : null
+  const pricePerM2 = c.price != null && areaM2 ? c.price / areaM2 : null
   const refAvg = c.refPriceMinV2 != null && c.refPriceMaxV2 != null ? (c.refPriceMinV2 + c.refPriceMaxV2) / 2 : null
   const deviation = pricePerV2 != null && refAvg ? ((pricePerV2 - refAvg) / refAvg) * 100 : null
   const offerTotal = c.offerPerV2 != null && areaV2 ? c.offerPerV2 * areaV2 : null
@@ -81,47 +88,58 @@ export default async function FichaPage({ params }: { params: Promise<{ id: stri
             </div>
           )}
 
-          {/* Datos */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 10, marginTop: 20 }}>
-            <Field label="Tipo" value={c.propertyType ?? "—"} />
-            <Field label="Catastro" value={c.cadastralNumber ?? "—"} />
-            <Field label="Área" value={areaV2 ? formatV2(areaV2) : (c.area?.toString() ?? "—")} />
-            <Field label="Precio pedido" value={fmt(c.price)} />
+          {/* Precio pedido destacado */}
+          <div style={{ marginTop: 20, display: "flex", justifyContent: "space-between", alignItems: "center", background: "#F6F7F9", borderRadius: 12, padding: "16px 20px", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".1em", color: "#6B7280" }}>Precio pedido</div>
+              <div style={{ fontFamily: "Georgia,serif", fontSize: 32, color: "#12182A", lineHeight: 1.1 }}>{fQ(inQ(c.price))}</div>
+              <div style={{ fontSize: 16, color: "#6B7280" }}>{fUSD(inUSD(c.price))}</div>
+            </div>
+            <div style={{ textAlign: "right", fontSize: 12.5, color: "#6B7280" }}>
+              {c.propertyType && <div>{c.propertyType}</div>}
+              {c.cadastralNumber && <div>Catastro: <strong style={{ color: "#12182A" }}>{c.cadastralNumber}</strong></div>}
+            </div>
           </div>
 
-          {/* Análisis por v² */}
-          <div style={{ marginTop: 22, border: "1px solid #E7E9EE", borderRadius: 12, overflow: "hidden" }}>
-            <div style={{ background: "#FBFAF6", padding: "10px 16px", fontWeight: 600, fontSize: 13, color: "#12182A", borderBottom: "1px solid #E7E9EE" }}>
-              Análisis por vara² (v²)
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 0 }}>
-              <Cell label="Precio pedido / v²" value={fmt(pricePerV2)} />
-              <Cell label="Ref. mercado / v²" value={refAvg != null ? `${fmt(c.refPriceMinV2)}–${fmt(c.refPriceMaxV2)}` : "—"} />
-              <Cell label="Promedio / v²" value={fmt(refAvg)} />
-              <Cell label="Desviación" value={deviation != null ? `${deviation >= 0 ? "+" : ""}${deviation.toFixed(0)}%` : "—"} color={devTone} />
-            </div>
-            {deviation != null && (
-              <div style={{ padding: "8px 16px", fontSize: 12.5, color: "#475065", borderTop: "1px solid #E7E9EE" }}>
-                {deviation > 5 ? `El precio pedido está ${Math.abs(deviation).toFixed(0)}% por encima del promedio de mercado de la zona.`
-                  : deviation < -5 ? `El precio está ${Math.abs(deviation).toFixed(0)}% por debajo del promedio — posible oportunidad.`
-                    : "El precio está en línea con el promedio de mercado."}
-                {c.isCommercial && " Se considera área comercial."}
-              </div>
-            )}
+          {/* Área v² y m² */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
+            <FBox label="Área (v²)" main={areaV2 ? `${Math.round(areaV2).toLocaleString("es-GT")} v²` : "—"} />
+            <FBox label="Área (m²)" main={areaM2 ? `${Math.round(areaM2).toLocaleString("es-GT")} m²` : "—"} />
           </div>
+
+          {/* Precio por v² y m² en Q y USD */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+            <FBox label="Precio pedido / v²" main={fQ(inQ(pricePerV2))} sub={`${fUSD(inUSD(pricePerV2))} /v²`} />
+            <FBox label="Precio pedido / m²" main={fQ(inQ(pricePerM2))} sub={`${fUSD(inUSD(pricePerM2))} /m²`} />
+          </div>
+
+          {/* Análisis de precio (referencia de mercado) */}
+          {(pricePerV2 != null && refAvg != null) && (
+            <div style={{ marginTop: 12, border: "1px solid #E7E9EE", borderRadius: 12, padding: "14px 18px", background: deviation! > 5 ? "#FBEBEA" : deviation! < -5 ? "#E9F3EC" : "#F6F7F9" }}>
+              <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".08em", color: "#6B7280" }}>Análisis de precio (vs mercado)</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
+                <span style={{ fontSize: 26, fontWeight: 700, color: devTone }}>{deviation! >= 0 ? "+" : ""}{deviation!.toFixed(0)}%</span>
+                <span style={{ fontSize: 14, color: devTone }}>{deviation! > 5 ? "por encima del mercado" : deviation! < -5 ? "por debajo (oportunidad)" : "en línea con el mercado"}</span>
+              </div>
+              <div style={{ fontSize: 12.5, color: "#475065", marginTop: 6 }}>
+                Pedido <strong>{fQ(inQ(pricePerV2))}/v²</strong> ({fUSD(inUSD(pricePerV2))}/v²) vs mercado <strong>{fQ(inQ(refAvg))}/v²</strong> ({fUSD(inUSD(refAvg))}/v²).{c.isCommercial && " Área comercial."}
+              </div>
+            </div>
+          )}
 
           {/* Oferta recomendada */}
-          <div style={{ marginTop: 16, background: "#0D1322", color: "#F4EFE6", borderRadius: 12, padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ marginTop: 14, background: "#0D1322", color: "#F4EFE6", borderRadius: 12, padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
             <div>
               <div style={{ fontSize: 10, letterSpacing: ".2em", textTransform: "uppercase", color: "#C9A24B" }}>Oferta recomendada</div>
               <div style={{ fontSize: 12, opacity: .75, marginTop: 2 }}>
-                {c.offerPerV2 != null ? `${fmt(c.offerPerV2)} por v²${c.isCommercial ? " (comercial)" : ""}` : "Sin definir"}
+                {c.offerPerV2 != null ? `${fQ(inQ(c.offerPerV2))}/v² · ${fUSD(inUSD(c.offerPerV2))}/v²${c.isCommercial ? " (comercial)" : ""}` : "Sin definir"}
               </div>
             </div>
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontFamily: "Georgia, serif", fontSize: 30 }}>{offerTotal != null ? fmt(offerTotal) : "—"}</div>
+              <div style={{ fontFamily: "Georgia, serif", fontSize: 32 }}>{fQ(inQ(offerTotal))}</div>
+              <div style={{ fontSize: 15, opacity: .85 }}>{fUSD(inUSD(offerTotal))}</div>
               {c.price != null && offerTotal != null && (
-                <div style={{ fontSize: 11, opacity: .7 }}>{(((offerTotal - c.price) / c.price) * 100).toFixed(0)}% vs pedido {fmt(c.price)}</div>
+                <div style={{ fontSize: 11, opacity: .7, marginTop: 2 }}>{(((offerTotal - c.price) / c.price) * 100).toFixed(0)}% vs pedido</div>
               )}
             </div>
           </div>
@@ -173,20 +191,12 @@ export default async function FichaPage({ params }: { params: Promise<{ id: stri
   )
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function FBox({ label, main, sub }: { label: string; main: string; sub?: string }) {
   return (
-    <div>
-      <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".06em", color: "#6B7280" }}>{label}</div>
-      <div style={{ fontSize: 14, color: "#12182A", fontWeight: 500, marginTop: 2 }}>{value}</div>
-    </div>
-  )
-}
-
-function Cell({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div style={{ padding: "12px 16px", borderRight: "1px solid #E7E9EE", borderTop: "1px solid #E7E9EE" }}>
+    <div style={{ border: "1px solid #E7E9EE", borderRadius: 10, padding: "12px 16px", background: "#FBFAF6" }}>
       <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em", color: "#6B7280" }}>{label}</div>
-      <div style={{ fontSize: 16, fontWeight: 700, marginTop: 3, color: color ?? "#12182A" }}>{value}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, marginTop: 3, color: "#12182A" }}>{main}</div>
+      {sub && <div style={{ fontSize: 13, color: "#6B7280", marginTop: 1 }}>{sub}</div>}
     </div>
   )
 }

@@ -158,7 +158,9 @@ export function CandidateDetail({ candidate, canEdit, canDelete, autoRef, fx, ne
           {loc && <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="size-3.5" />{loc}</p>}
         </div>
         <div className="text-right">
-          <div className="font-display text-2xl text-[#12182A]">{money(candidate.price, candidate.currency)}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Precio pedido</div>
+          <div className="font-display text-2xl text-[#12182A] leading-none">{fQ(inQ(candidate.price))}</div>
+          <div className="text-sm text-muted-foreground">{fUSD(inUSD(candidate.price))}</div>
           {score != null && (
             <div className="inline-flex items-center gap-1 text-xs font-bold text-white px-2 py-0.5 rounded-full mt-1" style={{ background: scoreColor(score) }}
               title="Deal score (0–100) según precio vs mercado, ubicación y datos">
@@ -303,28 +305,39 @@ export function CandidateDetail({ candidate, canEdit, canDelete, autoRef, fx, ne
           </div>
         )}
 
-        {/* Resultados */}
-        <div className="grid grid-cols-3 gap-2">
-          <Stat label="Área" value={areaV2 ? `${formatV2(areaV2)} · ${Math.round(areaM2!).toLocaleString("es-GT")} m²` : "—"} />
-          <Stat label="Ref. promedio /v²" value={fmt(refAvg)} />
-          <Stat label="Desviación" value={deviation != null ? `${deviation >= 0 ? "+" : ""}${deviation.toFixed(0)}%` : "—"}
-            tone={deviation == null ? undefined : deviation > 5 ? "bad" : deviation < -5 ? "good" : "neutral"} />
+        {/* Área en v² y m² (cuadros separados) */}
+        <div className="grid grid-cols-2 gap-2">
+          <Stat label="Área (v²)" value={areaV2 ? `${Math.round(areaV2).toLocaleString("es-GT")} v²` : "—"} />
+          <Stat label="Área (m²)" value={areaM2 ? `${Math.round(areaM2).toLocaleString("es-GT")} m²` : "—"} />
         </div>
 
-        {/* Precio por v² y m², en Q y USD (tipo de cambio {fx}) */}
+        {/* Precio pedido por v² y por m², en Q y USD */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <PriceCell label="Precio pedido / v²" q={fQ(inQ(pricePerV2))} usd={fUSD(inUSD(pricePerV2))} />
           <PriceCell label="Precio pedido / m²" q={fQ(inQ(pricePerM2))} usd={fUSD(inUSD(pricePerM2))} />
         </div>
-        {deviation != null && (
-          <p className="text-xs text-muted-foreground">
-            {deviation > 5
-              ? `Piden ${Math.abs(deviation).toFixed(0)}% por ENCIMA del promedio de mercado.`
-              : deviation < -5
-                ? `Está ${Math.abs(deviation).toFixed(0)}% por DEBAJO del promedio — posible oportunidad.`
-                : "En línea con el promedio de mercado."}
-          </p>
-        )}
+
+        {/* Análisis de precio */}
+        {(pricePerV2 != null && refAvg != null) && (() => {
+          const tone = deviation! > 5 ? "bad" : deviation! < -5 ? "good" : "neutral"
+          const col = tone === "bad" ? "#A8423F" : tone === "good" ? "#2C6B43" : "#12182A"
+          const bg = tone === "bad" ? "#FBEBEA" : tone === "good" ? "#E9F3EC" : "#F6F7F9"
+          return (
+            <div className="rounded-lg p-4" style={{ background: bg }}>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Análisis de precio</div>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-bold" style={{ color: col }}>{deviation! >= 0 ? "+" : ""}{deviation!.toFixed(0)}%</span>
+                <span className="text-sm" style={{ color: col }}>
+                  {deviation! > 5 ? "por encima del mercado" : deviation! < -5 ? "por debajo (oportunidad)" : "en línea con el mercado"}
+                </span>
+              </div>
+              <div className="text-xs text-muted-foreground mt-1.5">
+                Pedido <strong>{fQ(inQ(pricePerV2))}/v²</strong> vs mercado <strong>{fQ(inQ(refAvg))}/v²</strong>
+                {refAvgManual == null && autoRef && <> (referencia de tu inventario en {autoRef.dept})</>}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Comercial + oferta */}
         <label className="flex items-center gap-2 text-sm">

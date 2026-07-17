@@ -212,6 +212,7 @@ export async function submitAcquisition(token: string, formData: FormData): Prom
       bedrooms: int(formData.get("bedrooms")),
       bathrooms: int(formData.get("bathrooms")),
       area: num(formData.get("area")),
+      areaUnit: str(formData.get("areaUnit")) || "M2",
       description: str(formData.get("description")),
       galleryUrls: gallery,
       documentUrls: documents,

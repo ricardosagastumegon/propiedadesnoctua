@@ -176,10 +176,19 @@ export function SubmitForm({ token, orgName, brief }: { token: string; orgName: 
                 </select>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div><label className={label}>Habitaciones</label><input name="bedrooms" type="number" className={input} /></div>
               <div><label className={label}>Baños</label><input name="bathrooms" type="number" className={input} /></div>
-              <div><label className={label}>Área (m²)</label><input name="area" type="number" step="0.01" className={input} /></div>
+              <div><label className={label}>Área</label><input name="area" type="number" step="any" className={input} /></div>
+              <div><label className={label}>Unidad</label>
+                <select name="areaUnit" defaultValue="M2" className={input}>
+                  <option value="M2">m²</option>
+                  <option value="V2">v² (varas²)</option>
+                  <option value="CUERDA">cuerdas</option>
+                  <option value="MANZANA">manzanas</option>
+                  <option value="HECTAREA">hectáreas</option>
+                </select>
+              </div>
             </div>
             <div>
               <label className={label}>Descripción</label>
