@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card"
 import { Map as MapIcon, Plus } from "lucide-react"
 import { LinksManager, type LinkRow } from "./_links-manager"
 import { Board, type BoardItem } from "./_board"
+import { AcqTabs } from "./_tabs"
 import { pricePerV2, dealScore } from "@/lib/deal-score"
 
 export const dynamic = "force-dynamic"
@@ -31,7 +32,7 @@ export default async function AdquisicionesPage() {
       orderBy: { createdAt: "asc" },
       include: { intermediary: { select: { name: true } } },
     }),
-    prisma.organizationSettings.findUnique({ where: { organizationId: me }, select: { intermediaryCode: true, fxUsdGtq: true } }),
+    prisma.organizationSettings.findUnique({ where: { organizationId: me }, select: { intermediaryCode: true, fxUsdGtq: true, poiEnabled: true } }),
   ])
 
   const linkRows: LinkRow[] = links.map(l => ({
@@ -77,6 +78,8 @@ export default async function AdquisicionesPage() {
           )}
         </div>
       </div>
+
+      {settings?.poiEnabled && <AcqTabs />}
 
       <LinksManager links={linkRows} canEdit={canEdit} myCode={settings?.intermediaryCode ?? null} fx={settings?.fxUsdGtq ?? 7.5} />
 

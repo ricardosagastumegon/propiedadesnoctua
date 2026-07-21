@@ -13,6 +13,15 @@ export interface AcqMapItem {
   polygon: LatLng[] | null
 }
 
+export interface PoiPoint {
+  id: string
+  name: string
+  category: string | null
+  municipality: string | null
+  lat: number
+  lng: number
+}
+
 const Inner = dynamic(() => import("./_map-inner").then(m => m.AcqMapInner), {
   ssr: false,
   loading: () => (
@@ -22,6 +31,6 @@ const Inner = dynamic(() => import("./_map-inner").then(m => m.AcqMapInner), {
   ),
 })
 
-export function AcqMap({ items }: { items: AcqMapItem[] }) {
-  return <Inner items={items} />
+export function AcqMap({ items, pois = [] }: { items: AcqMapItem[]; pois?: PoiPoint[] }) {
+  return <Inner items={items} pois={pois} />
 }

@@ -245,6 +245,7 @@ export function makeOrgSettings(over: Partial<OrganizationSettings> = {}): Organ
     acquisitionBrief: null,
     intermediaryCode: null,
     fxUsdGtq: 7.5,
+    poiEnabled: false,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...over,

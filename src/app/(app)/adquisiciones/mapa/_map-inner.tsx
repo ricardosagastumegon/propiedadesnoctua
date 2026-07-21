@@ -4,7 +4,16 @@ import { useEffect, useMemo, useState } from "react"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
 import { Maximize2, X } from "lucide-react"
-import type { AcqMapItem } from "./_map"
+import type { AcqMapItem, PoiPoint } from "./_map"
+
+// Ícono de punto de interés (ej. gasolinera) — distinto de las propiedades.
+function poiIcon(): L.DivIcon {
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:20px;height:20px;border-radius:50%;background:#7C3AED;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:11px">⛽</div>`,
+    iconSize: [20, 20], iconAnchor: [10, 10],
+  })
+}
 
 const STAGE = {
   NEW:       { label: "Nuevas",      color: "#2563EB" },
@@ -46,7 +55,7 @@ function InvalidateOnResize({ height }: { height: number }) {
   return null
 }
 
-function FitAll({ items }: { items: AcqMapItem[] }) {
+function FitAll({ items, pois }: { items: AcqMapItem[]; pois: PoiPoint[] }) {
   const map = useMap()
   useEffect(() => {
     const pts: [number, number][] = []
@@ -54,18 +63,20 @@ function FitAll({ items }: { items: AcqMapItem[] }) {
       if (it.lat != null && it.lng != null) pts.push([it.lat, it.lng])
       if (it.polygon) for (const p of it.polygon) pts.push([p[0], p[1]])
     }
+    for (const p of pois) pts.push([p.lat, p.lng])
     if (pts.length === 0) return
     if (pts.length === 1) { map.setView(pts[0], 15); return }
     const lats = pts.map(p => p[0]), lons = pts.map(p => p[1])
     map.fitBounds([[Math.min(...lats), Math.min(...lons)], [Math.max(...lats), Math.max(...lons)]], { padding: [40, 40] })
-  }, [items, map])
+  }, [items, pois, map])
   return null
 }
 
-export function AcqMapInner({ items }: { items: AcqMapItem[] }) {
+export function AcqMapInner({ items, pois }: { items: AcqMapItem[]; pois: PoiPoint[] }) {
   const first = items.find(i => i.lat != null && i.lng != null)
-  const center: [number, number] = first ? [first.lat!, first.lng!] : [14.6349, -90.5069]
+  const center: [number, number] = first ? [first.lat!, first.lng!] : (pois[0] ? [pois[0].lat, pois[0].lng] : [14.6349, -90.5069])
   const icons = useMemo(() => new Map(items.map(i => [i.id, priceIcon(i)])), [items])
+  const poiMk = useMemo(() => poiIcon(), [])
 
   const [fullscreen, setFullscreen] = useState(false)
   const [fsHeight, setFsHeight] = useState(640)
@@ -102,7 +113,19 @@ export function AcqMapInner({ items }: { items: AcqMapItem[] }) {
               opacity={0.6} attribution='Catastro &copy; RIC Guatemala' />
           </LayersControl.Overlay>
         </LayersControl>
-        <FitAll items={items} />
+        <FitAll items={items} pois={pois} />
+
+        {/* Puntos de interés (gasolineras, etc.) */}
+        {pois.map(p => (
+          <Marker key={p.id} position={[p.lat, p.lng]} icon={poiMk}>
+            <Popup>
+              <div className="text-sm">
+                <div className="font-semibold">{p.name}</div>
+                <div className="text-xs text-muted-foreground">{[p.category, p.municipality].filter(Boolean).join(" · ")}</div>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
 
         {items.map(it => {
           const st = stageOf(it.stage)
@@ -135,6 +158,11 @@ export function AcqMapInner({ items }: { items: AcqMapItem[] }) {
             <span className="w-3 h-3 rounded-full" style={{ background: s.color }} /> {s.label}
           </span>
         ))}
+        {pois.length > 0 && (
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full flex items-center justify-center text-[8px]" style={{ background: "#7C3AED" }}>⛽</span> Puntos de interés ({pois.length})
+          </span>
+        )}
         <span className="text-muted-foreground ml-auto">Capas y catastro RIC arriba a la derecha ▸</span>
       </div>
     </div>

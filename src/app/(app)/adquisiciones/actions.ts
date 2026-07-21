@@ -396,6 +396,60 @@ export async function deleteNegotiation(id: string): Promise<{ ok: true } | { er
   return { ok: true }
 }
 
+/** Crea un punto de interés (ej. gasolinera). */
+export async function createPoi(formData: FormData): Promise<{ ok: true } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const name = str(formData.get("name"))
+  if (!name) return { error: "Poné un nombre." }
+  await prisma.pointOfInterest.create({
+    data: {
+      organizationId: g.user.organizationId, name,
+      category: str(formData.get("category")), municipality: str(formData.get("municipality")),
+      department: str(formData.get("department")), zone: str(formData.get("zone")), address: str(formData.get("address")),
+      latitude: num(formData.get("latitude")), longitude: num(formData.get("longitude")), notes: str(formData.get("notes")),
+    },
+  })
+  revalidatePath("/adquisiciones/puntos"); revalidatePath("/adquisiciones/mapa")
+  return { ok: true }
+}
+
+/** Elimina un punto de interés. */
+export async function deletePoi(id: string): Promise<{ ok: true } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  await prisma.pointOfInterest.deleteMany({ where: { id, organizationId: g.user.organizationId } })
+  revalidatePath("/adquisiciones/puntos"); revalidatePath("/adquisiciones/mapa")
+  return { ok: true }
+}
+
+/** Importa puntos pegados (detecta lat/lng en cada línea). */
+export async function importPois(text: string, category: string): Promise<{ ok: true; count: number } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  const data: { organizationId: string; name: string; category: string | null; latitude: number; longitude: number; municipality: string | null }[] = []
+  let i = 0
+  for (const line of lines) {
+    // Buscar dos números tipo lat/lng (GT: lat 13–18, lng -93 a -88)
+    const nums = (line.match(/-?\d+\.\d+/g) || []).map(Number)
+    let lat: number | null = null, lng: number | null = null
+    for (let k = 0; k < nums.length - 1; k++) {
+      const a = nums[k], b = nums[k + 1]
+      if (a > 13 && a < 18 && b < -87 && b > -93) { lat = a; lng = b; break }
+    }
+    if (lat == null || lng == null) continue
+    // texto restante (sin números) → nombre / municipio
+    const rest = line.replace(/-?\d+\.\d+/g, "").replace(/[,;|\t]+/g, " ").trim()
+    i++
+    data.push({ organizationId: g.user.organizationId, name: rest || `Punto ${i}`, category: category.trim() || null, latitude: lat, longitude: lng, municipality: rest || null })
+  }
+  if (data.length === 0) return { error: "No se detectaron coordenadas. Cada línea debe traer lat y lng (ej. 14.5803, -90.5221)." }
+  await prisma.pointOfInterest.createMany({ data })
+  revalidatePath("/adquisiciones/puntos"); revalidatePath("/adquisiciones/mapa")
+  return { ok: true, count: data.length }
+}
+
 /** Elimina una candidata. */
 export async function deleteCandidate(id: string): Promise<{ ok: true } | { error: string }> {
   const g = await tryGuard({ module: "adquisiciones", action: "delete" })

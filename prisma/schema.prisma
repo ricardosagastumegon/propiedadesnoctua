@@ -42,6 +42,7 @@ model Organization {
   acquisitionCandidates AcquisitionCandidate[]
   acquisitionLinksOwned        AcquisitionLink[] @relation("AcqLinkOwner")
   acquisitionLinksIntermediary AcquisitionLink[] @relation("AcqLinkIntermediary")
+  pointsOfInterest             PointOfInterest[]
   activityLogs     ActivityLog[]
   settings         OrganizationSettings?
   serviceAcceptances ServiceAcceptance[]
@@ -61,6 +62,8 @@ model OrganizationSettings {
   intermediaryCode        String?  @unique
   // Tipo de cambio USD→GTQ para conversiones (configurable).
   fxUsdGtq                Float    @default(7.5)
+  // Habilita el módulo de Puntos de Interés dentro de Adquisiciones (por tenant).
+  poiEnabled              Boolean  @default(false)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
@@ -138,6 +141,26 @@ model AcquisitionCandidate {
 
   @@index([organizationId, stage])
   @@index([linkId])
+}
+
+// Punto de interés (ej. gasolineras propias / competencia) para el mapa de Adquisiciones.
+model PointOfInterest {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  category       String?  // marca / tipo (Puma, Shell, propia, competencia…)
+  department     String?
+  municipality   String?
+  zone           String?
+  address        String?
+  latitude       Float?
+  longitude      Float?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 // Registro de negociación de una candidata (pidieron/ofrecí/reofertaron…).
