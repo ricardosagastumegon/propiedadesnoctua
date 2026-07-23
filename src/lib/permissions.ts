@@ -183,6 +183,8 @@ export interface UserForPermissions {
   id: string
   role: string
   organizationId: string
+  /** Módulos bloqueados para ESTE usuario (override sobre el rol). Opcional. */
+  deniedModules?: string[] | null
 }
 
 function permsForRole(role: string): Record<Module, ModulePermission> {
@@ -194,6 +196,8 @@ function permsForRole(role: string): Record<Module, ModulePermission> {
  */
 export function can(user: UserForPermissions | null | undefined, module: Module, action: Action): boolean {
   if (!user) return false
+  // Bloqueo por-usuario: gana sobre el rol (nunca puede sobre ALWAYS_ON tampoco).
+  if (user.deniedModules && user.deniedModules.includes(module)) return false
   return permsForRole(user.role)[module]?.[action] ?? false
 }
 
@@ -203,7 +207,8 @@ export function can(user: UserForPermissions | null | undefined, module: Module,
 export function getVisibleModules(user: UserForPermissions | null | undefined): Module[] {
   if (!user) return []
   const perms = permsForRole(user.role)
-  return MODULES.filter(m => perms[m].view)
+  const denied = user.deniedModules ?? []
+  return MODULES.filter(m => perms[m].view && !denied.includes(m))
 }
 
 /**

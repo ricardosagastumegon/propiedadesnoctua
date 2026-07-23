@@ -219,6 +219,9 @@ model User {
   role                String    @default("VIEWER")
   authorityPolicy     String    @default("NONE")
   canAcceptServices   Boolean   @default(false)
+  // Módulos BLOQUEADOS para este usuario específico (override sobre el rol).
+  // Ej. un ADMIN con ["configuracion"] no ve ni entra a Configuración.
+  deniedModules       String[]  @default([])
   phone               String?
   organizationId      String
   isActive            Boolean   @default(true)

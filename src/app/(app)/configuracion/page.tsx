@@ -41,6 +41,8 @@ export default async function ConfiguracionPage() {
   ])
 
   if (!org || !me) redirect("/login")
+  // Bloqueo por-usuario: si tiene "configuracion" en deniedModules, no entra ni por URL.
+  if (me.deniedModules?.includes("configuracion")) redirect("/dashboard")
   const prepaymentCap = settings?.prepaymentCapPercentage ?? 80
   const isAdmin = me.role === "OWNER" || me.role === "ADMIN"
 

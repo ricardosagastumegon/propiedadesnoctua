@@ -35,6 +35,7 @@ export function makeUser(over: Partial<User> = {}): User {
     role: "ADMIN",
     authorityPolicy: "ALONE",
     canAcceptServices: false,
+    deniedModules: [],
     phone: null,
     organizationId: "org_default",
     isActive: true,

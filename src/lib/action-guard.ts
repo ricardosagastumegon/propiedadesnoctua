@@ -54,10 +54,18 @@ export async function guardAction(opts: GuardOptions): Promise<GuardedUser> {
     name: session.user.name ?? "Usuario",
   }
 
-  // 1. Permiso de rol
-  if (!can(user, opts.module, opts.action)) {
+  // Bloqueo por-usuario (deniedModules): se lee fresco de la DB para que aplique
+  // de inmediato, sin depender de re-login (el JWT no lo re-lee por request).
+  const denyRow = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { deniedModules: true },
+  })
+  const deniedModules = denyRow?.deniedModules ?? []
+
+  // 1. Permiso de rol (+ bloqueo por-usuario)
+  if (!can({ ...user, deniedModules }, opts.module, opts.action)) {
     throw new ActionForbiddenError(
-      `Tu rol (${user.role}) no tiene permiso para ${opts.action} en ${opts.module}`,
+      `No tenés permiso para ${opts.action} en ${opts.module}`,
     )
   }
 

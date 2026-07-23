@@ -12,6 +12,14 @@ async function requireAdminSession() {
   if (role !== "OWNER" && role !== "ADMIN") {
     throw new Error("Solo administradores pueden gestionar usuarios")
   }
+  // Bloqueo por-usuario: un admin con "configuracion" en deniedModules no gestiona usuarios.
+  const deny = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { deniedModules: true },
+  })
+  if (deny?.deniedModules?.includes("configuracion")) {
+    throw new Error("No tenés acceso a Configuración")
+  }
   return {
     orgId: session.user.organizationId,
     userId: session.user.id,

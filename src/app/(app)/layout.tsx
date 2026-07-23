@@ -16,7 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = session.user
   const orgId = user.organizationId
 
-  const [pendingApprovals, pendingAcceptances, devUsers, settings] = await Promise.all([
+  const [pendingApprovals, pendingAcceptances, devUsers, settings, me] = await Promise.all([
     prisma.approvalRequest.count({
       where: { organizationId: orgId, status: { in: ["PENDING", "PENDING_COSIGN"] } },
     }),
@@ -34,9 +34,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       where: { organizationId: orgId },
       select: { enabledModules: true },
     }),
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: { deniedModules: true },
+    }),
   ])
 
   const enabledModules = parseEnabledModules(settings?.enabledModules)
+  const deniedModules = me?.deniedModules ?? []
   const isPlatformAdmin = isPlatformAdminEmail(user.email)
 
   return (
@@ -59,7 +64,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <SidebarNav
           pendingApprovals={pendingApprovals}
           pendingAcceptances={pendingAcceptances}
-          user={{ id: user.id, role: user.role, organizationId: user.organizationId }}
+          user={{ id: user.id, role: user.role, organizationId: user.organizationId, deniedModules }}
           enabledModules={enabledModules}
           isPlatformAdmin={isPlatformAdmin}
         />
