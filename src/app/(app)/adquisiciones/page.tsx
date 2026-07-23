@@ -25,7 +25,7 @@ export default async function AdquisicionesPage() {
     prisma.acquisitionCandidate.findMany({
       where: { OR: [{ organizationId: me }, { link: { intermediaryOrgId: me } }] },
       orderBy: { createdAt: "desc" },
-      include: { link: { select: { name: true } } },
+      include: { link: { select: { name: true } }, submittedByOrg: { select: { name: true } } },
     }),
     prisma.acquisitionLink.findMany({
       where: { organizationId: me },
@@ -51,6 +51,13 @@ export default async function AdquisicionesPage() {
   }
   const deptAvg = (d: string | null) => { const e = d ? deptSum.get(d) : null; return e && e.n ? e.sum / e.n : null }
 
+  // Etiqueta de origen (quién cargó la propiedad): público (link), manual o reenviada por un tenant.
+  const originOf = (c: (typeof candidates)[number]): string => {
+    if (c.source === "FORWARDED") return c.submittedByOrg?.name ? `${c.submittedByOrg.name} (enviada)` : "Reenviada"
+    if (c.source === "MANUAL") return "Manual"
+    return c.link?.name ?? "Público"
+  }
+
   const items: BoardItem[] = candidates.map(c => {
     const ppv = pricePerV2(c)
     const refAvg = (c.refPriceMinV2 != null && c.refPriceMaxV2 != null) ? (c.refPriceMinV2 + c.refPriceMaxV2) / 2 : deptAvg(c.department)
@@ -60,6 +67,7 @@ export default async function AdquisicionesPage() {
       department: c.department, city: c.city, zone: c.zone,
       cover: c.galleryUrls[0] ?? null, linkName: c.link?.name ?? null,
       mirrored: c.organizationId !== me, score,
+      categories: c.categories, origin: originOf(c),
     }
   })
 

@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { tryGuard } from "@/lib/action-guard"
 import { sendAcquisitionEmail, isEmailConfigured } from "@/lib/email"
 import { isValidPolygon, centroid, type LatLng } from "@/lib/geo"
+import { sanitizeCategories } from "@/lib/acquisition-categories"
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.noctuapo.com"
 const STAGES = ["NEW", "OFFERED", "ACCEPTED", "DISCARDED"] as const
@@ -193,11 +194,15 @@ export async function submitAcquisition(token: string, formData: FormData): Prom
     return { error: "Falta la ubicación: poné el catastro, dibujá el polígono en el mapa, o subí los documentos de la municipalidad." }
   }
 
+  let categories: string[] = []
+  try { const raw = str(formData.get("categories")); if (raw) categories = sanitizeCategories(JSON.parse(raw)) } catch { /* ignore */ }
+
   const candidate = await prisma.acquisitionCandidate.create({
     data: {
       organizationId: orgId,
       linkId: link.id,
       title,
+      categories,
       propertyType: str(formData.get("propertyType")),
       department: str(formData.get("department")),
       city: str(formData.get("city")),
@@ -307,8 +312,11 @@ function parsePropertyData(formData: FormData) {
   let longitude = num(formData.get("longitude"))
   if (polygon && (latitude == null || longitude == null)) { const c = centroid(polygon); if (c) { latitude = c[0]; longitude = c[1] } }
   const arr = (key: string) => { try { const raw = str(formData.get(key)); if (raw) { const a = JSON.parse(raw); if (Array.isArray(a)) return a.filter((u): u is string => typeof u === "string").slice(0, 12) } } catch { /* */ } return [] as string[] }
+  let categories: string[] = []
+  try { const raw = str(formData.get("categories")); if (raw) categories = sanitizeCategories(JSON.parse(raw)) } catch { /* */ }
   return {
     title: str(formData.get("title")),
+    categories,
     propertyType: str(formData.get("propertyType")),
     department: str(formData.get("department")),
     city: str(formData.get("city")),
@@ -337,7 +345,7 @@ export async function createCandidateManual(formData: FormData): Promise<{ redir
   const c = await prisma.acquisitionCandidate.create({
     data: {
       organizationId: g.user.organizationId, source: "MANUAL", stage: "NEW",
-      title: d.title, propertyType: d.propertyType, department: d.department, city: d.city, zone: d.zone,
+      title: d.title, categories: d.categories, propertyType: d.propertyType, department: d.department, city: d.city, zone: d.zone,
       addressLine: d.addressLine, cadastralNumber: d.cadastralNumber, price: d.price, currency: d.currency,
       bedrooms: d.bedrooms, bathrooms: d.bathrooms, area: d.area, areaUnit: d.areaUnit, cuerdaVaras: d.cuerdaVaras,
       description: d.description, galleryUrls: d.gallery, documentUrls: d.documents,
@@ -357,7 +365,7 @@ export async function updateCandidateInfo(id: string, formData: FormData): Promi
   const res = await prisma.acquisitionCandidate.updateMany({
     where: { id, organizationId: g.user.organizationId },
     data: {
-      title: d.title, propertyType: d.propertyType, department: d.department, city: d.city, zone: d.zone,
+      title: d.title, categories: d.categories, propertyType: d.propertyType, department: d.department, city: d.city, zone: d.zone,
       addressLine: d.addressLine, cadastralNumber: d.cadastralNumber, price: d.price, currency: d.currency,
       bedrooms: d.bedrooms, bathrooms: d.bathrooms, area: d.area, areaUnit: d.areaUnit, cuerdaVaras: d.cuerdaVaras,
       description: d.description, galleryUrls: d.gallery, documentUrls: d.documents,
@@ -396,10 +404,17 @@ export async function deleteNegotiation(id: string): Promise<{ ok: true } | { er
   return { ok: true }
 }
 
+/** ¿El tenant tiene habilitado el módulo de Puntos de Interés? (gate del super-admin). */
+async function requirePoiEnabled(orgId: string): Promise<boolean> {
+  const s = await prisma.organizationSettings.findUnique({ where: { organizationId: orgId }, select: { poiEnabled: true } })
+  return !!s?.poiEnabled
+}
+
 /** Crea un punto de interés (ej. gasolinera). */
 export async function createPoi(formData: FormData): Promise<{ ok: true } | { error: string }> {
   const g = await tryGuard({ module: "adquisiciones", action: "edit" })
   if ("error" in g) return { error: g.error }
+  if (!(await requirePoiEnabled(g.user.organizationId))) return { error: "Los puntos de interés no están habilitados para tu organización." }
   const name = str(formData.get("name"))
   if (!name) return { error: "Poné un nombre." }
   await prisma.pointOfInterest.create({
@@ -427,6 +442,7 @@ export async function deletePoi(id: string): Promise<{ ok: true } | { error: str
 export async function importPois(text: string, category: string): Promise<{ ok: true; count: number } | { error: string }> {
   const g = await tryGuard({ module: "adquisiciones", action: "edit" })
   if ("error" in g) return { error: g.error }
+  if (!(await requirePoiEnabled(g.user.organizationId))) return { error: "Los puntos de interés no están habilitados para tu organización." }
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
   const data: { organizationId: string; name: string; category: string | null; latitude: number; longitude: number; municipality: string | null }[] = []
   let i = 0
@@ -448,6 +464,100 @@ export async function importPois(text: string, category: string): Promise<{ ok: 
   await prisma.pointOfInterest.createMany({ data })
   revalidatePath("/adquisiciones/puntos"); revalidatePath("/adquisiciones/mapa")
   return { ok: true, count: data.length }
+}
+
+/**
+ * "Enviar a": reenvía una candidata propia a otro tenant (receiver). Crea una COPIA
+ * en el tenant destino, marcada con el origen (submittedByOrg = mi tenant) para
+ * mantener la trazabilidad. Solo si el super-admin autorizó ese envío.
+ */
+export async function forwardCandidate(candidateId: string, receiverOrgId: string): Promise<{ ok: true; name: string; already?: boolean } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const me = g.user.organizationId
+  if (receiverOrgId === me) return { error: "No podés reenviarte a vos mismo." }
+
+  // ¿Estoy autorizado a enviarle a ese tenant?
+  const perm = await prisma.acquisitionForwardPermission.findUnique({
+    where: { senderOrgId_receiverOrgId: { senderOrgId: me, receiverOrgId } },
+    select: { id: true, receiver: { select: { name: true } } },
+  })
+  if (!perm) return { error: "No estás autorizado a enviarle propiedades a ese tenant. Pedile al administrador de Noctua que lo habilite." }
+
+  // La candidata debe ser MÍA y ORIGINADA por mí (pública/manual). Las que ya me
+  // reenviaron (submittedByOrgId != null) NO se pueden re-reenviar: el reenvío es
+  // de un solo salto para no romper la trazabilidad ni propagar el contacto original.
+  const c = await prisma.acquisitionCandidate.findFirst({ where: { id: candidateId, organizationId: me, submittedByOrgId: null } })
+  if (!c) return { error: "Propiedad no encontrada, o es una que te reenviaron (no se puede reenviar de nuevo)." }
+
+  // Evitar duplicados: si ya la reenvié a ese tenant, no crear otra.
+  const dup = await prisma.acquisitionCandidate.findFirst({
+    where: { organizationId: receiverOrgId, sourceCandidateId: c.id },
+    select: { id: true },
+  })
+  if (dup) return { ok: true, name: perm.receiver.name, already: true }
+
+  let created
+  try {
+    created = await prisma.acquisitionCandidate.create({
+      data: {
+        organizationId: receiverOrgId,
+        submittedByOrgId: me,
+        sourceCandidateId: c.id,
+        source: "FORWARDED",
+        stage: "NEW",
+        title: c.title,
+        categories: c.categories,
+        propertyType: c.propertyType,
+        department: c.department, city: c.city, zone: c.zone, addressLine: c.addressLine,
+        cadastralNumber: c.cadastralNumber,
+        mapPolygon: c.mapPolygon ?? undefined,
+        latitude: c.latitude, longitude: c.longitude,
+        price: c.price, currency: c.currency,
+        bedrooms: c.bedrooms, bathrooms: c.bathrooms,
+        area: c.area, areaUnit: c.areaUnit, cuerdaVaras: c.cuerdaVaras,
+        description: c.description,
+        galleryUrls: c.galleryUrls, documentUrls: c.documentUrls,
+        agentName: c.agentName, agentPhone: c.agentPhone, agentEmail: c.agentEmail,
+      },
+    })
+  } catch (e) {
+    // Backstop de carrera: doble envío simultáneo choca con el índice único
+    // (organizationId, sourceCandidateId) → tratarlo como "ya enviada".
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      return { ok: true, name: perm.receiver.name, already: true }
+    }
+    throw e
+  }
+
+  // Notificar al tenant destino (campana + email).
+  try {
+    const sender = await prisma.organization.findUnique({ where: { id: me }, select: { name: true } })
+    const users = await prisma.user.findMany({
+      where: { organizationId: receiverOrgId, isActive: true, role: { in: ["OWNER", "ADMIN", "MANAGER"] } },
+      select: { id: true, email: true },
+    })
+    if (users.length) {
+      await prisma.notification.createMany({
+        data: users.map(u => ({
+          organizationId: receiverOrgId, userId: u.id, type: "ACQUISITION",
+          title: "Propiedad reenviada",
+          message: `${sender?.name ?? "Un socio"} te envió: ${c.title}`,
+          link: `/adquisiciones/${created.id}`,
+        })),
+      })
+      if (isEmailConfigured()) {
+        const url = `${APP_URL}/adquisiciones/${created.id}`
+        await Promise.all(users.filter(u => u.email).map(u =>
+          sendAcquisitionEmail(u.email!, c.title, sender?.name ?? null, url).catch(() => {})
+        ))
+      }
+    }
+  } catch { /* no romper el reenvío por fallar la notificación */ }
+
+  revalidatePath("/adquisiciones")
+  revalidatePath(`/adquisiciones/${candidateId}`)
+  return { ok: true, name: perm.receiver.name }
 }
 
 /** Elimina una candidata. */

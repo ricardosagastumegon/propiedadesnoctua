@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, Phone, Mail, Trash2, MapPin, Calculator, FileText, Pencil, Handshake } from "lucide-react"
-import { updateCandidateStage, updateCandidateAnalysis, deleteCandidate, addNegotiation, deleteNegotiation } from "../actions"
+import { ArrowLeft, Phone, Mail, Trash2, MapPin, Calculator, FileText, Pencil, Handshake, Send } from "lucide-react"
+import { updateCandidateStage, updateCandidateAnalysis, deleteCandidate, addNegotiation, deleteNegotiation, forwardCandidate } from "../actions"
 import { toVaras2, v2ToM2, convertCurrency, AREA_UNITS, CUERDA_SIZES, formatV2, type AreaUnit } from "@/lib/varas"
 import { dealScore, scoreColor, scoreLabel } from "@/lib/deal-score"
+import { categoryLabel } from "@/lib/acquisition-categories"
 
 interface AutoRef { count: number; avg: number; min: number; max: number; dept: string }
 interface Negotiation { id: string; kind: string; amount: number; currency: string; note: string | null; createdAt: string }
@@ -24,7 +25,7 @@ interface C {
   area: number | null; description: string | null; galleryUrls: string[]
   documentUrls: string[]; latitude: number | null; longitude: number | null
   agentName: string | null; agentPhone: string | null; agentEmail: string | null
-  analysisNotes: string | null
+  analysisNotes: string | null; categories: string[]
   areaUnit: string | null; cuerdaVaras: number | null
   refPriceMinV2: number | null; refPriceMaxV2: number | null
   isCommercial: boolean; offerPerV2: number | null
@@ -43,7 +44,7 @@ function money(n: number | null, c: string) {
   return `${c === "USD" ? "$" : "Q"} ${n.toLocaleString("es-GT", { minimumFractionDigits: 2 })}`
 }
 
-export function CandidateDetail({ candidate, canEdit, canDelete, autoRef, fx, negotiations }: { candidate: C; canEdit: boolean; canDelete: boolean; autoRef: AutoRef | null; fx: number; negotiations: Negotiation[] }) {
+export function CandidateDetail({ candidate, canEdit, canDelete, autoRef, fx, negotiations, origin, forwardTargets }: { candidate: C; canEdit: boolean; canDelete: boolean; autoRef: AutoRef | null; fx: number; negotiations: Negotiation[]; origin: string; forwardTargets: { id: string; name: string }[] }) {
   const router = useRouter()
   const [stage, setStage] = useState(candidate.stage)
   const [saving, setSaving] = useState(false)
@@ -129,6 +130,21 @@ export function CandidateDetail({ candidate, canEdit, canDelete, autoRef, fx, ne
     router.push("/adquisiciones")
   }
 
+  // Enviar a: reenviar esta propiedad a otro tenant autorizado.
+  const [sendTo, setSendTo] = useState("")
+  const [sending, setSending] = useState(false)
+  async function send() {
+    if (!sendTo) return
+    const target = forwardTargets.find(t => t.id === sendTo)
+    if (!confirm(`¿Enviar "${candidate.title}" a ${target?.name ?? "ese tenant"}? Le llegará una copia para que la analice.`)) return
+    setSending(true)
+    const res = await forwardCandidate(candidate.id, sendTo)
+    setSending(false)
+    if ("error" in res) { alert(res.error); return }
+    alert(res.already ? `Ya se la habías enviado a ${res.name}.` : `Enviada a ${res.name}. Le llegó una notificación.`)
+    setSendTo("")
+  }
+
   const loc = [candidate.zone, candidate.city, candidate.department].filter(Boolean).join(", ")
   const waPhone = candidate.agentPhone?.replace(/[^0-9]/g, "")
 
@@ -138,7 +154,20 @@ export function CandidateDetail({ candidate, canEdit, canDelete, autoRef, fx, ne
         <Link href="/adquisiciones" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
           <ArrowLeft className="size-4" /> Volver a Adquisiciones
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {canEdit && forwardTargets.length > 0 && (
+            <div className="inline-flex items-center gap-1.5 rounded-lg border px-2 py-1">
+              <Send className="size-4 text-[#8A6A2E]" />
+              <select value={sendTo} onChange={e => setSendTo(e.target.value)} disabled={sending}
+                className="text-sm bg-background outline-none max-w-[150px]">
+                <option value="">Enviar a…</option>
+                {forwardTargets.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+              <Button size="sm" className="h-7" disabled={!sendTo || sending} onClick={send}>
+                {sending ? "Enviando…" : "Enviar"}
+              </Button>
+            </div>
+          )}
           {canEdit && (
             <Link href={`/adquisiciones/${candidate.id}/editar`}
               className="text-sm inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 hover:bg-muted/50">
@@ -156,6 +185,16 @@ export function CandidateDetail({ candidate, canEdit, canDelete, autoRef, fx, ne
         <div>
           <h1 className="font-display text-2xl">{candidate.title}</h1>
           {loc && <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="size-3.5" />{loc}</p>}
+          <p className="text-xs text-muted-foreground mt-1">Origen: <span className="font-medium text-foreground">{origin}</span></p>
+          {candidate.categories.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {candidate.categories.map(cat => (
+                <span key={cat} className="text-[11px] px-2 py-0.5 rounded-full bg-[#8A6A2E]/10 text-[#8A6A2E] border border-[#8A6A2E]/20">
+                  {categoryLabel(cat)}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <div className="text-right">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Precio pedido</div>

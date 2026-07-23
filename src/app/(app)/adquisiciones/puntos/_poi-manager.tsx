@@ -94,6 +94,23 @@ function AddForm({ onDone, busy, setBusy }: { onDone: () => void; busy: boolean;
 function ImportForm({ onDone, busy, setBusy }: { onDone: () => void; busy: boolean; setBusy: (b: boolean) => void }) {
   const [text, setText] = useState("")
   const [category, setCategory] = useState("gasolinera")
+  const [fileName, setFileName] = useState<string | null>(null)
+
+  function readFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (/\.xlsx?$/i.test(file.name)) {
+      alert("Los archivos .xlsx no se leen directo. Abrí el Excel y guardá como CSV (Archivo → Guardar como → CSV), y subí ese archivo.")
+      e.target.value = ""
+      return
+    }
+    setFileName(file.name)
+    const reader = new FileReader()
+    reader.onload = () => setText(String(reader.result ?? ""))
+    reader.readAsText(file)
+    e.target.value = ""
+  }
+
   async function run() {
     setBusy(true)
     const res = await importPois(text, category)
@@ -104,10 +121,18 @@ function ImportForm({ onDone, busy, setBusy }: { onDone: () => void; busy: boole
   }
   return (
     <Card className="p-4 space-y-2">
-      <div className="text-xs text-muted-foreground">Pegá filas del Excel/Sheets. Cada línea debe traer <strong>latitud y longitud</strong> (ej. <code>14.5803, -90.5221 Guatemala</code>). Lo demás se toma como nombre/municipio.</div>
-      <div className="flex items-center gap-2">
+      <div className="text-xs text-muted-foreground">
+        Subí un archivo <strong>CSV</strong> (exportado de Excel: <em>Guardar como → CSV</em>) o pegá las filas. Cada línea debe traer
+        {" "}<strong>latitud y longitud</strong> (ej. <code>14.5803, -90.5221 Guatemala</code>). Lo demás se toma como nombre/municipio.
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
         <Label className="text-xs">Categoría</Label>
         <Input value={category} onChange={e => setCategory(e.target.value)} className="h-8 w-40" />
+        <label className="inline-flex items-center gap-1.5 text-xs border rounded-lg px-3 py-1.5 cursor-pointer hover:bg-muted/40">
+          <Upload className="size-3.5" /> Subir CSV
+          <input type="file" accept=".csv,.txt,text/csv,text/plain" className="hidden" onChange={readFile} />
+        </label>
+        {fileName && <span className="text-xs text-muted-foreground truncate max-w-40">{fileName}</span>}
       </div>
       <Textarea rows={5} value={text} onChange={e => setText(e.target.value)} placeholder="14.58035, -90.52215 GUATEMALA&#10;14.58532, -90.48817 GUATEMALA" className="font-mono text-xs" />
       <div className="flex justify-end"><Button size="sm" onClick={run} disabled={busy || !text.trim()}>{busy ? "Importando…" : "Importar"}</Button></div>

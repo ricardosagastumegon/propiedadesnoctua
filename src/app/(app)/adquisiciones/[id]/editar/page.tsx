@@ -26,7 +26,7 @@ export default async function EditarCandidataPage({ params }: { params: Promise<
           id: c.id, title: c.title, propertyType: c.propertyType, department: c.department, city: c.city, zone: c.zone,
           addressLine: c.addressLine, cadastralNumber: c.cadastralNumber, price: c.price, currency: c.currency,
           bedrooms: c.bedrooms, bathrooms: c.bathrooms, area: c.area, areaUnit: c.areaUnit, cuerdaVaras: c.cuerdaVaras,
-          description: c.description, galleryUrls: c.galleryUrls, documentUrls: c.documentUrls,
+          description: c.description, galleryUrls: c.galleryUrls, documentUrls: c.documentUrls, categories: c.categories,
           mapPolygon: c.mapPolygon, latitude: c.latitude, longitude: c.longitude,
         }} />
       </div>

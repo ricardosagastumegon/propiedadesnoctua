@@ -39,9 +39,12 @@ model Organization {
   assetRecordTypes AssetRecordType[]
   vendorInvoices   VendorInvoice[]
   pettyCashes      PettyCash[]
-  acquisitionCandidates AcquisitionCandidate[]
+  acquisitionCandidates        AcquisitionCandidate[] @relation("AcqOwner")
+  acquisitionSubmitted         AcquisitionCandidate[] @relation("AcqSubmittedBy")
   acquisitionLinksOwned        AcquisitionLink[] @relation("AcqLinkOwner")
   acquisitionLinksIntermediary AcquisitionLink[] @relation("AcqLinkIntermediary")
+  acqForwardAsSender           AcquisitionForwardPermission[] @relation("AcqForwardSender")
+  acqForwardAsReceiver         AcquisitionForwardPermission[] @relation("AcqForwardReceiver")
   pointsOfInterest             PointOfInterest[]
   activityLogs     ActivityLog[]
   settings         OrganizationSettings?
@@ -96,9 +99,14 @@ model AcquisitionCandidate {
   id             String   @id @default(cuid())
   organizationId String
   linkId         String?  // por qué link entró (para dueño + intermediario)
+  // Trazabilidad de origen: si otro tenant la reenvió, aquí queda quién.
+  submittedByOrgId String? // tenant que la envió/reenvió (null = público/manual)
+  sourceCandidateId String? // id de la candidata original (si es copia reenviada)
   stage          String   @default("NEW") // NEW | OFFERED | ACCEPTED | DISCARDED
   // Datos de la propiedad
   title          String
+  // Etiquetas/catálogo (varias): apartamentos, bodegas, plazas comerciales…
+  categories     String[] @default([])
   propertyType   String?
   department     String?
   city           String?
@@ -135,12 +143,32 @@ model AcquisitionCandidate {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  link         AcquisitionLink? @relation(fields: [linkId], references: [id], onDelete: SetNull)
-  negotiations AcquisitionNegotiation[]
+  organization   Organization     @relation("AcqOwner", fields: [organizationId], references: [id], onDelete: Cascade)
+  submittedByOrg Organization?    @relation("AcqSubmittedBy", fields: [submittedByOrgId], references: [id], onDelete: SetNull)
+  link           AcquisitionLink? @relation(fields: [linkId], references: [id], onDelete: SetNull)
+  negotiations   AcquisitionNegotiation[]
 
+  @@unique([organizationId, sourceCandidateId])
   @@index([organizationId, stage])
   @@index([linkId])
+  @@index([submittedByOrgId])
+}
+
+// Permiso de reenvío (allowlist): el tenant "sender" puede ENVIAR propiedades
+// al tenant "receiver". Lo configura el super-admin. Sin esto, nadie puede
+// reenviarle propiedades a otro tenant (se preserva la trazabilidad).
+model AcquisitionForwardPermission {
+  id            String   @id @default(cuid())
+  senderOrgId   String   // quien puede enviar (ej. Ikonic)
+  receiverOrgId String   // a quién le llega (ej. SION)
+  createdAt     DateTime @default(now())
+
+  sender   Organization @relation("AcqForwardSender", fields: [senderOrgId], references: [id], onDelete: Cascade)
+  receiver Organization @relation("AcqForwardReceiver", fields: [receiverOrgId], references: [id], onDelete: Cascade)
+
+  @@unique([senderOrgId, receiverOrgId])
+  @@index([senderOrgId])
+  @@index([receiverOrgId])
 }
 
 // Punto de interés (ej. gasolineras propias / competencia) para el mapa de Adquisiciones.

@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { TOGGLEABLE_MODULES } from "@/lib/permissions"
-import { adminCreateTenant, adminSetModules, adminResetUserPassword, adminToggleUserActive, adminSetUserPassword, adminSetLinkIntermediary } from "./actions"
-import { Plus, Building2, Users, ChevronDown, ChevronRight, KeyRound, Power, PowerOff, Clock, Lock } from "lucide-react"
+import { adminCreateTenant, adminSetModules, adminResetUserPassword, adminToggleUserActive, adminSetUserPassword, adminSetLinkIntermediary, adminSetPoiEnabled, adminAddForwardPermission, adminRemoveForwardPermission } from "./actions"
+import { Plus, Building2, Users, ChevronDown, ChevronRight, KeyRound, Power, PowerOff, Clock, Lock, MapPin, Send, Trash2 } from "lucide-react"
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "Nunca ingresó"
@@ -40,6 +40,7 @@ const MODULE_LABELS: Record<string, string> = {
 
 export interface AcqLink { id: string; name: string; intermediaryOrgId: string | null }
 export interface OrgOption { id: string; name: string }
+export interface AllowedSender { permId: string; orgId: string; name: string }
 
 export interface TenantRow {
   id: string
@@ -49,8 +50,10 @@ export interface TenantRow {
   users: number
   properties: number
   enabledModules: string[] | null
+  poiEnabled: boolean
   userList: TenantUser[]
   acqLinks: AcqLink[]
+  allowedSenders: AllowedSender[]
 }
 
 export function AdminTenants({ tenants, allOrgs }: { tenants: TenantRow[]; allOrgs: OrgOption[] }) {
@@ -96,6 +99,25 @@ function TenantItem({ tenant, allOrgs, onCreds }: { tenant: TenantRow; allOrgs: 
 
   async function setIntermediary(linkId: string, orgId: string) {
     const res = await adminSetLinkIntermediary(linkId, orgId || null)
+    if (res && "error" in res) { alert(res.error); return }
+    router.refresh()
+  }
+
+  async function togglePoi(enabled: boolean) {
+    const res = await adminSetPoiEnabled(tenant.id, enabled)
+    if (res && "error" in res) { alert(res.error); return }
+    router.refresh()
+  }
+
+  async function addSender(orgId: string) {
+    if (!orgId) return
+    const res = await adminAddForwardPermission(tenant.id, orgId)
+    if (res && "error" in res) { alert(res.error); return }
+    router.refresh()
+  }
+
+  async function removeSender(permId: string) {
+    const res = await adminRemoveForwardPermission(permId)
     if (res && "error" in res) { alert(res.error); return }
     router.refresh()
   }
@@ -192,6 +214,15 @@ function TenantItem({ tenant, allOrgs, onCreds }: { tenant: TenantRow; allOrgs: 
             <Button size="sm" onClick={save} disabled={saving}>{saving ? "Guardando…" : "Guardar módulos"}</Button>
           </div>
 
+          {/* Puntos de Interés (mapa propio del tenant) */}
+          <div className="pt-3 border-t">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={tenant.poiEnabled} onChange={e => togglePoi(e.target.checked)} />
+              <MapPin className="size-3.5 text-[#8A6A2E]" />
+              <span>Puntos de interés — mapa propio de este tenant (sube su propio Excel)</span>
+            </label>
+          </div>
+
           {/* Usuarios del tenant */}
           <div className="pt-3 border-t">
             <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
@@ -261,6 +292,40 @@ function TenantItem({ tenant, allOrgs, onCreds }: { tenant: TenantRow; allOrgs: 
               </div>
             </div>
           )}
+
+          {/* Quién puede ENVIARLE propiedades a este tenant (allowlist de reenvío) */}
+          <div className="pt-3 border-t">
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+              <Send className="size-3.5" /> Quién puede enviarle propiedades a {tenant.name}
+            </div>
+            {tenant.allowedSenders.length > 0 ? (
+              <div className="space-y-1.5 mb-2">
+                {tenant.allowedSenders.map(s => (
+                  <div key={s.permId} className="flex items-center justify-between gap-2 bg-background rounded-md px-3 py-2">
+                    <span className="text-sm font-medium truncate">{s.name}</span>
+                    <button onClick={() => removeSender(s.permId)} className="text-destructive shrink-0" title="Quitar permiso">
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground mb-2">Nadie autorizado. Solo tenants autorizados pueden reenviarle propiedades (se mantiene la trazabilidad).</p>
+            )}
+            <label className="flex items-center gap-1.5 text-xs">
+              Autorizar tenant:
+              <select
+                className="border rounded-md px-2 py-1 text-xs max-w-[200px]"
+                value=""
+                onChange={e => { addSender(e.target.value); e.target.value = "" }}
+              >
+                <option value="">— elegí un tenant —</option>
+                {allOrgs
+                  .filter(o => o.id !== tenant.id && !tenant.allowedSenders.some(s => s.orgId === o.id))
+                  .map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+            </label>
+          </div>
         </div>
       )}
     </Card>

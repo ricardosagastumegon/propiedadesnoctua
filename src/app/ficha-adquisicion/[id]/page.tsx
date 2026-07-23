@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { can } from "@/lib/permissions"
 import { toVaras2, v2ToM2, convertCurrency, type AreaUnit } from "@/lib/varas"
+import { categoryLabel } from "@/lib/acquisition-categories"
 import { isValidPolygon, type LatLng } from "@/lib/geo"
 import { AcqMap, type AcqMapItem } from "@/app/(app)/adquisiciones/mapa/_map"
 import { PrintButton } from "./_print-btn"
@@ -78,6 +79,15 @@ export default async function FichaPage({ params }: { params: Promise<{ id: stri
         <div style={{ padding: "24px 28px" }}>
           <h1 style={{ fontFamily: "Georgia, serif", fontSize: 26, color: "#12182A", margin: 0 }}>{c.title}</h1>
           {loc && <div style={{ color: "#6B7280", fontSize: 14, marginTop: 4 }}>📍 {loc}</div>}
+          {c.categories.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+              {c.categories.map(cat => (
+                <span key={cat} style={{ fontSize: 11, padding: "3px 9px", borderRadius: 999, background: "rgba(138,106,46,.10)", color: "#8A6A2E", border: "1px solid rgba(138,106,46,.25)" }}>
+                  {categoryLabel(cat)}
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Fotos */}
           {c.galleryUrls.length > 0 && (

@@ -17,13 +17,33 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
 
   const c = await prisma.acquisitionCandidate.findFirst({
     where: { id, OR: [{ organizationId: me }, { link: { intermediaryOrgId: me } }] },
-    include: { negotiations: { orderBy: { createdAt: "asc" } } },
+    include: {
+      negotiations: { orderBy: { createdAt: "asc" } },
+      link: { select: { name: true } },
+      submittedByOrg: { select: { name: true } },
+    },
   })
   if (!c) notFound()
   const isOwner = c.organizationId === me
 
   const settings = await prisma.organizationSettings.findUnique({ where: { organizationId: me }, select: { fxUsdGtq: true } })
   const fx = settings?.fxUsdGtq ?? 7.5
+
+  // Origen (quién la cargó) para trazabilidad.
+  const origin = c.source === "FORWARDED"
+    ? (c.submittedByOrg?.name ? `${c.submittedByOrg.name} (enviada)` : "Reenviada")
+    : c.source === "MANUAL" ? "Manual" : (c.link?.name ?? "Público")
+
+  // Destinos a los que puedo reenviar esta propiedad (allowlist). Solo si es MÍA y
+  // ORIGINADA por mí — las que me reenviaron (submittedByOrgId != null) no se re-reenvían.
+  const canForward = isOwner && c.submittedByOrgId == null
+  const forwardTargets = canForward
+    ? (await prisma.acquisitionForwardPermission.findMany({
+        where: { senderOrgId: me },
+        select: { receiver: { select: { id: true, name: true } } },
+        orderBy: { createdAt: "asc" },
+      })).map(p => p.receiver)
+    : []
   const negotiations = c.negotiations.map(n => ({ id: n.id, kind: n.kind, amount: n.amount, currency: n.currency, note: n.note, createdAt: n.createdAt.toISOString() }))
 
   // Referencia automática: precio/v² de tus otras propiedades en el mismo departamento
@@ -44,6 +64,8 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
       autoRef={autoRef}
       fx={fx}
       negotiations={negotiations}
+      origin={origin}
+      forwardTargets={forwardTargets}
       candidate={{
         id: c.id, stage: c.stage, title: c.title, propertyType: c.propertyType,
         department: c.department, city: c.city, zone: c.zone, addressLine: c.addressLine,
@@ -52,7 +74,7 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
         area: c.area, description: c.description, galleryUrls: c.galleryUrls,
         documentUrls: c.documentUrls, latitude: c.latitude, longitude: c.longitude,
         agentName: c.agentName, agentPhone: c.agentPhone, agentEmail: c.agentEmail,
-        analysisNotes: c.analysisNotes,
+        analysisNotes: c.analysisNotes, categories: c.categories,
         areaUnit: c.areaUnit, cuerdaVaras: c.cuerdaVaras,
         refPriceMinV2: c.refPriceMinV2, refPriceMaxV2: c.refPriceMaxV2,
         isCommercial: c.isCommercial, offerPerV2: c.offerPerV2,

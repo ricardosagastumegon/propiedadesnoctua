@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
 import { Maximize2, X } from "lucide-react"
+import { categoryLabel } from "@/lib/acquisition-categories"
 import type { AcqMapItem, PoiPoint } from "./_map"
 
 // Ícono de punto de interés (ej. gasolinera) — distinto de las propiedades.
@@ -73,7 +74,15 @@ function FitAll({ items, pois }: { items: AcqMapItem[]; pois: PoiPoint[] }) {
 }
 
 export function AcqMapInner({ items, pois }: { items: AcqMapItem[]; pois: PoiPoint[] }) {
-  const first = items.find(i => i.lat != null && i.lng != null)
+  const [cat, setCat] = useState("")
+  const catOptions = useMemo(() => {
+    const s = new Set<string>()
+    for (const i of items) for (const c of i.categories ?? []) s.add(c)
+    return Array.from(s).sort()
+  }, [items])
+  const visibleItems = useMemo(() => (cat ? items.filter(i => (i.categories ?? []).includes(cat)) : items), [items, cat])
+
+  const first = visibleItems.find(i => i.lat != null && i.lng != null)
   const center: [number, number] = first ? [first.lat!, first.lng!] : (pois[0] ? [pois[0].lat, pois[0].lng] : [14.6349, -90.5069])
   const icons = useMemo(() => new Map(items.map(i => [i.id, priceIcon(i)])), [items])
   const poiMk = useMemo(() => poiIcon(), [])
@@ -113,7 +122,7 @@ export function AcqMapInner({ items, pois }: { items: AcqMapItem[]; pois: PoiPoi
               opacity={0.6} attribution='Catastro &copy; RIC Guatemala' />
           </LayersControl.Overlay>
         </LayersControl>
-        <FitAll items={items} pois={pois} />
+        <FitAll items={visibleItems} pois={pois} />
 
         {/* Puntos de interés (gasolineras, etc.) */}
         {pois.map(p => (
@@ -127,7 +136,7 @@ export function AcqMapInner({ items, pois }: { items: AcqMapItem[]; pois: PoiPoi
           </Marker>
         ))}
 
-        {items.map(it => {
+        {visibleItems.map(it => {
           const st = stageOf(it.stage)
           return (
             <div key={it.id}>
@@ -140,6 +149,9 @@ export function AcqMapInner({ items, pois }: { items: AcqMapItem[]; pois: PoiPoi
                     <div className="text-sm">
                       <div className="font-semibold">{it.title}</div>
                       <div className="text-xs" style={{ color: st.color }}>{st.label}</div>
+                      {it.categories && it.categories.length > 0 && (
+                        <div className="text-[11px] text-muted-foreground mt-0.5">{it.categories.map(categoryLabel).join(" · ")}</div>
+                      )}
                       <div className="mt-1">{it.price != null ? `${it.currency === "USD" ? "$" : "Q"} ${it.price.toLocaleString("es-GT")}` : "Sin precio"}</div>
                       <a href={`/adquisiciones/${it.id}`} className="text-blue-600 underline text-xs">Ver detalle →</a>
                     </div>
@@ -162,6 +174,17 @@ export function AcqMapInner({ items, pois }: { items: AcqMapItem[]; pois: PoiPoi
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full flex items-center justify-center text-[8px]" style={{ background: "#7C3AED" }}>⛽</span> Puntos de interés ({pois.length})
           </span>
+        )}
+        {catOptions.length > 0 && (
+          <label className="flex items-center gap-1.5">
+            Etiqueta:
+            <select value={cat} onChange={e => setCat(e.target.value)} className="border rounded-md px-1.5 py-0.5 text-xs bg-white">
+              <option value="">Todas ({items.length})</option>
+              {catOptions.map(v => (
+                <option key={v} value={v}>{categoryLabel(v)} ({items.filter(i => (i.categories ?? []).includes(v)).length})</option>
+              ))}
+            </select>
+          </label>
         )}
         <span className="text-muted-foreground ml-auto">Capas y catastro RIC arriba a la derecha ▸</span>
       </div>

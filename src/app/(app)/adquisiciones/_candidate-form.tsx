@@ -7,13 +7,14 @@ import { CoordPicker } from "../propiedades/_components/coord-picker"
 import { compressImage } from "@/lib/compress-image"
 import { Button } from "@/components/ui/button"
 import { createCandidateManual, updateCandidateInfo } from "./actions"
+import { CategoryPicker } from "./_category-picker"
 
 export interface CandidateInitial {
   id: string
   title: string; propertyType: string | null; department: string | null; city: string | null; zone: string | null
   addressLine: string | null; cadastralNumber: string | null; price: number | null; currency: string
   bedrooms: number | null; bathrooms: number | null; area: number | null; areaUnit: string | null; cuerdaVaras: number | null
-  description: string | null; galleryUrls: string[]; documentUrls: string[]
+  description: string | null; galleryUrls: string[]; documentUrls: string[]; categories: string[]
   mapPolygon: unknown; latitude: number | null; longitude: number | null
 }
 
@@ -96,6 +97,10 @@ export function CandidateForm({ initial }: { initial?: CandidateInitial }) {
             </select></div>
         )}
         <div><label className={lbl}>Catastro (RIC)</label><input name="cadastralNumber" defaultValue={initial?.cadastralNumber ?? ""} className={inp} /></div>
+        <div>
+          <label className={lbl}>Etiquetas (para qué sirve / ideal para)</label>
+          <CategoryPicker initial={initial?.categories ?? []} />
+        </div>
         <div><label className={lbl}>Descripción</label><textarea name="description" rows={2} defaultValue={initial?.description ?? ""} className={inp} /></div>
       </div>
 

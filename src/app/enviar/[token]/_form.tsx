@@ -2,6 +2,7 @@
 import { useState, useRef, useTransition } from "react"
 import { PROPERTY_TYPES, DEPARTMENTS } from "@/lib/schemas/property"
 import { submitAcquisition } from "@/app/(app)/adquisiciones/actions"
+import { CategoryPicker } from "@/app/(app)/adquisiciones/_category-picker"
 import { CoordPicker } from "@/app/(app)/propiedades/_components/coord-picker"
 import { compressImage } from "@/lib/compress-image"
 
@@ -189,6 +190,10 @@ export function SubmitForm({ token, orgName, brief }: { token: string; orgName: 
                   <option value="HECTAREA">hectáreas</option>
                 </select>
               </div>
+            </div>
+            <div>
+              <label className={label}>Etiquetas (para qué sirve / ideal para)</label>
+              <CategoryPicker />
             </div>
             <div>
               <label className={label}>Descripción</label>

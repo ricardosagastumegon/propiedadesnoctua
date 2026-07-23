@@ -11,6 +11,7 @@ export interface AcqMapItem {
   lat: number | null
   lng: number | null
   polygon: LatLng[] | null
+  categories?: string[]
 }
 
 export interface PoiPoint {

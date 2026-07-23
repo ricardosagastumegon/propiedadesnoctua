@@ -31,6 +31,7 @@ export default async function AdquisicionesMapaPage() {
       price: c.price, currency: c.currency,
       lat: c.latitude, lng: c.longitude,
       polygon: isValidPolygon(c.mapPolygon) ? (c.mapPolygon as LatLng[]) : null,
+      categories: c.categories,
     }))
     .filter(c => c.lat != null && c.lng != null)
 

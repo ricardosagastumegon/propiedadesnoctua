@@ -68,6 +68,46 @@ export async function adminSetLinkIntermediary(linkId: string, intermediaryOrgId
   return { ok: true }
 }
 
+/** Habilita/deshabilita el módulo de Puntos de Interés para un tenant. Solo platform admin. */
+export async function adminSetPoiEnabled(organizationId: string, enabled: boolean): Promise<{ ok: true } | { error: string }> {
+  try { await requirePlatformAdmin() } catch { return { error: "No autorizado" } }
+  await prisma.organizationSettings.upsert({
+    where: { organizationId },
+    update: { poiEnabled: enabled },
+    create: { organizationId, poiEnabled: enabled },
+  })
+  revalidatePath("/admin")
+  revalidatePath("/adquisiciones")
+  return { ok: true }
+}
+
+/**
+ * Autoriza a un tenant (sender) a ENVIAR/reenviar propiedades a otro (receiver).
+ * Preserva la trazabilidad: solo tenants autorizados pueden mandar. Solo platform admin.
+ */
+export async function adminAddForwardPermission(receiverOrgId: string, senderOrgId: string): Promise<{ ok: true } | { error: string }> {
+  try { await requirePlatformAdmin() } catch { return { error: "No autorizado" } }
+  if (!senderOrgId || !receiverOrgId) return { error: "Faltan datos" }
+  if (senderOrgId === receiverOrgId) return { error: "Un tenant no puede enviarse a sí mismo." }
+  try {
+    await prisma.acquisitionForwardPermission.create({ data: { senderOrgId, receiverOrgId } })
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { ok: true } // ya existía
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2003") return { error: "Tenant no válido" }
+    throw e
+  }
+  revalidatePath("/admin")
+  return { ok: true }
+}
+
+/** Quita un permiso de reenvío. Solo platform admin. */
+export async function adminRemoveForwardPermission(id: string): Promise<{ ok: true } | { error: string }> {
+  try { await requirePlatformAdmin() } catch { return { error: "No autorizado" } }
+  await prisma.acquisitionForwardPermission.deleteMany({ where: { id } })
+  revalidatePath("/admin")
+  return { ok: true }
+}
+
 /** Activa/desactiva un usuario de cualquier tenant. Solo platform admin. */
 export async function adminToggleUserActive(userId: string, isActive: boolean): Promise<{ ok: true } | { error: string }> {
   try { await requirePlatformAdmin() } catch { return { error: "No autorizado" } }

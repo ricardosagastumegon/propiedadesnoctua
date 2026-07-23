@@ -14,13 +14,14 @@ export default async function AdminPage() {
     orderBy: { createdAt: "desc" },
     select: {
       id: true, name: true, slug: true, createdAt: true,
-      settings: { select: { enabledModules: true } },
+      settings: { select: { enabledModules: true, poiEnabled: true } },
       _count: { select: { users: true, properties: true } },
       users: {
         orderBy: { role: "asc" },
         select: { id: true, name: true, email: true, role: true, isActive: true, lastLoginAt: true },
       },
       acquisitionLinksOwned: { select: { id: true, name: true, intermediaryOrgId: true } },
+      acqForwardAsReceiver: { select: { id: true, sender: { select: { id: true, name: true } } } },
     },
   })
 
@@ -34,11 +35,13 @@ export default async function AdminPage() {
     users: o._count.users,
     properties: o._count.properties,
     enabledModules: parseEnabledModules(o.settings?.enabledModules),
+    poiEnabled: o.settings?.poiEnabled ?? false,
     userList: o.users.map(u => ({
       id: u.id, name: u.name, email: u.email, role: u.role,
       isActive: u.isActive, lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
     })),
     acqLinks: o.acquisitionLinksOwned.map(l => ({ id: l.id, name: l.name, intermediaryOrgId: l.intermediaryOrgId })),
+    allowedSenders: o.acqForwardAsReceiver.map(p => ({ permId: p.id, orgId: p.sender.id, name: p.sender.name })),
   }))
 
   return (
