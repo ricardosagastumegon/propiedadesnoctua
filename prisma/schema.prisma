@@ -45,7 +45,8 @@ model Organization {
   acquisitionLinksIntermediary AcquisitionLink[] @relation("AcqLinkIntermediary")
   acqForwardAsSender           AcquisitionForwardPermission[] @relation("AcqForwardSender")
   acqForwardAsReceiver         AcquisitionForwardPermission[] @relation("AcqForwardReceiver")
-  pointsOfInterest             PointOfInterest[]
+  pointsOfInterest             PointOfInterest[] @relation("PoiOwner")
+  pointsOfInterestShared       PointOfInterest[] @relation("PoiSharedBy")
   activityLogs     ActivityLog[]
   settings         OrganizationSettings?
   serviceAcceptances ServiceAcceptance[]
@@ -121,6 +122,18 @@ model AcquisitionCandidate {
   bedrooms       Int?
   bathrooms      Int?
   area           Float?
+  // Datos comerciales / industriales — alimentan la ficha de inversión.
+  builtArea         Float?   // m² de construcción
+  parkingSpaces     Int?
+  frontM            Float?   // frente en metros
+  depthM            Float?   // fondo en metros
+  maneuveringYardM2 Float?   // patio de maniobra (m²)
+  officeMezzanineM2 Float?   // oficina / mezanine (m²)
+  clearHeightM      Float?   // altura libre (m)
+  loadingDocks      Int?     // andenes de carga
+  pavedAccess       Boolean? // tri-estado: null = no se preguntó
+  isIndustrial      Boolean  @default(false)
+  landUse           String?  // uso de suelo / POT (ej. "G4 (Zona Naranja)")
   description    String?
   galleryUrls    String[] @default([])
   documentUrls   String[] @default([]) // documentos de municipalidad (plano, escritura) — PDF/imagen
@@ -184,11 +197,17 @@ model PointOfInterest {
   latitude       Float?
   longitude      Float?
   notes          String?
+  // Compartir entre tenants (igual que las propiedades): quién me lo envió.
+  sharedByOrgId  String?  // tenant que lo compartió (null = propio)
+  sourcePoiId    String?  // id del punto original (dedup + trazabilidad)
   createdAt      DateTime @default(now())
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization  @relation("PoiOwner", fields: [organizationId], references: [id], onDelete: Cascade)
+  sharedByOrg  Organization? @relation("PoiSharedBy", fields: [sharedByOrgId], references: [id], onDelete: SetNull)
 
+  @@unique([organizationId, sourcePoiId])
   @@index([organizationId])
+  @@index([sharedByOrgId])
 }
 
 // Registro de negociación de una candidata (pidieron/ofrecí/reofertaron…).

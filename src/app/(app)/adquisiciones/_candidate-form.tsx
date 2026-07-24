@@ -16,6 +16,10 @@ export interface CandidateInitial {
   bedrooms: number | null; bathrooms: number | null; area: number | null; areaUnit: string | null; cuerdaVaras: number | null
   description: string | null; galleryUrls: string[]; documentUrls: string[]; categories: string[]
   mapPolygon: unknown; latitude: number | null; longitude: number | null
+  // Datos comerciales / industriales (ficha de inversión)
+  builtArea: number | null; parkingSpaces: number | null; frontM: number | null; depthM: number | null
+  maneuveringYardM2: number | null; officeMezzanineM2: number | null; clearHeightM: number | null; loadingDocks: number | null
+  pavedAccess: boolean | null; isIndustrial: boolean; landUse: string | null
 }
 
 export function CandidateForm({ initial }: { initial?: CandidateInitial }) {
@@ -103,6 +107,29 @@ export function CandidateForm({ initial }: { initial?: CandidateInitial }) {
         </div>
         <div><label className={lbl}>Descripción</label><textarea name="description" rows={2} defaultValue={initial?.description ?? ""} className={inp} /></div>
       </div>
+
+      <details className="bg-white border rounded-2xl p-5 shadow-sm" open={!!(initial?.builtArea ?? initial?.frontM ?? initial?.maneuveringYardM2 ?? initial?.isIndustrial)}>
+        <summary className="cursor-pointer font-medium text-sm select-none">Datos comerciales / industriales (opcional)</summary>
+        <p className="text-xs text-muted-foreground mt-1 mb-3">Para bodegas, locales, plazas, industria. Lo que llenes aparece en la ficha de inversión.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div><label className={lbl}>Construcción (m²)</label><input name="builtArea" type="number" step="any" defaultValue={initial?.builtArea ?? ""} className={inp} /></div>
+          <div><label className={lbl}>Frente (m)</label><input name="frontM" type="number" step="any" defaultValue={initial?.frontM ?? ""} className={inp} /></div>
+          <div><label className={lbl}>Fondo (m)</label><input name="depthM" type="number" step="any" defaultValue={initial?.depthM ?? ""} className={inp} /></div>
+          <div><label className={lbl}>Parqueos</label><input name="parkingSpaces" type="number" defaultValue={initial?.parkingSpaces ?? ""} className={inp} /></div>
+          <div><label className={lbl}>Patio maniobra (m²)</label><input name="maneuveringYardM2" type="number" step="any" defaultValue={initial?.maneuveringYardM2 ?? ""} className={inp} /></div>
+          <div><label className={lbl}>Oficina/mezanine (m²)</label><input name="officeMezzanineM2" type="number" step="any" defaultValue={initial?.officeMezzanineM2 ?? ""} className={inp} /></div>
+          <div><label className={lbl}>Altura libre (m)</label><input name="clearHeightM" type="number" step="any" defaultValue={initial?.clearHeightM ?? ""} className={inp} /></div>
+          <div><label className={lbl}>Andenes de carga</label><input name="loadingDocks" type="number" defaultValue={initial?.loadingDocks ?? ""} className={inp} /></div>
+          <div><label className={lbl}>Acceso pavimentado</label>
+            <select name="pavedAccess" defaultValue={initial?.pavedAccess == null ? "" : String(initial.pavedAccess)} className={inp}>
+              <option value="">—</option><option value="true">Sí</option><option value="false">No</option>
+            </select></div>
+          <div className="col-span-2 sm:col-span-3"><label className={lbl}>Uso de suelo / POT</label><input name="landUse" defaultValue={initial?.landUse ?? ""} placeholder="Ej: G4 (Zona Naranja)" className={inp} /></div>
+        </div>
+        <label className="flex items-center gap-2 text-sm mt-3">
+          <input type="checkbox" name="isIndustrial" value="true" defaultChecked={initial?.isIndustrial ?? false} /> Propiedad industrial
+        </label>
+      </details>
 
       <div className="bg-white border rounded-2xl p-5 shadow-sm">
         <label className={lbl}>Ubicación en el mapa (polígono / coordenadas)</label>

@@ -28,6 +28,10 @@ export default async function EditarCandidataPage({ params }: { params: Promise<
           bedrooms: c.bedrooms, bathrooms: c.bathrooms, area: c.area, areaUnit: c.areaUnit, cuerdaVaras: c.cuerdaVaras,
           description: c.description, galleryUrls: c.galleryUrls, documentUrls: c.documentUrls, categories: c.categories,
           mapPolygon: c.mapPolygon, latitude: c.latitude, longitude: c.longitude,
+          builtArea: c.builtArea, parkingSpaces: c.parkingSpaces, frontM: c.frontM, depthM: c.depthM,
+          maneuveringYardM2: c.maneuveringYardM2, officeMezzanineM2: c.officeMezzanineM2,
+          clearHeightM: c.clearHeightM, loadingDocks: c.loadingDocks, pavedAccess: c.pavedAccess,
+          isIndustrial: c.isIndustrial, landUse: c.landUse,
         }} />
       </div>
     </div>

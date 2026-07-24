@@ -24,6 +24,30 @@ function str(v: FormDataEntryValue | null): string | null {
   const s = v == null ? "" : String(v).trim()
   return s === "" ? null : s
 }
+/** Tri-estado: "" → null (no se preguntó), "true"/"false" → boolean. */
+function boolTri(v: FormDataEntryValue | null): boolean | null {
+  const s = v == null ? "" : String(v).trim().toLowerCase()
+  if (s === "") return null
+  if (s === "true" || s === "1" || s === "si" || s === "sí" || s === "on") return true
+  if (s === "false" || s === "0" || s === "no") return false
+  return null
+}
+/** Campos comerciales / industriales para la ficha de inversión (compartidos entre create/submit). */
+function commercialFields(formData: FormData) {
+  return {
+    builtArea: num(formData.get("builtArea")),
+    parkingSpaces: int(formData.get("parkingSpaces")),
+    frontM: num(formData.get("frontM")),
+    depthM: num(formData.get("depthM")),
+    maneuveringYardM2: num(formData.get("maneuveringYardM2")),
+    officeMezzanineM2: num(formData.get("officeMezzanineM2")),
+    clearHeightM: num(formData.get("clearHeightM")),
+    loadingDocks: int(formData.get("loadingDocks")),
+    pavedAccess: boolTri(formData.get("pavedAccess")),
+    isIndustrial: str(formData.get("isIndustrial")) === "true",
+    landUse: str(formData.get("landUse")),
+  }
+}
 
 function newToken() { return crypto.randomBytes(12).toString("base64url") }
 
@@ -218,6 +242,7 @@ export async function submitAcquisition(token: string, formData: FormData): Prom
       bathrooms: int(formData.get("bathrooms")),
       area: num(formData.get("area")),
       areaUnit: str(formData.get("areaUnit")) || "M2",
+      ...commercialFields(formData),
       description: str(formData.get("description")),
       galleryUrls: gallery,
       documentUrls: documents,
@@ -333,6 +358,7 @@ function parsePropertyData(formData: FormData) {
     description: str(formData.get("description")),
     mapPolygon: polygon, latitude, longitude,
     gallery: arr("galleryUrls"), documents: arr("documentUrls"),
+    commercial: commercialFields(formData),
   }
 }
 
@@ -348,6 +374,7 @@ export async function createCandidateManual(formData: FormData): Promise<{ redir
       title: d.title, categories: d.categories, propertyType: d.propertyType, department: d.department, city: d.city, zone: d.zone,
       addressLine: d.addressLine, cadastralNumber: d.cadastralNumber, price: d.price, currency: d.currency,
       bedrooms: d.bedrooms, bathrooms: d.bathrooms, area: d.area, areaUnit: d.areaUnit, cuerdaVaras: d.cuerdaVaras,
+      ...d.commercial,
       description: d.description, galleryUrls: d.gallery, documentUrls: d.documents,
       mapPolygon: d.mapPolygon ?? undefined, latitude: d.latitude, longitude: d.longitude,
     },
@@ -368,6 +395,7 @@ export async function updateCandidateInfo(id: string, formData: FormData): Promi
       title: d.title, categories: d.categories, propertyType: d.propertyType, department: d.department, city: d.city, zone: d.zone,
       addressLine: d.addressLine, cadastralNumber: d.cadastralNumber, price: d.price, currency: d.currency,
       bedrooms: d.bedrooms, bathrooms: d.bathrooms, area: d.area, areaUnit: d.areaUnit, cuerdaVaras: d.cuerdaVaras,
+      ...d.commercial,
       description: d.description, galleryUrls: d.gallery, documentUrls: d.documents,
       mapPolygon: d.mapPolygon ?? Prisma.JsonNull, latitude: d.latitude, longitude: d.longitude,
     },
@@ -467,6 +495,52 @@ export async function importPois(text: string, category: string): Promise<{ ok: 
 }
 
 /**
+ * Comparte puntos de interés propios con otro tenant autorizado (misma allowlist
+ * que las propiedades). Crea copias en el destino con trazabilidad (sharedByOrg).
+ * Single-hop: los puntos que me compartieron a mí no se re-comparten.
+ */
+export async function sharePois(poiIds: string[], receiverOrgId: string): Promise<{ ok: true; name: string; shared: number; skipped: number } | { error: string }> {
+  const g = await tryGuard({ module: "adquisiciones", action: "edit" })
+  if ("error" in g) return { error: g.error }
+  const me = g.user.organizationId
+  if (receiverOrgId === me) return { error: "No podés compartir con vos mismo." }
+  if (!poiIds.length) return { error: "Elegí al menos un punto." }
+
+  const perm = await prisma.acquisitionForwardPermission.findUnique({
+    where: { senderOrgId_receiverOrgId: { senderOrgId: me, receiverOrgId } },
+    select: { receiver: { select: { name: true } } },
+  })
+  if (!perm) return { error: "No estás autorizado a compartir con ese tenant. Pedile al administrador de Noctua que lo habilite." }
+
+  // Solo puntos MÍOS y ORIGINALES (no los que me compartieron).
+  const points = await prisma.pointOfInterest.findMany({
+    where: { id: { in: poiIds }, organizationId: me, sharedByOrgId: null },
+  })
+  if (!points.length) return { error: "No hay puntos válidos para compartir." }
+
+  // Dedup: los que ya compartí con ese tenant no se duplican.
+  const existing = await prisma.pointOfInterest.findMany({
+    where: { organizationId: receiverOrgId, sourcePoiId: { in: points.map(p => p.id) } },
+    select: { sourcePoiId: true },
+  })
+  const already = new Set(existing.map(e => e.sourcePoiId))
+  const toCreate = points.filter(p => !already.has(p.id))
+
+  if (toCreate.length) {
+    await prisma.pointOfInterest.createMany({
+      data: toCreate.map(p => ({
+        organizationId: receiverOrgId, sharedByOrgId: me, sourcePoiId: p.id,
+        name: p.name, category: p.category, department: p.department, municipality: p.municipality,
+        zone: p.zone, address: p.address, latitude: p.latitude, longitude: p.longitude, notes: p.notes,
+      })),
+      skipDuplicates: true, // backstop de carrera con el índice único
+    })
+    revalidatePath("/adquisiciones/puntos"); revalidatePath("/adquisiciones/mapa")
+  }
+  return { ok: true, name: perm.receiver.name, shared: toCreate.length, skipped: points.length - toCreate.length }
+}
+
+/**
  * "Enviar a": reenvía una candidata propia a otro tenant (receiver). Crea una COPIA
  * en el tenant destino, marcada con el origen (submittedByOrg = mi tenant) para
  * mantener la trazabilidad. Solo si el super-admin autorizó ese envío.
@@ -516,6 +590,10 @@ export async function forwardCandidate(candidateId: string, receiverOrgId: strin
         price: c.price, currency: c.currency,
         bedrooms: c.bedrooms, bathrooms: c.bathrooms,
         area: c.area, areaUnit: c.areaUnit, cuerdaVaras: c.cuerdaVaras,
+        builtArea: c.builtArea, parkingSpaces: c.parkingSpaces, frontM: c.frontM, depthM: c.depthM,
+        maneuveringYardM2: c.maneuveringYardM2, officeMezzanineM2: c.officeMezzanineM2,
+        clearHeightM: c.clearHeightM, loadingDocks: c.loadingDocks, pavedAccess: c.pavedAccess,
+        isIndustrial: c.isIndustrial, landUse: c.landUse,
         description: c.description,
         galleryUrls: c.galleryUrls, documentUrls: c.documentUrls,
         agentName: c.agentName, agentPhone: c.agentPhone, agentEmail: c.agentEmail,

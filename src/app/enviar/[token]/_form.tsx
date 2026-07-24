@@ -201,6 +201,30 @@ export function SubmitForm({ token, orgName, brief }: { token: string; orgName: 
             </div>
           </div>
 
+          {/* Datos comerciales / industriales (opcional) */}
+          <details className="bg-white rounded-2xl border border-[#E7E9EE] p-5 shadow-sm">
+            <summary className="cursor-pointer font-medium text-[#12182A] select-none">Datos comerciales / industriales (opcional)</summary>
+            <p className="text-xs text-[#6B7280] mt-1 mb-3">Para bodegas, locales, plazas, industria.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div><label className={label}>Construcción (m²)</label><input name="builtArea" type="number" step="any" className={input} /></div>
+              <div><label className={label}>Frente (m)</label><input name="frontM" type="number" step="any" className={input} /></div>
+              <div><label className={label}>Fondo (m)</label><input name="depthM" type="number" step="any" className={input} /></div>
+              <div><label className={label}>Parqueos</label><input name="parkingSpaces" type="number" className={input} /></div>
+              <div><label className={label}>Patio maniobra (m²)</label><input name="maneuveringYardM2" type="number" step="any" className={input} /></div>
+              <div><label className={label}>Oficina/mezanine (m²)</label><input name="officeMezzanineM2" type="number" step="any" className={input} /></div>
+              <div><label className={label}>Altura libre (m)</label><input name="clearHeightM" type="number" step="any" className={input} /></div>
+              <div><label className={label}>Andenes de carga</label><input name="loadingDocks" type="number" className={input} /></div>
+              <div><label className={label}>Acceso pavimentado</label>
+                <select name="pavedAccess" defaultValue="" className={input}>
+                  <option value="">—</option><option value="true">Sí</option><option value="false">No</option>
+                </select></div>
+              <div className="col-span-2 sm:col-span-3"><label className={label}>Uso de suelo / POT</label><input name="landUse" placeholder="Ej: G4 (Zona Naranja)" className={input} /></div>
+            </div>
+            <label className="flex items-center gap-2 text-sm mt-3 text-[#12182A]">
+              <input type="checkbox" name="isIndustrial" value="true" /> Propiedad industrial
+            </label>
+          </details>
+
           {/* Ubicación: catastro O dibujo (obligatorio uno) */}
           <div className="bg-white rounded-2xl border border-[#E7E9EE] p-5 shadow-sm space-y-4">
             <div>

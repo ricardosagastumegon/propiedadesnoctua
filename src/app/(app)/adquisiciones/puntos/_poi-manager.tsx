@@ -6,25 +6,51 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Plus, Trash2, Upload } from "lucide-react"
-import { createPoi, deletePoi, importPois } from "../actions"
+import { MapPin, Plus, Trash2, Upload, Share2 } from "lucide-react"
+import { createPoi, deletePoi, importPois, sharePois } from "../actions"
 
 export interface Poi {
   id: string; name: string; category: string | null; municipality: string | null
   latitude: number | null; longitude: number | null
+  mine: boolean; origin: string | null
 }
 
-export function PoiManager({ pois, canEdit }: { pois: Poi[]; canEdit: boolean }) {
+export function PoiManager({ pois, canEdit, shareTargets = [] }: { pois: Poi[]; canEdit: boolean; shareTargets?: { id: string; name: string }[] }) {
   const router = useRouter()
   const [adding, setAdding] = useState(false)
   const [importing, setImporting] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const [target, setTarget] = useState("")
+  const [sharing, setSharing] = useState(false)
+
+  const mineIds = pois.filter(p => p.mine).map(p => p.id)
+  const canShare = canEdit && shareTargets.length > 0 && mineIds.length > 0
+
+  function toggle(id: string) {
+    setSel(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  }
+  function selectAllMine() {
+    setSel(prev => prev.size === mineIds.length ? new Set() : new Set(mineIds))
+  }
 
   async function del(id: string) {
     if (!confirm("¿Eliminar este punto?")) return
     const res = await deletePoi(id)
     if ("error" in res) { alert(res.error); return }
     router.refresh()
+  }
+
+  async function share() {
+    if (!target || sel.size === 0) return
+    const t = shareTargets.find(x => x.id === target)
+    if (!confirm(`¿Compartir ${sel.size} punto(s) con ${t?.name ?? "ese tenant"}?`)) return
+    setSharing(true)
+    const res = await sharePois(Array.from(sel), target)
+    setSharing(false)
+    if ("error" in res) { alert(res.error); return }
+    alert(`${res.shared} compartido(s) con ${res.name}${res.skipped ? `, ${res.skipped} ya estaban` : ""}.`)
+    setSel(new Set()); setTarget(""); router.refresh()
   }
 
   const cats = Array.from(new Set(pois.map(p => p.category).filter(Boolean))) as string[]
@@ -35,7 +61,7 @@ export function PoiManager({ pois, canEdit }: { pois: Poi[]; canEdit: boolean })
         <div className="text-sm text-muted-foreground">{pois.length} puntos {cats.length > 0 && <>· {cats.join(", ")}</>}</div>
         {canEdit && (
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => { setImporting(v => !v); setAdding(false) }}><Upload className="size-3.5 mr-1" />Importar (pegar)</Button>
+            <Button size="sm" variant="outline" onClick={() => { setImporting(v => !v); setAdding(false) }}><Upload className="size-3.5 mr-1" />Importar</Button>
             <Button size="sm" onClick={() => { setAdding(v => !v); setImporting(false) }}><Plus className="size-3.5 mr-1" />Agregar punto</Button>
           </div>
         )}
@@ -44,20 +70,44 @@ export function PoiManager({ pois, canEdit }: { pois: Poi[]; canEdit: boolean })
       {adding && <AddForm onDone={() => { setAdding(false); router.refresh() }} setBusy={setBusy} busy={busy} />}
       {importing && <ImportForm onDone={() => { setImporting(false); router.refresh() }} setBusy={setBusy} busy={busy} />}
 
+      {/* Barra para compartir puntos con otro tenant (misma allowlist que las propiedades) */}
+      {canShare && (
+        <Card className="p-3 flex items-center justify-between gap-3 flex-wrap bg-muted/20">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={sel.size > 0 && sel.size === mineIds.length} onChange={selectAllMine} />
+            {sel.size > 0 ? `${sel.size} seleccionado(s)` : "Seleccionar todos (míos)"}
+          </label>
+          <div className="flex items-center gap-2">
+            <Share2 className="size-4 text-[#8A6A2E]" />
+            <select value={target} onChange={e => setTarget(e.target.value)} className="h-9 border rounded-lg px-2 text-sm bg-background max-w-40">
+              <option value="">Compartir con…</option>
+              {shareTargets.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            <Button size="sm" disabled={!target || sel.size === 0 || sharing} onClick={share}>{sharing ? "Compartiendo…" : "Compartir"}</Button>
+          </div>
+        </Card>
+      )}
+
       {pois.length === 0 ? (
         <Card className="p-8 text-center text-sm text-muted-foreground">Sin puntos de interés. Importá o agregá.</Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {pois.map(p => (
             <Card key={p.id} className="p-3 flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-sm font-medium truncate">{p.name}</div>
-                <div className="text-xs text-muted-foreground">{[p.category, p.municipality].filter(Boolean).join(" · ") || "—"}</div>
-                {p.latitude != null && (
-                  <a href={`https://www.google.com/maps?q=${p.latitude},${p.longitude}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 inline-flex items-center gap-1 mt-0.5">
-                    <MapPin className="size-3" /> ver
-                  </a>
+              <div className="flex items-start gap-2 min-w-0">
+                {canShare && p.mine && (
+                  <input type="checkbox" checked={sel.has(p.id)} onChange={() => toggle(p.id)} className="mt-0.5 shrink-0" />
                 )}
+                <div className="min-w-0">
+                  <div className="text-sm font-medium truncate">{p.name}</div>
+                  <div className="text-xs text-muted-foreground">{[p.category, p.municipality].filter(Boolean).join(" · ") || "—"}</div>
+                  {p.origin && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 inline-block mt-0.5">de {p.origin}</span>}
+                  {p.latitude != null && (
+                    <a href={`https://www.google.com/maps?q=${p.latitude},${p.longitude}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 inline-flex items-center gap-1 mt-0.5 ml-2">
+                      <MapPin className="size-3" /> ver
+                    </a>
+                  )}
+                </div>
               </div>
               {canEdit && <button onClick={() => del(p.id)} className="text-destructive shrink-0"><Trash2 className="size-3.5" /></button>}
             </Card>
