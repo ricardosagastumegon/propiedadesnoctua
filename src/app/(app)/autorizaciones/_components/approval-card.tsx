@@ -252,7 +252,9 @@ export function ApprovalCard({ item, currentUserId, authorityPolicy, role }: Pro
   }
   const EntityIcon = meta.icon
 
-  const isSuperAdmin = role === "ADMIN"
+  // OWNER y ADMIN son máxima autoridad: pueden aprobar incluso sus propias solicitudes
+  // (si no, un dueño con "firma sola" nunca podría autorizar lo que él mismo pidió).
+  const isSuperAdmin = role === "ADMIN" || role === "OWNER"
   const isRequester = r.requestedBy.id === currentUserId
   const isCosigner = r.cosigner?.id === currentUserId
   // Super admin bypasses the "no self-approval" rule

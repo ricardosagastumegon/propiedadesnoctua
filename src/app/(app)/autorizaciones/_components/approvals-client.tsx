@@ -70,7 +70,7 @@ type GroupBy = "" | "property" | "type" | "vendor" | "requester"
 // ── Component ────────────────────────────────────────────────────────────
 
 export function ApprovalsClient({ enriched, currentUserId, authorityPolicy, role, properties, users }: Props) {
-  const isSuperAdmin = role === "ADMIN"
+  const isSuperAdmin = role === "ADMIN" || role === "OWNER"
   // Filters
   const [filterTypes, setFilterTypes] = useState<string[]>([])
   const [filterProperty, setFilterProperty] = useState("")

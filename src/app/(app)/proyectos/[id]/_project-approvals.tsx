@@ -36,9 +36,10 @@ interface Props {
   orgId: string
   currentUserId: string
   authorityPolicy: string
+  role: string
 }
 
-export function ProjectApprovals({ approvalRequests, partidas, currentUserId, authorityPolicy }: Props) {
+export function ProjectApprovals({ approvalRequests, partidas, currentUserId, authorityPolicy, role }: Props) {
   const [loading, setLoading] = useState<string | null>(null)
   const [rejectState, setRejectState] = useState<{ id: string; reason: string } | null>(null)
 
@@ -47,6 +48,8 @@ export function ProjectApprovals({ approvalRequests, partidas, currentUserId, au
   const partidaMap = Object.fromEntries(partidas.map(p => [p.id, p.name]))
 
   const canActOnApproval = authorityPolicy === "ALONE"
+  // OWNER/ADMIN pueden aprobar incluso sus propias solicitudes (máxima autoridad).
+  const isSuperAdmin = role === "OWNER" || role === "ADMIN"
 
   if (approvalRequests.length === 0) {
     return (
@@ -164,7 +167,7 @@ export function ProjectApprovals({ approvalRequests, partidas, currentUserId, au
                       {a.amount != null && (
                         <p className="font-display text-lg tabular-nums mb-2">{formatGTQ(a.amount)}</p>
                       )}
-                      {canActOnApproval && !isOwnRequest && !isRejecting && (
+                      {canActOnApproval && (!isOwnRequest || isSuperAdmin) && !isRejecting && (
                         <div className="flex gap-1.5 justify-end">
                           {isPendingCosign ? (
                             <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700"
@@ -186,7 +189,7 @@ export function ProjectApprovals({ approvalRequests, partidas, currentUserId, au
                           </Button>
                         </div>
                       )}
-                      {canActOnApproval && isOwnRequest && (
+                      {canActOnApproval && isOwnRequest && !isSuperAdmin && (
                         <p className="text-xs text-muted-foreground italic">Tu solicitud</p>
                       )}
                     </div>

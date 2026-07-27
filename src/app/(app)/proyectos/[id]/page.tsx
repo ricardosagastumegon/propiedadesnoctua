@@ -207,6 +207,7 @@ export default async function ProjectDetailPage({
             orgId={orgId}
             currentUserId={userId}
             authorityPolicy={authorityPolicy ?? "NONE"}
+            role={session.user.role}
           />
         </TabsContent>
 
